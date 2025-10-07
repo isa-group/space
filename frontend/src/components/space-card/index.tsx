@@ -15,7 +15,7 @@ export default function SpaceCard({ children, image, imageAlt }: SpaceCardProps)
       className="bg-white/90 dark:bg-gray-900/90 shadow-2xl rounded-3xl flex flex-col md:flex-row items-center w-full max-w-3xl border border-indigo-100 dark:border-gray-700 backdrop-blur-md p-0 md:p-0 overflow-hidden"
       style={{ minHeight: '420px' }}
     >
-      {image && !document.body.classList.contains('dark') && (
+      {image && (
         <div className="hidden md:flex items-center justify-center bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 h-full w-1/2 min-h-[420px]">
           <img
             src={image}
