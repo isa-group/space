@@ -811,13 +811,6 @@ paths:
           schema:
             type: string
             example: test@user.com
-        - name: serviceName
-          in: query
-          description: The name of the service for filter. All returned contracts will beinclude this service in their subscriptions.
-          required: false
-          schema:
-            type: string
-            example: Zoom
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Offset'
         - $ref: '#/components/parameters/Limit'
@@ -835,6 +828,57 @@ paths:
               - email
             example: lastName
             default: username
+      requestBody:
+        description: >-
+          Allow to define additional, more-complex filters on the requests regarding subscriptions composition.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                services:
+                  oneOf:
+                    - type: array
+                      description: >-
+                        List of services that the subscription must include
+                      items:
+                        type: string
+                        description: Name of the service
+                    - type: object
+                      description: >-
+                        Map containing service names as keys and plans/add-ons
+                        array that the subscription must include for such
+                        service as values.
+                      additionalProperties:
+                        type: array
+                        items:
+                          type: string
+                          description: Versions of the service
+                subscriptionPlans:
+                  type: object
+                  description: >-
+                    Map containing service names as keys and plans array that the
+                    subscription must include for such service as values.
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string
+                      description: Name of the plan
+                subscriptionAddOns:
+                  type: object
+                  description: >-
+                    Map containing service names as keys and add-ons array that
+                    the subscription must include for such service as values.
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string
+                      description: Name of the add-on
+              example:
+                subscriptionPlan: "PRO"
+                additionalAddOns:
+                  largeMeetings: 1
+                  zoomWhiteboard: 1
       responses:
         '200':
           description: Successful operation

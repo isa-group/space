@@ -27,6 +27,15 @@ class ContractController {
   async index(req: any, res: any) {
     try {
       const queryParams = this._transformIndexQueryParams(req.query);
+      const filters = req.body?.filters;
+
+      if (filters) {
+        // merge filters into top-level params and delegate to index which will call repository.findByFilters
+        const merged = { ...queryParams, filters };
+        const contracts = await this.contractService.index(merged);
+        res.json(contracts);
+        return;
+      }
 
       const contracts = await this.contractService.index(queryParams);
       res.json(contracts);
@@ -171,7 +180,6 @@ class ContractController {
       firstName: indexQueryParams.firstName as string,
       lastName: indexQueryParams.lastName as string,
       email: indexQueryParams.email as string,
-      serviceName: indexQueryParams.serviceName as string,
       page: parseInt(indexQueryParams['page'] as string) || 1,
       offset: parseInt(indexQueryParams['offset'] as string) || 0,
       limit: parseInt(indexQueryParams['limit'] as string) || 20,

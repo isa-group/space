@@ -790,8 +790,8 @@ class ServiceService {
     pricingVersion: string,
     fallBackSubscription: FallBackSubscription
   ): Promise<void> {
-    const serviceContracts: LeanContract[] = await this.contractRepository.findAll({
-      serviceName: serviceName,
+    const serviceContracts: LeanContract[] = await this.contractRepository.findByFilters({
+      services: [serviceName],
     });
 
     if (Object.keys(fallBackSubscription).length === 0) {
@@ -911,7 +911,7 @@ class ServiceService {
   }
 
   async _removeServiceFromContracts(serviceName: string): Promise<boolean> {
-    const contracts: LeanContract[] = await this.contractRepository.findAll({});
+    const contracts: LeanContract[] = await this.contractRepository.findByFilters({});
     const novatedContracts: LeanContract[] = [];
     const contractsToDisable: LeanContract[] = [];
 

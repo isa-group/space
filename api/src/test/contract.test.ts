@@ -5,6 +5,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
   createRandomContract,
   createRandomContracts,
+  createRandomContractsForService,
   getAllContracts,
   getContractByUserId,
   incrementAllUsageLevel,
@@ -32,7 +33,6 @@ describe('Contract API Test Suite', function () {
   });
 
   describe('GET /contracts', function () {
-
     let contracts: TestContract[];
 
     beforeAll(async function () {
@@ -63,7 +63,9 @@ describe('Contract API Test Suite', function () {
       expect(response.body).toBeDefined();
       expect(Array.isArray(response.body)).toBeTruthy();
       expect(response.body.length).toBeGreaterThan(0);
-      expect(response.body.every((contract: TestContract) => contract.userContact.username === username)).toBeTruthy();
+      expect(
+        response.body.every((contract: TestContract) => contract.userContact.username === username)
+      ).toBeTruthy();
     });
 
     it('Should return 200: Should return filtered contracts by firstName query parameter', async function () {
@@ -79,7 +81,11 @@ describe('Contract API Test Suite', function () {
       expect(response.body).toBeDefined();
       expect(Array.isArray(response.body)).toBeTruthy();
       expect(response.body.length).toBeGreaterThan(0);
-      expect(response.body.every((contract: TestContract) => contract.userContact.firstName === firstName)).toBeTruthy();
+      expect(
+        response.body.every(
+          (contract: TestContract) => contract.userContact.firstName === firstName
+        )
+      ).toBeTruthy();
     });
 
     it('Should return 200: Should return filtered contracts by lastName query parameter', async function () {
@@ -95,7 +101,9 @@ describe('Contract API Test Suite', function () {
       expect(response.body).toBeDefined();
       expect(Array.isArray(response.body)).toBeTruthy();
       expect(response.body.length).toBeGreaterThan(0);
-      expect(response.body.every((contract: TestContract) => contract.userContact.lastName === lastName)).toBeTruthy();
+      expect(
+        response.body.every((contract: TestContract) => contract.userContact.lastName === lastName)
+      ).toBeTruthy();
     });
 
     it('Should return 200: Should return filtered contracts by email query parameter', async function () {
@@ -111,7 +119,9 @@ describe('Contract API Test Suite', function () {
       expect(response.body).toBeDefined();
       expect(Array.isArray(response.body)).toBeTruthy();
       expect(response.body.length).toBeGreaterThan(0);
-      expect(response.body.every((contract: TestContract) => contract.userContact.email === email)).toBeTruthy();
+      expect(
+        response.body.every((contract: TestContract) => contract.userContact.email === email)
+      ).toBeTruthy();
     });
 
     it('Should return 200: Should paginate contracts using page and limit parameters', async function () {
@@ -119,30 +129,34 @@ describe('Contract API Test Suite', function () {
       await Promise.all([
         createRandomContract(app),
         createRandomContract(app),
-        createRandomContract(app)
+        createRandomContract(app),
       ]);
-      
+
       const limit = 2;
       const page1Response = await request(app)
         .get(`${baseUrl}/contracts?page=1&limit=${limit}`)
         .set('x-api-key', adminApiKey)
         .expect(200);
-      
+
       const page2Response = await request(app)
         .get(`${baseUrl}/contracts?page=2&limit=${limit}`)
         .set('x-api-key', adminApiKey)
         .expect(200);
-      
+
       expect(page1Response.body).toBeDefined();
       expect(Array.isArray(page1Response.body)).toBeTruthy();
       expect(page1Response.body.length).toBe(limit);
-      
+
       expect(page2Response.body).toBeDefined();
       expect(Array.isArray(page2Response.body)).toBeTruthy();
-      
+
       // Check that the results from page 1 and 2 are different
-      const page1Ids = page1Response.body.map((contract: TestContract) => contract.userContact.userId);
-      const page2Ids = page2Response.body.map((contract: TestContract) => contract.userContact.userId);
+      const page1Ids = page1Response.body.map(
+        (contract: TestContract) => contract.userContact.userId
+      );
+      const page2Ids = page2Response.body.map(
+        (contract: TestContract) => contract.userContact.userId
+      );
       expect(page1Ids).not.toEqual(page2Ids);
     });
 
@@ -152,10 +166,10 @@ describe('Contract API Test Suite', function () {
         .get(`${baseUrl}/contracts?offset=3&limit=${limit}`)
         .set('x-api-key', adminApiKey)
         .expect(200);
-      
+
       expect(offsetResponse.body).toBeDefined();
       expect(Array.isArray(offsetResponse.body)).toBeTruthy();
-      
+
       // Verify that this is working by comparing with a direct fetch
       const allContracts = await getAllContracts(app);
       const expectedContracts = allContracts.slice(3, 3 + limit);
@@ -167,11 +181,13 @@ describe('Contract API Test Suite', function () {
         .get(`${baseUrl}/contracts?sort=firstName&order=asc`)
         .set('x-api-key', adminApiKey)
         .expect(200);
-      
+
       expect(response.body).toBeDefined();
       expect(Array.isArray(response.body)).toBeTruthy();
-      
-      const firstNames = response.body.map((contract: TestContract) => contract.userContact.firstName);
+
+      const firstNames = response.body.map(
+        (contract: TestContract) => contract.userContact.firstName
+      );
       const sortedFirstNames = [...firstNames].sort();
       expect(firstNames).toEqual(sortedFirstNames);
     });
@@ -181,11 +197,13 @@ describe('Contract API Test Suite', function () {
         .get(`${baseUrl}/contracts?sort=lastName&order=desc`)
         .set('x-api-key', adminApiKey)
         .expect(200);
-      
+
       expect(response.body).toBeDefined();
       expect(Array.isArray(response.body)).toBeTruthy();
-      
-      const lastNames = response.body.map((contract: TestContract) => contract.userContact.lastName);
+
+      const lastNames = response.body.map(
+        (contract: TestContract) => contract.userContact.lastName
+      );
       const sortedLastNames = [...lastNames].sort().reverse();
       expect(lastNames).toEqual(sortedLastNames);
     });
@@ -195,11 +213,13 @@ describe('Contract API Test Suite', function () {
         .get(`${baseUrl}/contracts`)
         .set('x-api-key', adminApiKey)
         .expect(200);
-      
+
       expect(response.body).toBeDefined();
       expect(Array.isArray(response.body)).toBeTruthy();
-      
-      const usernames = response.body.map((contract: TestContract) => contract.userContact.username);
+
+      const usernames = response.body.map(
+        (contract: TestContract) => contract.userContact.username
+      );
       const sortedUsernames = [...usernames].sort();
       expect(usernames).toEqual(sortedUsernames);
     });
@@ -209,7 +229,7 @@ describe('Contract API Test Suite', function () {
         .get(`${baseUrl}/contracts?limit=200`)
         .set('x-api-key', adminApiKey)
         .expect(200);
-      
+
       expect(response.body).toBeDefined();
       expect(Array.isArray(response.body)).toBeTruthy();
       expect(response.body.length).toBeLessThanOrEqual(100);
@@ -218,32 +238,198 @@ describe('Contract API Test Suite', function () {
     it('Should return 200: Should return filtered contracts by serviceName query parameter', async function () {
       // First, get all contracts to find one with a specific service
       const allContracts = await getAllContracts(app);
-      
+
       // Find a contract with at least one contracted service
       const testContract = allContracts.find(
         contract => Object.keys(contract.contractedServices).length > 0
       );
-      
+
       // Get the first serviceName from the contract
       const serviceName = Object.keys(testContract.contractedServices)[0];
-      
+
       const response = await request(app)
-        .get(`${baseUrl}/contracts?serviceName=${serviceName}`)
+        .get(`${baseUrl}/contracts`)
         .set('x-api-key', adminApiKey)
+        .send({ filters: { services: [serviceName] } })
         .expect(200);
-      
+
       expect(response.body).toBeDefined();
       expect(Array.isArray(response.body)).toBeTruthy();
       expect(response.body.length).toBeGreaterThan(0);
-      expect(response.body.every((contract: TestContract) => 
-        Object.keys(contract.contractedServices).includes(serviceName)
-      )).toBeTruthy();
+      expect(
+        response.body.every((contract: TestContract) =>
+          Object.keys(contract.contractedServices).includes(serviceName)
+        )
+      ).toBeTruthy();
+    });
+
+  it('Should return 200: Should return filtered contracts by services (array)', async function () {
+      // Ensure at least one contract exists with a service
+      const created = await createRandomContract(app);
+      const serviceName = Object.keys(created.contractedServices)[0];
+
+      const response = await request(app)
+        .get(`${baseUrl}/contracts`)
+        .set('x-api-key', adminApiKey)
+        .send({ filters: { services: [serviceName] } })
+        .expect(200);
+
+      expect(response.body).toBeDefined();
+      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.body.length).toBeGreaterThan(0);
+      expect(
+        response.body.every((c: any) => Object.keys(c.contractedServices).includes(serviceName))
+      ).toBeTruthy();
+    });
+
+  it('Should return 200: Should return filtered contracts by services with specific versions (object)', async function () {
+      // Create a set of contracts for the same service/version
+      const first = await createRandomContract(app);
+      const serviceName = Object.keys(first.contractedServices)[0];
+      const pricingVersion = first.contractedServices[serviceName];
+
+      // Create more contracts with the same service/version
+      await createRandomContractsForService(serviceName, pricingVersion, 3, app);
+
+      const response = await request(app)
+        .get(`${baseUrl}/contracts`)
+        .set('x-api-key', adminApiKey)
+        .query({ limit: 50 })
+        .send({ filters: { services: { [serviceName]: [pricingVersion] } } })
+        .expect(200);
+
+      expect(response.body).toBeDefined();
+      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.body.length).toBeGreaterThanOrEqual(1);
+      expect(
+        response.body.every(
+          (c: any) => c.contractedServices && c.contractedServices[serviceName] === pricingVersion
+        )
+      ).toBeTruthy();
+    });
+
+  it('Should return 200: Should return filtered contracts by plans', async function () {
+      // Create a contract and use its plan for filtering
+      const created = await createRandomContract(app);
+      const serviceName = Object.keys(created.subscriptionPlans)[0];
+      // If no plans were set for the contract, skip this assertion (safety)
+      if (!serviceName) return;
+      const planName = created.subscriptionPlans[serviceName];
+
+      const response = await request(app)
+        .get(`${baseUrl}/contracts`)
+        .set('x-api-key', adminApiKey)
+        .query({ limit: 50 })
+        .send({ filters: { plans: { [serviceName]: [planName] } } })
+        .expect(200);
+
+      expect(response.body).toBeDefined();
+      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.body.length).toBeGreaterThanOrEqual(1);
+      expect(
+        response.body.every(
+          (c: any) => c.subscriptionPlans && c.subscriptionPlans[serviceName] === planName
+        )
+      ).toBeTruthy();
+    });
+
+  it('Should return 200: Should return filtered contracts by addOns', async function () {
+      // Find a contract with at least one addOn
+      const all = await getAllContracts(app);
+      const withAddOn = all.find((c: any) => Object.keys(c.subscriptionAddOns || {}).length > 0);
+      if (!withAddOn) {
+        // Create a contract that includes addOns by creating several contracts until one contains addOns
+        const created = await createRandomContract(app);
+        // Try again
+        const all2 = await getAllContracts(app);
+        const withAddOn2 = all2.find(
+          (c: any) => Object.keys(c.subscriptionAddOns || {}).length > 0
+        );
+        if (!withAddOn2)
+          return; // if still none, skip test
+        else {
+          const svc = Object.keys(withAddOn2.subscriptionAddOns)[0];
+          const addOn = Object.keys(withAddOn2.subscriptionAddOns[svc])[0];
+
+          const response = await request(app)
+            .get(`${baseUrl}/contracts`)
+            .set('x-api-key', adminApiKey)
+            .query({ limit: 50 })
+            .send({ filters: { addOns: { [svc]: [addOn] } } })
+            .expect(200);
+
+          expect(response.body).toBeDefined();
+          expect(Array.isArray(response.body)).toBeTruthy();
+          expect(response.body.length).toBeGreaterThanOrEqual(1);
+          expect(
+            response.body.every(
+              (c: any) =>
+                c.subscriptionAddOns &&
+                c.subscriptionAddOns[svc] &&
+                c.subscriptionAddOns[svc][addOn] !== undefined
+            )
+          ).toBeTruthy();
+        }
+      } else {
+        const svc = Object.keys(withAddOn.subscriptionAddOns)[0];
+        const addOn = Object.keys(withAddOn.subscriptionAddOns[svc])[0];
+
+        const response = await request(app)
+          .get(`${baseUrl}/contracts`)
+          .set('x-api-key', adminApiKey)
+          .query({ limit: 50 })
+          .send({ filters: { addOns: { [svc]: [addOn] } } })
+          .expect(200);
+
+        expect(response.body).toBeDefined();
+        expect(Array.isArray(response.body)).toBeTruthy();
+        expect(response.body.length).toBeGreaterThanOrEqual(1);
+        expect(
+          response.body.every(
+            (c: any) =>
+              c.subscriptionAddOns &&
+              c.subscriptionAddOns[svc] &&
+              c.subscriptionAddOns[svc][addOn] !== undefined
+          )
+        ).toBeTruthy();
+      }
+    });
+
+  it('Should return 200: Should return empty array for unknown service', async function () {
+      const response = await request(app)
+        .get(`${baseUrl}/contracts`)
+        .set('x-api-key', adminApiKey)
+        .query({ limit: 20 })
+        .send({ filters: { services: ['non-existent-service-xyz'] } })
+        .expect(200);
+
+      expect(response.body).toBeDefined();
+      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.body.length).toBe(0);
+    });
+
+  it('Should return 200: Should return empty array for known service but non-matching version', async function () {
+      const created = await createRandomContract(app);
+      const serviceName = Object.keys(created.contractedServices)[0];
+      const wrongVersion = '0_0_0_nonexistent';
+
+      const response = await request(app)
+        .get(`${baseUrl}/contracts`)
+        .set('x-api-key', adminApiKey)
+        .query({ limit: 20 })
+        .send({ filters: { services: { [serviceName]: [wrongVersion] } } })
+        .expect(200);
+
+      expect(response.body).toBeDefined();
+      expect(Array.isArray(response.body)).toBeTruthy();
+      // Should be empty because version doesn't match
+      expect(response.body.length).toBe(0);
     });
   });
 
   describe('POST /contracts', function () {
     it('Should return 201 and the created contract', async function () {
-      const {contract: contractToCreate} = await generateContractAndService(undefined, app);
+      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
       const response = await request(app)
         .post(`${baseUrl}/contracts`)
         .set('x-api-key', adminApiKey)
@@ -264,7 +450,7 @@ describe('Contract API Test Suite', function () {
     });
 
     it('Should return 422 when userContact.userId is an empty string', async function () {
-      const {contract: contractToCreate} = await generateContractAndService(undefined, app);
+      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
 
       // Force empty userId
       contractToCreate.userContact.userId = '';
@@ -282,7 +468,7 @@ describe('Contract API Test Suite', function () {
     });
 
     it('Should return 400 given a contract with unexistent service', async function () {
-      const {contract: contractToCreate} = await generateContractAndService(undefined, app);
+      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
 
       contractToCreate.contractedServices['unexistent-service'] = '1.0.0';
 
@@ -293,11 +479,11 @@ describe('Contract API Test Suite', function () {
 
       expect(response.status).toBe(400);
       expect(response.body).toBeDefined();
-      expect(response.body.error).toBe("Invalid contract: Services not found: unexistent-service");
+      expect(response.body.error).toBe('Invalid contract: Services not found: unexistent-service');
     });
 
     it('Should return 400 given a contract with existent service, but invalid version', async function () {
-      const {contract: contractToCreate} = await generateContractAndService(undefined, app);
+      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
 
       const existingService = Object.keys(contractToCreate.contractedServices)[0];
       contractToCreate.contractedServices[existingService] = 'invalid-version';
@@ -309,11 +495,13 @@ describe('Contract API Test Suite', function () {
 
       expect(response.status).toBe(400);
       expect(response.body).toBeDefined();
-      expect(response.body.error).toBe(`Invalid contract: Pricing version invalid-version for service ${existingService} not found`);
+      expect(response.body.error).toBe(
+        `Invalid contract: Pricing version invalid-version for service ${existingService} not found`
+      );
     });
 
     it('Should return 400 given a contract with a non-existent plan for a contracted service', async function () {
-      const {contract: contractToCreate} = await generateContractAndService(undefined, app);
+      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
 
       const serviceName = Object.keys(contractToCreate.contractedServices)[0];
       // Set an invalid plan name
@@ -331,11 +519,11 @@ describe('Contract API Test Suite', function () {
     });
 
     it('Should return 400 given a contract with a non-existent add-on for a contracted service', async function () {
-      const {contract: contractToCreate} = await generateContractAndService(undefined, app);
+      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
 
       const serviceName = Object.keys(contractToCreate.contractedServices)[0];
       // Inject an invalid add-on name
-      contractToCreate.subscriptionAddOns[serviceName] = { 'non_existent_addon': 1 };
+      contractToCreate.subscriptionAddOns[serviceName] = { non_existent_addon: 1 };
 
       const response = await request(app)
         .post(`${baseUrl}/contracts`)
@@ -350,7 +538,7 @@ describe('Contract API Test Suite', function () {
 
     it('Should return 400 when creating a contract for a userId that already has a contract', async function () {
       // Create initial contract
-      const {contract: contractToCreate} = await generateContractAndService(undefined, app);
+      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
 
       const firstResponse = await request(app)
         .post(`${baseUrl}/contracts`)
@@ -613,7 +801,7 @@ describe('Contract API Test Suite', function () {
         .set('x-api-key', adminApiKey);
 
       expect(response.status).toBe(200);
-        
+
       const updatedContract: TestContract = response.body;
 
       expect(updatedContract).toBeDefined();
@@ -632,7 +820,6 @@ describe('Contract API Test Suite', function () {
     });
 
     it('Should return 404: Given reset and usageLimit', async function () {
-
       const newContract: TestContract = await createRandomContract(app);
 
       await request(app)
@@ -644,7 +831,6 @@ describe('Contract API Test Suite', function () {
     });
 
     it('Should return 404: Given invalid usageLimit', async function () {
-
       const newContract: TestContract = await createRandomContract(app);
 
       await request(app)
@@ -656,16 +842,13 @@ describe('Contract API Test Suite', function () {
     });
 
     it('Should return 422: Given invalid body', async function () {
-
       const newContract: TestContract = await createRandomContract(app);
 
       await request(app)
-        .put(
-          `${baseUrl}/contracts/${newContract.userContact.userId}/usageLevels`
-        )
+        .put(`${baseUrl}/contracts/${newContract.userContact.userId}/usageLevels`)
         .set('x-api-key', adminApiKey)
         .send({
-          test: "invalid object"
+          test: 'invalid object',
         })
         .expect(422);
     });
@@ -715,7 +898,9 @@ describe('Contract API Test Suite', function () {
       const updatedContract: TestContract = response.body;
 
       expect(updatedContract).toBeDefined();
-      expect(new Date(updatedContract.billingPeriod.endDate)).toEqual(addDays(newContract.billingPeriod.endDate, 3));
+      expect(new Date(updatedContract.billingPeriod.endDate)).toEqual(
+        addDays(newContract.billingPeriod.endDate, 3)
+      );
       expect(updatedContract.billingPeriod.autoRenew).toBe(true);
       expect(updatedContract.billingPeriod.renewalDays).toBe(30);
     });
@@ -726,10 +911,7 @@ describe('Contract API Test Suite', function () {
       const servicesBefore = await getAllContracts(app);
       expect(servicesBefore.length).toBeGreaterThan(0);
 
-      await request(app)
-        .delete(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .expect(204);
+      await request(app).delete(`${baseUrl}/contracts`).set('x-api-key', adminApiKey).expect(204);
 
       const servicesAfter = await getAllContracts(app);
       expect(servicesAfter.length).toBe(0);

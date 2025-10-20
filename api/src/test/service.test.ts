@@ -189,8 +189,9 @@ describe('Services API Test Suite', function () {
       expect(responseAfter.status).toEqual(404);
 
       const contractsAfter = await request(app)
-        .get(`${baseUrl}/contracts?serviceName=${serviceName}`)
-        .set('x-api-key', adminApiKey);
+        .get(`${baseUrl}/contracts`)
+        .set('x-api-key', adminApiKey)
+        .send({ filters: { services: [serviceName] } });
       expect(contractsAfter.status).toEqual(200);
       expect(Array.isArray(contractsAfter.body)).toBe(true);
       expect(
@@ -548,8 +549,9 @@ describe('Services API Test Suite', function () {
         ).toBeTruthy();
 
         const reponseContractsAfter = await request(app)
-          .get(`${baseUrl}/contracts?serviceName=${testService}`)
-          .set('x-api-key', adminApiKey);
+          .get(`${baseUrl}/contracts`)
+          .set('x-api-key', adminApiKey)
+          .send({ filters: { services: [testService] } });
 
         expect(reponseContractsAfter.status).toEqual(200);
         expect(Array.isArray(reponseContractsAfter.body)).toBe(true);

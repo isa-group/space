@@ -53,6 +53,23 @@ export async function getPricingsFromService(
     });
 }
 
+export async function getPricingVersion(
+  apiKey: string,
+  serviceName: string,
+  version: string
+): Promise<Pricing | null> {
+  return axios
+    .get(`/services/${serviceName}/pricings/${version}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      timeout: DEFAULT_TIMEOUT,
+    })
+    .then(response => response.data as Pricing)
+    .catch(() => null);
+}
+
 export async function changePricingAvailability(
   apiKey: string,
   serviceName: string,

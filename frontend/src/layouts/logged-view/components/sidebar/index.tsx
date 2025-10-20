@@ -2,9 +2,11 @@ import { motion } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router';
 import useAuth from '@/hooks/useAuth';
 import { FiHome, FiUsers, FiServer, FiSettings, FiChevronRight } from 'react-icons/fi';
+import { AiOutlineDashboard } from 'react-icons/ai';
 
 const tabs = [
   { label: 'Overview', path: '/', icon: <FiHome size={22} /> },
+  { label: 'Contracts Dashboard', path: '/contracts/dashboard', icon: <AiOutlineDashboard size={22}/> },
   { label: 'Access Control', path: '/users', icon: <FiUsers size={22} /> },
   { label: 'Services Management', path: '/services', icon: <FiServer size={22} /> },
   { label: 'Settings', path: '/settings', icon: <FiSettings size={22} /> },
@@ -14,6 +16,7 @@ function getSelectedTab(pathname: string) {
   if (pathname.startsWith('/users')) return '/users';
   if (pathname.startsWith('/services')) return '/services';
   if (pathname.startsWith('/settings')) return '/settings';
+  if (pathname.startsWith('/contracts/dashboard')) return '/contracts/dashboard';
   return '/';
 }
 

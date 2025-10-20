@@ -37,7 +37,7 @@ class ContractService {
       );
     }
 
-    const contracts: LeanContract[] = await this.contractRepository.findAll(queryParams);
+    const contracts: LeanContract[] = await this.contractRepository.findByFilters(queryParams);
 
     for (const contract of contracts) {
       contract.contractedServices = resetEscapeContractedServiceVersions(contract.contractedServices);
