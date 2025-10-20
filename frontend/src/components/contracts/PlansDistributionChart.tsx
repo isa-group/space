@@ -46,7 +46,9 @@ export default function PlansDistributionChart({ data }: { data: Record<string, 
     <div className="h-[34rem] bg-gradient-to-b from-white/60 to-indigo-50 dark:from-gray-900 dark:to-gray-800 px-4 py-2 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-800">
       <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">PLANS DISTRIBUTION</h3>
       {pieData.length === 0 ? (
-        <div className="text-gray-500">No data</div>
+        <div className="w-full h-[30rem] flex items-center justify-center">
+          <div className="text-gray-500 text-lg">No data</div>
+        </div>
       ) : (
         <div className="flex items-center justify-center">
           <div className="w-full h-[30rem]">

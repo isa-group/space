@@ -1,7 +1,7 @@
 // React import not required with the new JSX transform
 import useAuth from '@/hooks/useAuth';
 import useContracts from '@/hooks/useContracts';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { getServices, getPricingsFromService } from '@/api/services/servicesApi';
 import SummaryCards from '@/components/contracts/SummaryCards';
 import PlansDistributionChart from '@/components/contracts/PlansDistributionChart';
@@ -14,10 +14,7 @@ export default function ContractsDashboard() {
   const apiKey = user?.apiKey ?? '';
   const {
     contracts,
-    totalContracts,
-  plansDistribution,
-  addonsByPlan,
-    refresh,
+    
     page,
     setPage,
     limit,
@@ -65,20 +62,82 @@ export default function ContractsDashboard() {
     setServiceFilter(selectedService);
   }, [selectedService, setServiceFilter]);
 
-  const distinctPlans = Object.keys(plansDistribution).length;
-
-  // derive number of distinct active services across returned contracts
-  // consider both structured c.services[] entries and subscriptionPlans map keys
-  const activeServiceNames = new Set<string>();
-  contracts.forEach(c => {
-    if (Array.isArray(c.services) && c.services.length > 0) {
-      c.services.forEach(s => s.serviceName && activeServiceNames.add(s.serviceName));
-    } else if (c.subscriptionPlans) {
-      Object.keys(c.subscriptionPlans).forEach(k => k && activeServiceNames.add(k));
+  // const distinctPlans = Object.keys(plansDistribution).length; // use localPlansDistribution below (filtered)
+  // Client-side filtered view so the whole dashboard reflects the selected service/version
+  const filteredContracts = useMemo(() => {
+    let res = contracts || [];
+    if (selectedService) {
+      const svc = selectedService.toLowerCase();
+      res = res.filter(c => {
+        const inServices = (c.services || []).some((s: any) => (s.serviceName || '').toLowerCase() === svc);
+        const inMap = c.subscriptionPlans ? Object.keys(c.subscriptionPlans).some(k => k.toLowerCase() === svc) : false;
+        return inServices || inMap;
+      });
     }
-  });
-  const activeServicesCount = activeServiceNames.size;
+    if (selectedVersion) {
+      const ver = String(selectedVersion).replace(/^v/i, '').toLowerCase();
+      res = res.filter(c => {
+        return (c.services || []).some((s: any) => {
+          const pv = (s.pricingVersion ?? '').toString().replace(/^v/i, '').toLowerCase();
+          if (selectedService) {
+            if ((s.serviceName || '').toLowerCase() !== selectedService.toLowerCase()) return false;
+          }
+          return pv === ver;
+        });
+      });
+    }
+    return res;
+  }, [contracts, selectedService, selectedVersion]);
+
+  const filteredTotalContracts = filteredContracts.length;
+
+  // derive plansDistribution and addonsByPlan from filteredContracts (so the charts reflect selection)
+  const { localPlansDistribution, localAddonsByPlan } = useMemo(() => {
+    const map: Record<string, number> = {};
+    const addonMap: Record<string, Record<string, number>> = {};
+    for (const c of filteredContracts) {
+      if (c.subscriptionPlans) {
+        for (const [serviceName, planName] of Object.entries(c.subscriptionPlans)) {
+          const plan = planName || 'unknown';
+          map[plan] = (map[plan] || 0) + 1;
+          const addonsForService = c.subscriptionAddOns ? (c.subscriptionAddOns as Record<string, Record<string, number>>)[serviceName] : undefined;
+          if (addonsForService) {
+            addonMap[plan] = addonMap[plan] || {};
+            for (const [addonName, qty] of Object.entries(addonsForService || {})) {
+              addonMap[plan][addonName] = (addonMap[plan][addonName] || 0) + Number(qty || 0);
+            }
+          }
+        }
+      }
+      if (c.services) {
+        for (const s of c.services) {
+          const plan = s.subscriptionPlan ?? 'unknown';
+          map[plan] = (map[plan] || 0) + 1;
+          if (s.subscriptionAddOns) {
+            addonMap[plan] = addonMap[plan] || {};
+            for (const [addonName, qty] of Object.entries(s.subscriptionAddOns || {})) {
+              addonMap[plan][addonName] = (addonMap[plan][addonName] || 0) + Number(qty || 0);
+            }
+          }
+        }
+      }
+    }
+    return { localPlansDistribution: map, localAddonsByPlan: addonMap };
+  }, [filteredContracts]);
+
+  const distinctPlans = Object.keys(localPlansDistribution).length;
+
   const totalServicesCount = availableServices.length;
+
+  // compute distinct add-ons across all plans in the filtered view
+  const distinctAddOnsCount = useMemo(() => {
+    const set = new Set<string>();
+    for (const plan of Object.keys(localAddonsByPlan || {})) {
+      const addons = localAddonsByPlan[plan] || {};
+      for (const addon of Object.keys(addons || {})) set.add(addon);
+    }
+    return set.size;
+  }, [localAddonsByPlan]);
 
   return (
     <div className="max-w-7xl mx-auto py-10 px-4 md:px-0">
@@ -106,11 +165,11 @@ export default function ContractsDashboard() {
         </div>
       </div>
 
-  <SummaryCards totalContracts={totalContracts} totalPlans={distinctPlans} activeServicesCount={activeServicesCount} totalServicesCount={totalServicesCount} />
+  <SummaryCards totalContracts={filteredTotalContracts} totalPlans={distinctPlans} distinctAddOnsCount={distinctAddOnsCount} totalServicesCount={totalServicesCount} />
 
       <div className="flex">
         <div className="flex-grow">
-          <PlansDistributionChart data={plansDistribution} />
+          <PlansDistributionChart data={localPlansDistribution} />
         </div>
       </div>
 
@@ -122,7 +181,7 @@ export default function ContractsDashboard() {
               <div className="text-sm text-gray-500">Shows how many times each add-on was contracted per plan</div>
             </div>
             <div className="flex justify-center gap-4">
-              <AddonsByPlanCharts addonsByPlan={addonsByPlan} plansOrder={Object.keys(plansDistribution)} />
+              <AddonsByPlanCharts addonsByPlan={localAddonsByPlan} plansOrder={Object.keys(localPlansDistribution)} />
             </div>
           </div>
           <div className='flex justify-evenly items-center my-8'>
@@ -131,7 +190,7 @@ export default function ContractsDashboard() {
             <div className='h-0.5 bg-gray-400 w-[45%]'></div>
           </div>
         <ContractsTable
-          contracts={contracts}
+          contracts={filteredContracts}
           page={page}
           setPage={setPage}
           limit={limit}
