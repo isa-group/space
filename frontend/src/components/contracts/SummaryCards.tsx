@@ -8,10 +8,9 @@ interface Props {
   totalContracts: number;
   totalPlans: number;
   distinctAddOnsCount: number;
-  totalServicesCount: number;
 }
 
-export default function SummaryCards({ totalContracts, totalPlans, distinctAddOnsCount, totalServicesCount }: Props) {
+export default function SummaryCards({ totalContracts, totalPlans, distinctAddOnsCount }: Props) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
       <div className="p-4 bg-gradient-to-r from-white/60 to-indigo-50 dark:from-gray-800 dark:to-gray-900 rounded-2xl shadow-lg backdrop-blur-sm border border-gray-100 dark:border-gray-800">

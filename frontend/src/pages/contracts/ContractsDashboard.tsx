@@ -127,8 +127,6 @@ export default function ContractsDashboard() {
 
   const distinctPlans = Object.keys(localPlansDistribution).length;
 
-  const totalServicesCount = availableServices.length;
-
   // compute distinct add-ons across all plans in the filtered view
   const distinctAddOnsCount = useMemo(() => {
     const set = new Set<string>();
@@ -165,7 +163,7 @@ export default function ContractsDashboard() {
         </div>
       </div>
 
-  <SummaryCards totalContracts={filteredTotalContracts} totalPlans={distinctPlans} distinctAddOnsCount={distinctAddOnsCount} totalServicesCount={totalServicesCount} />
+  <SummaryCards totalContracts={filteredTotalContracts} totalPlans={distinctPlans} distinctAddOnsCount={distinctAddOnsCount} />
 
       <div className="flex">
         <div className="flex-grow">
