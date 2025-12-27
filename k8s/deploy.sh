@@ -1,3 +1,7 @@
+cd ..
+echo "Building docker images..."
+docker compose build
+cd k8s
 echo "Creating namespace..."
 kubectl apply -f space-namespace.yml
 echo "Deploying ingress controller..."
