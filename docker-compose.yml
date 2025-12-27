@@ -67,7 +67,7 @@ services:
       dockerfile: ./docker/Dockerfile
       args:
         VITE_ENVIRONMENT: production
-        VITE_SPACE_BASE_URL: http://localhost:5403/api/v1
+        VITE_SPACE_BASE_URL: http://localhost:5403/api/v1 # Change to http://localhost/api/v1 if running SPACE in kubernetes
     depends_on:
       - space-server
     networks:
