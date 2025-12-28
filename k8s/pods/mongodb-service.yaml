@@ -4,6 +4,7 @@ metadata:
   labels:
     app: mongodb
   name: mongodb-service
+  namespace: space
 spec:
   ports:
   - port: 27017

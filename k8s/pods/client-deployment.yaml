@@ -4,6 +4,7 @@ metadata:
   labels:
     app: client
   name: client-deployment
+  namespace: space
 spec:
   replicas: 1
   selector:

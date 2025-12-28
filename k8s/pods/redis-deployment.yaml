@@ -4,6 +4,7 @@ metadata:
   labels:
     app: redis
   name: redis-deployment
+  namespace: space
 spec:
   replicas: 1
   selector:

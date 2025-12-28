@@ -4,6 +4,7 @@ metadata:
   labels:
     app: server
   name: server-deployment
+  namespace: space
 spec:
   replicas: 3
   selector:

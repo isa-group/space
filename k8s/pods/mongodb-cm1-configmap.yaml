@@ -15,6 +15,7 @@ data:
     echo "Mongo users created."
 kind: ConfigMap
 metadata:
+  namespace: space
   annotations:
     use-subpath: "true"
   labels:

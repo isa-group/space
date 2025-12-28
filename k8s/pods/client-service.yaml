@@ -4,6 +4,7 @@ metadata:
   labels:
     app: client
   name: client-service
+  namespace: space
 spec:
   ports:
   - name: http
