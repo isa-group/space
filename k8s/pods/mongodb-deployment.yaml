@@ -4,6 +4,7 @@ metadata:
   labels:
     app: mongodb
   name: mongodb-deployment
+  namespace: space
 spec:
   replicas: 1
   selector:

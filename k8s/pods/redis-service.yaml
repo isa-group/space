@@ -4,6 +4,7 @@ metadata:
   labels:
     app: redis
   name: redis-service
+  namespace: space
 spec:
   ports:
   - port: 6379

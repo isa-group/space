@@ -4,6 +4,7 @@ metadata:
   labels:
     app: client
   name: client-deployment
+  namespace: space
 spec:
   replicas: 1
   selector:
@@ -21,4 +22,11 @@ spec:
           envFrom:
             - configMapRef:
                 name: client-config
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
       restartPolicy: Always
