@@ -14,7 +14,7 @@ enum UserRole <<Enum>> {
     USER
 }
 
-enum KeyScope <<Enum>> {
+enum OrganizationKeyScope <<Enum>> {
     ALL
     MANAGEMENT
     EVALUATION
@@ -69,9 +69,10 @@ class User <<Entity>> {
 }
 
 class Organization <<Entity>>{
+    - id: String
     - name: String
-    - slug: String
-    - apiKeys: ApiKey[]
+    - owner: User
+    - apiKeys: OrganizationApiKey[]
     - members: OrganizationUser[]
     - createdAt: Date
     - updatedAt: Date
@@ -125,9 +126,9 @@ class OrganizationUser <<ValueObject>> {
     - role: OrganizationRole
 }
 
-class ApiKey <<ValueObject>> {
+class OrganizationApiKey <<ValueObject>> {
     - key: String
-    - scope: KeyScope
+    - scope: OrganizationKeyScope
     - createdAt: Date
 }
 
@@ -222,6 +223,7 @@ class SubscriptionConstraint <<ValueObject>> {
 
 ' Relationships
 User "1" <-- "0..*" OrganizationUser: is
+User "1" --> "0..*" Organization: owns
 
 Contract *-- "1" UserContact : contains
 Contract *-- "1" BillingPeriod : contains
@@ -229,7 +231,7 @@ Contract *-- "0..*" UsageLevel : tracks
 Contract *-- "0..*" ContractHistory : history
 
 Organization "1" <-- "0..*" OrganizationUser : has
-Organization *-- "0..*" ApiKey : has
+Organization *-- "0..*" OrganizationApiKey : has
 Organization *-- "0..*" Service
 
 OrganizationUser -- OrganizationRole : has
@@ -256,7 +258,7 @@ UsageLimit -- ValueType : uses
 Period -- PeriodUnit : uses
 
 User -- UserRole : has
-ApiKey -- KeyScope : has
+OrganizationApiKey -- OrganizationKeyScope : has
 
 ' Notes
 note right of Service
