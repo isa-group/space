@@ -9,7 +9,18 @@ skinparam class {
 }
 
 ' Enumerations
-enum Role <<Enum>> {
+enum UserRole <<Enum>> {
+    ADMIN
+    USER
+}
+
+enum KeyScope <<Enum>> {
+    ALL
+    MANAGEMENT
+    EVALUATION
+}
+
+enum OrganizationRole <<Enum>> {
     ADMIN
     MANAGER
     EVALUATOR
@@ -50,12 +61,20 @@ enum PeriodUnit <<Enum>> {
 class User <<Entity>> {
     - username: String
     - password: String
-    - apiKey: String
-    - role: Role
+    - role: UserRole
     - createdAt: Date
     - updatedAt: Date
     --
     + verifyPassword(password: String): Boolean
+}
+
+class Organization <<Entity>>{
+    - name: String
+    - slug: String
+    - apiKeys: ApiKey[]
+    - members: OrganizationUser[]
+    - createdAt: Date
+    - updatedAt: Date
 }
 
 class Service <<Entity>> {
@@ -99,6 +118,17 @@ class UserContact <<ValueObject>> {
     - lastName: String
     - email: String
     - phone: String
+}
+
+class OrganizationUser <<ValueObject>> {
+    - userId: String
+    - role: OrganizationRole
+}
+
+class ApiKey <<ValueObject>> {
+    - key: String
+    - scope: KeyScope
+    - createdAt: Date
 }
 
 class BillingPeriod <<ValueObject>> {
@@ -191,20 +221,30 @@ class SubscriptionConstraint <<ValueObject>> {
 }
 
 ' Relationships
-User "1" -- "0..*" Service : manages
+User "1" <-- "0..*" OrganizationUser: is
+
 Contract *-- "1" UserContact : contains
 Contract *-- "1" BillingPeriod : contains
 Contract *-- "0..*" UsageLevel : tracks
 Contract *-- "0..*" ContractHistory : history
 
-Service "1" *-- "1..*" PricingData : activePricings
-Service "1" *-- "0..*" PricingData : archivedPricings
+Organization "1" <-- "0..*" OrganizationUser : has
+Organization *-- "0..*" ApiKey : has
+Organization *-- "0..*" Service
+
+OrganizationUser -- OrganizationRole : has
+
+Service *-- "1..*" PricingData : activePricings
+Service *-- "0..*" PricingData : archivedPricings
+Service "0..*" <-- "0..*" ContractHistory : records
+Service "1..*" <-- "0..*" Contract : subscribes to
+
 PricingData "0..*" --> "1" Pricing : references
 
-Pricing "1" *-- "0..*" Feature : defines
-Pricing "1" *-- "0..*" UsageLimit : defines
-Pricing "1" *-- "0..*" Plan : offers
-Pricing "1" *-- "0..*" AddOn : offers
+Pricing *-- "0..*" Feature : defines
+Pricing *-- "0..*" UsageLimit : defines
+Pricing *-- "0..*" Plan : offers
+Pricing *-- "0..*" AddOn : offers
 
 UsageLimit *-- "0..1" Period : has
 AddOn *-- "0..1" SubscriptionConstraint : has
@@ -214,7 +254,9 @@ Feature -- FeatureType : classified by
 UsageLimit -- UsageLimitType : classified by
 UsageLimit -- ValueType : uses
 Period -- PeriodUnit : uses
-User -- Role : has
+
+User -- UserRole : has
+ApiKey -- KeyScope : has
 
 ' Notes
 note right of Service
