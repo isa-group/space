@@ -1,6 +1,6 @@
 import container from '../config/container';
 import UserRepository from '../repositories/mongoose/UserRepository';
-import { LeanUser, Role, USER_ROLES } from '../types/models/User';
+import { LeanUser, UserRole, USER_ROLES } from '../types/models/User';
 import { hashPassword } from '../utils/users/helpers';
 
 class UserService {
@@ -91,7 +91,7 @@ class UserService {
     return newApiKey;
   }
 
-  async changeRole(username: string, role: Role, creatorData: LeanUser) {
+  async changeRole(username: string, role: UserRole, creatorData: LeanUser) {
     
     if (creatorData.role !== 'ADMIN' && role === 'ADMIN') {
       throw new Error('Not enough permissions: Only admins can assign the role ADMIN.');

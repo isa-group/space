@@ -3,10 +3,10 @@ export interface LeanUser {
   username: string;
   password: string;
   apiKey: string;
-  role: Role;
+  role: UserRole;
 }
 
-export type Role = 'ADMIN' | 'MANAGER' | 'EVALUATOR';
+export type UserRole = 'ADMIN' | 'USER';
 export type Module = 'users' | 'services' | 'contracts' | 'features' | '*';
 export type RestOperation = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
@@ -16,21 +16,13 @@ export interface RolePermissions {
   blockedMethods?: Partial<Record<RestOperation, Module[]>>;
 }
 
-export const USER_ROLES: Role[] = ['ADMIN', 'MANAGER', 'EVALUATOR'];
+export const USER_ROLES: UserRole[] = ['ADMIN', 'USER'];
 
-export const ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
+export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
   'ADMIN': {
     allowAll: true
   },
-  'MANAGER': {
-    blockedMethods: {
-      'DELETE': ['*']
-    }
+  'USER': {
+    allowAll: true
   },
-  'EVALUATOR': {
-    allowedMethods: {
-      'GET': ['services', 'features'],
-      'POST': ['features']
-    }
-  }
 };

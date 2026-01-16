@@ -1,13 +1,13 @@
 import { toPlainObject } from '../../utils/mongoose';
 import RepositoryBase from '../RepositoryBase';
 import UserMongoose from './models/UserMongoose';
-import { LeanUser, Role } from '../../types/models/User';
-import { generateApiKey } from '../../utils/users/helpers';
+import { LeanUser, UserRole } from '../../types/models/User';
+import { generateUserApiKey } from '../../utils/users/helpers';
 
 class UserRepository extends RepositoryBase {
   async findByUsername(username: string) {
     try {
-      const user = await UserMongoose.findOne({ username });
+      const user = await UserMongoose.findOne({ username }).exec();
 
       if (!user) return null;
 
@@ -18,7 +18,7 @@ class UserRepository extends RepositoryBase {
   }
 
   async authenticate(username: string, password: string): Promise<LeanUser | null> {
-    const user = await UserMongoose.findOne({ username });
+    const user = await UserMongoose.findOne({ username }).exec();
 
     if (!user) return null;
 
@@ -30,7 +30,7 @@ class UserRepository extends RepositoryBase {
 
     if (!leanUser.apiKey) {
       // If the user does not have an API key, we generate one
-      const newApiKey = generateApiKey();
+      const newApiKey = generateUserApiKey();
       await UserMongoose.updateOne({ username }, { apiKey: newApiKey });
       
       return leanUser;
@@ -70,7 +70,7 @@ class UserRepository extends RepositoryBase {
   async regenerateApiKey(username: string) {
     const updatedUser = await UserMongoose.findOneAndUpdate(
       { username: username },
-      { apiKey: generateApiKey() },
+      { apiKey: generateUserApiKey() },
       { new: true, projection: { password: 0 } }
     );
 
@@ -91,7 +91,7 @@ class UserRepository extends RepositoryBase {
     }
   }
 
-  async changeRole(username: string, role: Role) {
+  async changeRole(username: string, role: UserRole) {
     return this.update(username, { role });
   }
 }

@@ -2,10 +2,10 @@ import request from 'supertest';
 import { baseUrl } from '../testApp';
 import { Server } from 'http';
 import UserMongoose from '../../../main/repositories/mongoose/models/UserMongoose';
-import { Role, USER_ROLES } from '../../../main/types/models/User';
+import { UserRole, USER_ROLES } from '../../../main/types/models/User';
 
 // Create a test user directly in the database
-export const createTestUser = async (role: Role = USER_ROLES[USER_ROLES.length - 1]): Promise<any> => {
+export const createTestUser = async (role: UserRole = USER_ROLES[USER_ROLES.length - 1]): Promise<any> => {
   const userData = {
     username: `test_user_${Date.now()}`,
     password: 'password123',
@@ -29,7 +29,7 @@ export const regenerateApiKey = async (app: Server, userId: string, apiKey: stri
 };
 
 // Change the role of a user
-export const changeUserRole = async (app: Server, userId: string, newRole: Role, apiKey: string): Promise<any> => {
+export const changeUserRole = async (app: Server, userId: string, newRole: UserRole, apiKey: string): Promise<any> => {
   const response = await request(app)
     .put(`${baseUrl}/users/${userId}/role`)
     .set('x-api-key', apiKey)

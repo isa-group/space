@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import mongoose, { Document, Schema } from 'mongoose';
-import { generateApiKey, hashPassword } from '../../../utils/users/helpers';
-import { Role, USER_ROLES } from '../../../types/models/User';
+import { generateUserApiKey, hashPassword } from '../../../utils/users/helpers';
+import { UserRole, USER_ROLES } from '../../../types/models/User';
 
 const userSchema = new Schema({
   username: {
@@ -53,7 +53,7 @@ userSchema.pre('save', async function(next) {
     
     // If there's no API Key, we generate one
     if (!user.apiKey) {
-      user.apiKey = generateApiKey();
+      user.apiKey = generateUserApiKey();
     }
     
     next();
@@ -66,7 +66,7 @@ export interface UserDocument extends Document {
   username: string;
   password: string;
   apiKey: string;
-  role: Role;
+  role: UserRole;
   verifyPassword: (password: string) => Promise<boolean>;
 }
 
