@@ -6,6 +6,11 @@ function generateUserApiKey() {
   return apiKey;
 };
 
+function generateOrganizationApiKey() {
+  const apiKey = "org_" + crypto.randomBytes(32).toString('hex');
+  return apiKey;
+};
+
 async function hashPassword(password: string): Promise<string> {
   const salt = await bcrypt.genSalt(10);
   const hash = await bcrypt.hash(password, salt);
@@ -13,4 +18,4 @@ async function hashPassword(password: string): Promise<string> {
   return hash;
 }
 
-export { generateUserApiKey, hashPassword };
+export { generateUserApiKey, generateOrganizationApiKey, hashPassword };

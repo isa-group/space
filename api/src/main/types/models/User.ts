@@ -23,6 +23,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     allowAll: true
   },
   'USER': {
-    allowAll: true
+    allowAll: true,
   },
 };

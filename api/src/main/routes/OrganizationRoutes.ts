@@ -1,0 +1,61 @@
+import express from 'express';
+
+import * as OrganizationValidation from '../controllers/validation/OrganizationValidation';
+import { handleValidation } from '../middlewares/ValidationHandlingMiddleware';
+import OrganizationController from '../controllers/OrganizationController';
+import { hasOrgRole, isOrgOwner } from '../middlewares/ApiKeyAuthMiddleware';
+
+const loadFileRoutes = function (app: express.Application) {
+  const organizationController = new OrganizationController();
+  
+  const baseUrl = process.env.BASE_URL_PATH || '/api/v1';
+
+  // Public route for authentication (does not require API Key)
+  app
+    .route(`${baseUrl}/organizations/`)
+    .get(
+      organizationController.getAllOrganizations
+    )
+    .post(
+      OrganizationValidation.create,
+      handleValidation,
+      organizationController.createOrganization
+    );
+  
+    
+    app
+    .route(`${baseUrl}/organizations/:organizationId`)
+    .get(
+      organizationController.getOrganizationById
+    )
+    .put(
+      isOrgOwner,
+      OrganizationValidation.update,
+      handleValidation,
+      organizationController.update
+    );
+
+    app
+      .route(`${baseUrl}/organizations/members`)
+      .post(
+        hasOrgRole(["OWNER", "ADMIN", "MANAGER"]),
+        organizationController.addMember
+      )
+      .delete(
+        hasOrgRole(["OWNER", "ADMIN", "MANAGER"]),
+        organizationController.removeMember
+      );
+    
+      app
+      .route(`${baseUrl}/organizations/api-keys`)
+      .post(
+        hasOrgRole(["OWNER", "ADMIN", "MANAGER"]),
+        organizationController.addApiKey
+      )
+      .delete(
+        hasOrgRole(["OWNER", "ADMIN", "MANAGER"]),
+        organizationController.removeApiKey
+      );
+};
+
+export default loadFileRoutes;

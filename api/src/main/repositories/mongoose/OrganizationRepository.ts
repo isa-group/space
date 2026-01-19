@@ -1,16 +1,22 @@
-import { LeanApiKey, LeanOrganization } from '../../types/models/Organization';
+import { LeanApiKey, LeanOrganization, OrganizationFilter } from '../../types/models/Organization';
 import RepositoryBase from '../RepositoryBase';
 import OrganizationMongoose from './models/OrganizationMongoose';
 
 class OrganizationRepository extends RepositoryBase {
-  async findById(organizationId: string, ownerId: string): Promise<LeanOrganization | null> {
-    const organization = await OrganizationMongoose.findOne({ _id: organizationId, owner: ownerId }).populate('owner').exec();
+  
+  async findAll(filters: OrganizationFilter): Promise<LeanOrganization[]> {
+    const organizations = await OrganizationMongoose.find(filters).exec();
+    return organizations.map(org => org.toObject() as unknown as LeanOrganization);
+  }
+  
+  async findById(organizationId: string): Promise<LeanOrganization | null> {
+    const organization = await OrganizationMongoose.findOne({ _id: organizationId }).populate('owner').exec();
 
     return organization ? organization.toObject() as unknown as LeanOrganization : null;
   }
 
-  async findByNameAndOwnerId(name: string, ownerId: string): Promise<LeanOrganization | null> {
-    const organization = await OrganizationMongoose.findOne({ name, owner: ownerId }).populate('owner').exec();
+  async findByOwner(owner: string): Promise<LeanOrganization | null> {
+    const organization = await OrganizationMongoose.findOne({ owner }).exec();
 
     return organization ? organization.toObject() as unknown as LeanOrganization : null;
   }
@@ -27,17 +33,17 @@ class OrganizationRepository extends RepositoryBase {
     ).exec();
   }
 
-  async addMember(organizationId: string, userId: string): Promise<void> {
+  async addMember(organizationId: string, username: string): Promise<void> {
     await OrganizationMongoose.updateOne(
       { _id: organizationId },
-      { $addToSet: { members: userId } }
+      { $addToSet: { members: username } }
     ).exec();
   }
 
-  async changeOwner(organizationId: string, newOwnerId: string): Promise<void> {
+  async changeOwner(organizationId: string, newOwner: string): Promise<void> {
     await OrganizationMongoose.updateOne(
       { _id: organizationId },
-      { owner: newOwnerId }
+      { owner: newOwner }
     ).exec();
   }
 
@@ -48,10 +54,10 @@ class OrganizationRepository extends RepositoryBase {
     ).exec();
   }
 
-  async removeMember(organizationId: string, userId: string): Promise<void> {
+  async removeMember(organizationId: string, username: string): Promise<void> {
     await OrganizationMongoose.updateOne(
       { _id: organizationId },
-      { $pull: { members: userId } }
+      { $pull: { members: username } }
     ).exec();
   }
 }

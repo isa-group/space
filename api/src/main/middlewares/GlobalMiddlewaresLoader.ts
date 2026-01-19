@@ -1,8 +1,8 @@
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import { apiKeyAuthMiddleware } from './ApiKeyAuthMiddleware';
 import { analyticsTrackerMiddleware } from './AnalyticsMiddleware';
+import { apiKeyAuthMiddleware } from './ApiKeyAuthMiddleware';
 
 interface OriginValidatorCallback {
   (err: Error | null, allow?: boolean): void;
@@ -43,8 +43,7 @@ const loadGlobalMiddlewares = (app: express.Application) => {
   ));
   app.use(express.static('public'));
   
-  // Apply API Key authentication middleware to all routes
-  // except those defined as public
+  // Populate request with user info based on API key
   app.use(apiKeyAuthMiddleware);
 
   // Apply analytics tracking middleware

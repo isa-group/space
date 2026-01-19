@@ -13,7 +13,7 @@ export interface LeanApiKey {
   scope: OrganizationKeyScope;
 }
 
-export type OrganizationRole = 'ADMIN' | 'MANAGER' | 'EVALUATOR';
+export type OrganizationRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'EVALUATOR';
 export type OrganizationKeyScope = "ALL" | "MANAGEMENT" | "EVALUATION";
 
 export interface RolePermissions {
@@ -22,10 +22,13 @@ export interface RolePermissions {
   blockedMethods?: Partial<Record<RestOperation, Module[]>>;
 }
 
-export const ORGANIZATION_USER_ROLES: OrganizationRole[] = ['ADMIN', 'MANAGER', 'EVALUATOR'];
+export const ORGANIZATION_USER_ROLES: OrganizationRole[] = ['OWNER', 'ADMIN', 'MANAGER', 'EVALUATOR'];
 export const ORGANIZATION_API_KEY_ROLES: OrganizationKeyScope[] = ['ALL', 'MANAGEMENT', 'EVALUATION'];
 
 export const USER_ROLE_PERMISSIONS: Record<OrganizationRole, RolePermissions> = {
+  'OWNER': {
+    allowAll: true
+  },
   'ADMIN': {
     allowAll: true
   },
@@ -58,3 +61,12 @@ export const API_KEY_ROLE_PERMISSIONS: Record<OrganizationKeyScope, RolePermissi
     }
   }
 };
+
+export interface OrganizationFilter {
+  owner?: string;
+}
+
+export interface OrganizationMember {
+  username: string;
+  role: OrganizationRole;
+}
