@@ -2,7 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { analyticsTrackerMiddleware } from './AnalyticsMiddleware';
-import { apiKeyAuthMiddleware } from './ApiKeyAuthMiddleware';
+import { authenticateApiKeyMiddleware } from './AuthMiddleware';
 
 interface OriginValidatorCallback {
   (err: Error | null, allow?: boolean): void;
@@ -44,7 +44,7 @@ const loadGlobalMiddlewares = (app: express.Application) => {
   app.use(express.static('public'));
   
   // Populate request with user info based on API key
-  app.use(apiKeyAuthMiddleware);
+  app.use(authenticateApiKeyMiddleware);
 
   // Apply analytics tracking middleware
   app.use(analyticsTrackerMiddleware);

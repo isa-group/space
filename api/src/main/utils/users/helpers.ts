@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
 function generateUserApiKey() {
-  const apiKey = "user_" + crypto.randomBytes(32).toString('hex');
+  const apiKey = "usr_" + crypto.randomBytes(32).toString('hex');
   return apiKey;
 };
 

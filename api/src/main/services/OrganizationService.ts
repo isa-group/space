@@ -1,6 +1,7 @@
 import container from '../config/container';
+import { OrganizationApiKeyRole } from '../config/permissions';
 import OrganizationRepository from '../repositories/mongoose/OrganizationRepository';
-import { LeanApiKey, LeanOrganization, OrganizationFilter, OrganizationKeyScope } from '../types/models/Organization';
+import { LeanApiKey, LeanOrganization, OrganizationFilter } from '../types/models/Organization';
 import { generateOrganizationApiKey } from '../utils/users/helpers';
 import UserService from './UserService';
 import { validateOrganizationData } from './validation/OrganizationServiceValidations';
@@ -29,6 +30,26 @@ class OrganizationService {
     return organization;
   }
 
+  async findByApiKey(apiKey: string): Promise<{ organization: LeanOrganization; apiKeyData: LeanApiKey }> {
+    const organization = await this.organizationRepository.findByApiKey(apiKey);
+    
+    if (!organization) {
+      throw new Error('Invalid API Key');
+    }
+
+    // Find the specific API key data
+    const apiKeyData = organization.apiKeys.find(key => key.key === apiKey);
+    
+    if (!apiKeyData) {
+      throw new Error('Invalid API Key');
+    }
+
+    return {
+      organization,
+      apiKeyData
+    };
+  }
+
   async create(organizationData: any): Promise<LeanOrganization> {
     
     validateOrganizationData(organizationData);
@@ -52,7 +73,7 @@ class OrganizationService {
     return organization;
   }
 
-  async addApiKey(organizationId: string, keyScope: OrganizationKeyScope): Promise<void> {
+  async addApiKey(organizationId: string, keyScope: OrganizationApiKeyRole): Promise<void> {
     const apiKeyData: LeanApiKey = {
       key: generateOrganizationApiKey(),
       scope: keyScope

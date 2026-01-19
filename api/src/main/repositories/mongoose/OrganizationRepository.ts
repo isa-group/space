@@ -21,6 +21,14 @@ class OrganizationRepository extends RepositoryBase {
     return organization ? organization.toObject() as unknown as LeanOrganization : null;
   }
 
+  async findByApiKey(apiKey: string): Promise<LeanOrganization | null> {
+    const organization = await OrganizationMongoose.findOne({ 
+      'apiKeys.key': apiKey 
+    }).populate('owner').exec();
+
+    return organization ? organization.toObject() as unknown as LeanOrganization : null;
+  }
+
   async create(organizationData: LeanOrganization): Promise<LeanOrganization> {
     const organization = await new OrganizationMongoose(organizationData).save();
     return organization.toObject() as unknown as LeanOrganization;
@@ -44,6 +52,13 @@ class OrganizationRepository extends RepositoryBase {
     await OrganizationMongoose.updateOne(
       { _id: organizationId },
       { owner: newOwner }
+    ).exec();
+  }
+
+  async update(organizationId: string, updateData: any): Promise<void> {
+    await OrganizationMongoose.updateOne(
+      { _id: organizationId },
+      { $set: updateData }
     ).exec();
   }
 

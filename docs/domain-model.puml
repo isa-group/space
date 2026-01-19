@@ -14,13 +14,13 @@ enum UserRole <<Enum>> {
     USER
 }
 
-enum OrganizationKeyScope <<Enum>> {
+enum OrganizationApiKeyRole <<Enum>> {
     ALL
     MANAGEMENT
     EVALUATION
 }
 
-enum OrganizationRole <<Enum>> {
+enum OrganizationUserRole <<Enum>> {
     ADMIN
     MANAGER
     EVALUATOR
@@ -123,12 +123,12 @@ class UserContact <<ValueObject>> {
 
 class OrganizationUser <<ValueObject>> {
     - userId: String
-    - role: OrganizationRole
+    - role: OrganizationUserRole
 }
 
 class OrganizationApiKey <<ValueObject>> {
     - key: String
-    - scope: OrganizationKeyScope
+    - scope: OrganizationApiKeyRole
     - createdAt: Date
 }
 
@@ -234,7 +234,7 @@ Organization "1" <-- "0..*" OrganizationUser : has
 Organization *-- "0..*" OrganizationApiKey : has
 Organization *-- "0..*" Service
 
-OrganizationUser -- OrganizationRole : has
+OrganizationUser -- OrganizationUserRole : has
 
 Service *-- "1..*" PricingData : activePricings
 Service *-- "0..*" PricingData : archivedPricings
@@ -258,7 +258,7 @@ UsageLimit -- ValueType : uses
 Period -- PeriodUnit : uses
 
 User -- UserRole : has
-OrganizationApiKey -- OrganizationKeyScope : has
+OrganizationApiKey -- OrganizationApiKeyRole : has
 
 ' Notes
 note right of Service
