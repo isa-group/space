@@ -26,8 +26,9 @@ class ServiceController {
   async index(req: any, res: any) {
     try {
       const queryParams = this._transformIndexQueryParams(req.query);
+      const organizationId = req.params.organizationId;
 
-      const services = await this.serviceService.index(queryParams);
+      const services = await this.serviceService.index(queryParams, organizationId);
 
       res.json(services);
     } catch (err: any) {
@@ -39,6 +40,7 @@ class ServiceController {
     try {
       let { pricingStatus } = req.query;
       const serviceName = req.params.serviceName;
+      const organizationId = req.params.organizationId;
 
       if (!pricingStatus) {
         pricingStatus = 'active';
@@ -47,7 +49,7 @@ class ServiceController {
         return;
       }
 
-      const pricings = await this.serviceService.indexPricings(serviceName, pricingStatus);
+      const pricings = await this.serviceService.indexPricings(serviceName, pricingStatus, organizationId);
 
       for (const pricing of pricings) {
         resetEscapePricingVersion(pricing);
@@ -66,7 +68,8 @@ class ServiceController {
   async show(req: any, res: any) {
     try {
       const serviceName = req.params.serviceName;
-      const service = await this.serviceService.show(serviceName);
+      const organizationId = req.params.organizationId;
+      const service = await this.serviceService.show(serviceName, organizationId);
 
       return res.json(service);
     } catch (err: any) {
@@ -82,8 +85,9 @@ class ServiceController {
     try {
       const serviceName = req.params.serviceName;
       const pricingVersion = req.params.pricingVersion;
+      const organizationId = req.params.organizationId;
 
-      const pricing = await this.serviceService.showPricing(serviceName, pricingVersion);
+      const pricing = await this.serviceService.showPricing(serviceName, pricingVersion, organizationId);
 
       resetEscapePricingVersion(pricing);
 
@@ -100,6 +104,7 @@ class ServiceController {
   async create(req: any, res: any) {
     try {
       const receivedFile = req.file;
+      const organizationId = req.params.organizationId;
       let service;
 
       if (!receivedFile) {
@@ -107,9 +112,9 @@ class ServiceController {
           res.status(400).send({ error: 'No file or URL provided' });
           return;
         }
-        service = await this.serviceService.create(req.body.pricing, 'url');
+        service = await this.serviceService.create(req.body.pricing, 'url', organizationId);
       } else {
-        service = await this.serviceService.create(req.file, 'file');
+        service = await this.serviceService.create(req.file, 'file', organizationId);
       }
       res.status(201).json(service);
     } catch (err: any) {
@@ -130,6 +135,7 @@ class ServiceController {
   async addPricingToService(req: any, res: any) {
     try {
       const serviceName = req.params.serviceName;
+      const organizationId = req.params.organizationId;
       const receivedFile = req.file;
       let service;
 
@@ -141,10 +147,11 @@ class ServiceController {
         service = await this.serviceService.addPricingToService(
           serviceName,
           req.body.pricing,
-          'url'
+          'url',
+          organizationId
         );
       } else {
-        service = await this.serviceService.addPricingToService(serviceName, req.file, 'file');
+        service = await this.serviceService.addPricingToService(serviceName, req.file, 'file', organizationId);
       }
 
       res.status(201).json(service);
@@ -165,8 +172,9 @@ class ServiceController {
     try {
       const newServiceData = req.body;
       const serviceName = req.params.serviceName;
+      const organizationId = req.params.organizationId;
 
-      const service = await this.serviceService.update(serviceName, newServiceData);
+      const service = await this.serviceService.update(serviceName, newServiceData, organizationId);
 
       res.json(service);
     } catch (err: any) {
@@ -178,6 +186,7 @@ class ServiceController {
     try {
       const serviceName = req.params.serviceName;
       const pricingVersion = req.params.pricingVersion;
+      const organizationId = req.params.organizationId;
       const newAvailability = req.query.availability ?? 'archived';
       const fallBackSubscription: FallBackSubscription = req.body ?? {};
 
@@ -194,7 +203,8 @@ class ServiceController {
           serviceName,
           pricingVersion,
           newAvailability,
-          fallBackSubscription
+          fallBackSubscription,
+          organizationId
         );
 
         res.json(service);
@@ -224,7 +234,8 @@ class ServiceController {
   async disable(req: any, res: any) {
     try {
       const serviceName = req.params.serviceName;
-      const result = await this.serviceService.disable(serviceName);
+      const organizationId = req.params.organizationId;
+      const result = await this.serviceService.disable(serviceName, organizationId);
 
       if (result) {
         res.status(204).send();
@@ -244,8 +255,9 @@ class ServiceController {
     try {
       const serviceName = req.params.serviceName;
       const pricingVersion = req.params.pricingVersion;
+      const organizationId = req.params.organizationId;
 
-      const result = await this.serviceService.destroyPricing(serviceName, pricingVersion);
+      const result = await this.serviceService.destroyPricing(serviceName, pricingVersion, organizationId);
 
       if (result) {
         res.status(204).send();

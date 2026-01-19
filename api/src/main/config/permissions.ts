@@ -58,37 +58,72 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   },
 
   // ============================================
-  // Service Management Routes
+  // Service Management Routes (Organization-scoped)
+  // User API Keys can access via /organizations/:organizationId/services/**
+  // ============================================
+  {
+    path: '/organizations/*/services',
+    methods: ['GET', 'POST', 'DELETE'],
+    allowedUserRoles: ['ADMIN', 'USER'],
+    requiresUser: true,
+  },
+  {
+    path: '/organizations/*/services/*',
+    methods: ['GET', 'PUT', 'PATCH', 'DELETE'],
+    allowedUserRoles: ['ADMIN', 'USER'],
+    requiresUser: true,
+  },
+  {
+    path: '/organizations/*/services/*/pricings',
+    methods: ['GET', 'POST'],
+    allowedUserRoles: ['ADMIN', 'USER'],
+    requiresUser: true,
+  },
+  {
+    path: '/organizations/*/services/*/pricings/*',
+    methods: ['GET', 'PUT', 'PATCH', 'DELETE'],
+    allowedUserRoles: ['ADMIN', 'USER'],
+    requiresUser: true,
+  },
+
+  // ============================================
+  // Service Management Routes (Direct access)
+  // Organization API Keys can access via /services/**
   // ============================================
   {
     path: '/services',
     methods: ['GET'],
-    allowedUserRoles: ['ADMIN', 'USER'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
   },
   {
     path: '/services',
     methods: ['POST'],
-    allowedUserRoles: ['ADMIN', 'USER'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
   {
     path: '/services/*',
     methods: ['GET'],
-    allowedUserRoles: ['ADMIN', 'USER'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
   },
   {
     path: '/services/*',
     methods: ['PUT', 'PATCH'],
-    allowedUserRoles: ['ADMIN', 'USER'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
   {
     path: '/services/*',
     methods: ['DELETE'],
-    allowedUserRoles: ['ADMIN'],
     allowedOrgRoles: ['ALL'],
+  },
+  {
+    path: '/services/*/pricings',
+    methods: ['GET', 'POST'],
+    allowedOrgRoles: ['ALL', 'MANAGEMENT'],
+  },
+  {
+    path: '/services/*/pricings/*',
+    methods: ['GET', 'PUT', 'PATCH', 'DELETE'],
+    allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
 
   // ============================================

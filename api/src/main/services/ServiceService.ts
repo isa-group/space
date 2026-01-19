@@ -35,8 +35,8 @@ class ServiceService {
     this.cacheService = container.resolve('cacheService');
   }
 
-  async index(queryParams: ServiceQueryFilters) {
-    const services = await this.serviceRepository.findAll(queryParams);
+  async index(queryParams: ServiceQueryFilters, organizationId: string) {
+    const services = await this.serviceRepository.findAll(organizationId, queryParams);
 
     for (const service of services) {
       resetEscapeVersionInService(service);
@@ -45,21 +45,22 @@ class ServiceService {
     return services;
   }
 
-  async indexByNames(serviceNames: string[]) {
+  async indexByNames(serviceNames: string[], organizationId: string) {
     if (!Array.isArray(serviceNames) || serviceNames.length === 0) {
       throw new Error('Invalid request: serviceNames must be a non-empty array');
     }
 
-    const services = await this.serviceRepository.findByNames(serviceNames);
+    const services = await this.serviceRepository.findByNames(serviceNames, organizationId);
     return services;
   }
 
-  async indexPricings(serviceName: string, pricingStatus: string) {
-    let service = await this.cacheService.get(`service.${serviceName}`);
+  async indexPricings(serviceName: string, pricingStatus: string, organizationId: string) {
+    const cacheKey = `service.${organizationId}.${serviceName}`;
+    let service = await this.cacheService.get(cacheKey);
 
     if (!service) {
-      service = await this.serviceRepository.findByName(serviceName);
-      await this.cacheService.set(`service.${serviceName}`, service, 3600, true);
+      service = await this.serviceRepository.findByName(serviceName, organizationId);
+      await this.cacheService.set(cacheKey, service, 3600, true);
     }
 
     if (!service) {
@@ -85,7 +86,8 @@ class ServiceService {
     const locallySavedPricings =
       (await this.serviceRepository.findPricingsByServiceName(
         service.name,
-        versionsToRetrieveLocally
+        versionsToRetrieveLocally,
+        organizationId
       )) ?? [];
 
     const remotePricings = [];
@@ -118,12 +120,13 @@ class ServiceService {
     return (locallySavedPricings as unknown as ExpectedPricingType[]).concat(remotePricings);
   }
 
-  async show(serviceName: string) {
-    let service = await this.cacheService.get(`service.${serviceName}`);
+  async show(serviceName: string, organizationId: string) {
+    const cacheKey = `service.${organizationId}.${serviceName}`;
+    let service = await this.cacheService.get(cacheKey);
 
     if (!service) {
-      service = await this.serviceRepository.findByName(serviceName);
-      await this.cacheService.set(`service.${serviceName}`, service, 3600, true);
+      service = await this.serviceRepository.findByName(serviceName, organizationId);
+      await this.cacheService.set(cacheKey, service, 3600, true);
       if (!service) {
         throw new Error(`Service ${serviceName} not found`);
       }
@@ -134,12 +137,13 @@ class ServiceService {
     return service;
   }
 
-  async showPricing(serviceName: string, pricingVersion: string) {
+  async showPricing(serviceName: string, pricingVersion: string, organizationId: string) {
 
-    let service = await this.cacheService.get(`service.${serviceName}`);
+    const cacheKey = `service.${organizationId}.${serviceName}`;
+    let service = await this.cacheService.get(cacheKey);
 
     if (!service){
-      service = await this.serviceRepository.findByName(serviceName);
+      service = await this.serviceRepository.findByName(serviceName, organizationId);
     }
 
     const formattedPricingVersion = escapeVersion(pricingVersion);
@@ -184,15 +188,15 @@ class ServiceService {
     }
   }
 
-  async create(receivedPricing: any, pricingType: 'file' | 'url') {
+  async create(receivedPricing: any, pricingType: 'file' | 'url', organizationId: string) {
     try {
       
       await this.cacheService.del("features.*");
 
       if (pricingType === 'file') {
-        return await this._createFromFile(receivedPricing);
+        return await this._createFromFile(receivedPricing, organizationId, undefined);
       } else {
-        return await this._createFromUrl(receivedPricing);
+        return await this._createFromUrl(receivedPricing, organizationId, undefined);
       }
     } catch (err) {
       throw new Error((err as Error).message);
@@ -202,23 +206,25 @@ class ServiceService {
   async addPricingToService(
     serviceName: string,
     receivedPricing: any,
-    pricingType: 'file' | 'url'
+    pricingType: 'file' | 'url',
+    organizationId: string
   ) {
     try {
       await this.cacheService.del("features.*");
-      await this.cacheService.del(`service.${serviceName}`);
+      const cacheKey = `service.${organizationId}.${serviceName}`;
+      await this.cacheService.del(cacheKey);
       
       if (pricingType === 'file') {
-        return await this._createFromFile(receivedPricing, serviceName);
+        return await this._createFromFile(receivedPricing, organizationId, serviceName);
       } else {
-        return await this._createFromUrl(receivedPricing, serviceName);
+        return await this._createFromUrl(receivedPricing, organizationId, serviceName);
       }
     } catch (err) {
       throw new Error((err as Error).message);
     }
   }
 
-  async _createFromFile(pricingFile: any, serviceName?: string) {
+  async _createFromFile(pricingFile: any, organizationId: string, serviceName?: string) {
     let service: LeanService | null = null;
 
     // Step 1: Parse and validate pricing
@@ -232,7 +238,7 @@ class ServiceService {
           `Invalid request: The service name in the pricing file (${uploadedPricing.saasName}) does not match the service name in the URL (${serviceName})`
         );
       }
-      service = await this.serviceRepository.findByName(serviceName);
+      service = await this.serviceRepository.findByName(serviceName, organizationId);
       if (!service) {
         throw new Error(`Service ${serviceName} not found`);
       }
@@ -266,8 +272,8 @@ class ServiceService {
     //   entries into archivedPricings (renaming collisions by appending timestamp)
     if (!service) {
       // Check if an enabled service exists
-      const existingEnabled = await this.serviceRepository.findByName(uploadedPricing.saasName, false);
-      const existingDisabled = await this.serviceRepository.findByName(uploadedPricing.saasName, true);
+      const existingEnabled = await this.serviceRepository.findByName(uploadedPricing.saasName, organizationId, false);
+      const existingDisabled = await this.serviceRepository.findByName(uploadedPricing.saasName, organizationId, true);
 
       if (existingEnabled) {
         throw new Error(`Invalid request: Service ${uploadedPricing.saasName} already exists`);
@@ -319,7 +325,7 @@ class ServiceService {
           archivedPricings: newArchived,
         };
 
-        const updated = await this.serviceRepository.update(existingDisabled.name, updateData);
+        const updated = await this.serviceRepository.update(existingDisabled.name, updateData, organizationId);
         if (!updated) {
           throw new Error(`Service ${uploadedPricing.saasName} not updated`);
         }
@@ -407,7 +413,7 @@ class ServiceService {
         };
       }
 
-      const updatedService = await this.serviceRepository.update(service.name, updatePayload);
+      const updatedService = await this.serviceRepository.update(service.name, updatePayload, organizationId);
 
       service = updatedService;
     }
@@ -440,14 +446,14 @@ class ServiceService {
     return service;
   }
 
-  async _createFromUrl(pricingUrl: string, serviceName?: string) {
+  async _createFromUrl(pricingUrl: string, organizationId: string, serviceName?: string) {
     const uploadedPricing: Pricing = await this._getPricingFromRemoteUrl(pricingUrl);
     const formattedPricingVersion = escapeVersion(uploadedPricing.version);
 
     if (!serviceName) {
       // Create a new service or re-enable a disabled one
-      const existingEnabled = await this.serviceRepository.findByName(uploadedPricing.saasName, false);
-      const existingDisabled = await this.serviceRepository.findByName(uploadedPricing.saasName, true);
+      const existingEnabled = await this.serviceRepository.findByName(uploadedPricing.saasName, organizationId, false);
+      const existingDisabled = await this.serviceRepository.findByName(uploadedPricing.saasName, organizationId, true);
 
       if (existingEnabled) {
         throw new Error(`Invalid request: Service ${uploadedPricing.saasName} already exists`);
@@ -488,7 +494,7 @@ class ServiceService {
           archivedPricings: newArchived,
         };
 
-        const updated = await this.serviceRepository.update(existingDisabled.name, updateData);
+        const updated = await this.serviceRepository.update(existingDisabled.name, updateData, organizationId);
         if (!updated) {
           throw new Error(`Service ${uploadedPricing.saasName} not updated`);
         }
@@ -518,7 +524,7 @@ class ServiceService {
         );
       }
       // Update an existing service
-      const service = await this.serviceRepository.findByName(serviceName);
+      const service = await this.serviceRepository.findByName(serviceName, organizationId);
       if (!service) {
         throw new Error(`Service ${serviceName} not found`);
       }
@@ -578,7 +584,7 @@ class ServiceService {
         };
       }
 
-      const updatedService = await this.serviceRepository.update(service.name, updatePayload);
+      const updatedService = await this.serviceRepository.update(service.name, updatePayload, organizationId);
 
       if (!updatedService) {
         throw new Error(`Service ${serviceName} not updated with pricing ${uploadedPricing.version}`);
@@ -593,25 +599,27 @@ class ServiceService {
     }
   }
 
-  async update(serviceName: string, newServiceData: any) {
+  async update(serviceName: string, newServiceData: any, organizationId: string) {
 
-    let service = await this.cacheService.get(`service.${serviceName}`);
+    const cacheKey = `service.${organizationId}.${serviceName}`;
+    let service = await this.cacheService.get(cacheKey);
 
     if (!service) {
-      service = await this.serviceRepository.findByName(serviceName);
+      service = await this.serviceRepository.findByName(serviceName, organizationId);
     }
 
     if (!service) {
       throw new Error(`Service ${serviceName} not found`);
     }
 
-    const updatedService = await this.serviceRepository.update(service.name, newServiceData);
+    const updatedService = await this.serviceRepository.update(service.name, newServiceData, organizationId);
     if (newServiceData.name && newServiceData.name !== service.name) {
       // If the service name has changed, we need to update the cache key
-      await this.cacheService.del(`service.${service.name}`);
+      await this.cacheService.del(cacheKey);
       serviceName = newServiceData.name;
     }
-    await this.cacheService.set(`service.${serviceName}`, updatedService, 3600, true);
+    const newCacheKey = `service.${organizationId}.${serviceName}`;
+    await this.cacheService.set(newCacheKey, updatedService, 3600, true);
 
     return updatedService;
   }
@@ -620,13 +628,15 @@ class ServiceService {
     serviceName: string,
     pricingVersion: string,
     newAvailability: 'active' | 'archived',
-    fallBackSubscription: FallBackSubscription
+    fallBackSubscription: FallBackSubscription,
+    organizationId: string
   ) {
 
-    let service = await this.cacheService.get(`service.${serviceName}`);
+    const cacheKey = `service.${organizationId}.${serviceName}`;
+    let service = await this.cacheService.get(cacheKey);
 
     if (!service) {
-      service = await this.serviceRepository.findByName(serviceName);
+      service = await this.serviceRepository.findByName(serviceName, organizationId);
     }
 
     const formattedPricingVersion = escapeVersion(pricingVersion);
@@ -673,20 +683,20 @@ class ServiceService {
       updatedService = await this.serviceRepository.update(service.name, {
         [`activePricings.${formattedPricingVersion}`]: pricingLocator,
         [`archivedPricings.${formattedPricingVersion}`]: undefined,
-      });
+      }, organizationId);
 
       // Emitir evento de cambio de pricing (activación)
       this.eventService.emitPricingActivedMessage(service.name, pricingVersion);
-      await this.cacheService.set(`service.${serviceName}`, updatedService, 3600, true);
+      await this.cacheService.set(cacheKey, updatedService, 3600, true);
     } else {
       updatedService = await this.serviceRepository.update(service.name, {
         [`activePricings.${formattedPricingVersion}`]: undefined,
         [`archivedPricings.${formattedPricingVersion}`]: pricingLocator,
-      });
+      }, organizationId);
 
       // Emitir evento de cambio de pricing (archivado)
       this.eventService.emitPricingArchivedMessage(service.name, pricingVersion);
-      await this.cacheService.set(`service.${serviceName}`, updatedService, 3600, true);
+      await this.cacheService.set(cacheKey, updatedService, 3600, true);
 
       if (
         fallBackSubscription &&
@@ -701,7 +711,8 @@ class ServiceService {
       await this._novateContractsToLatestVersion(
         service.name.toLowerCase(),
         escapeVersion(pricingVersion),
-        fallBackSubscription
+        fallBackSubscription,
+        organizationId
       );
     }
 
@@ -717,37 +728,39 @@ class ServiceService {
     return result;
   }
 
-  async disable(serviceName: string) {
-    let service = await this.cacheService.get(`service.${serviceName}`);
+  async disable(serviceName: string, organizationId: string) {
+    const cacheKey = `service.${organizationId}.${serviceName}`;
+    let service = await this.cacheService.get(cacheKey);
 
     if (!service) {
-      service = await this.serviceRepository.findByName(serviceName);
+      service = await this.serviceRepository.findByName(serviceName, organizationId);
     }
 
     if (!service) {
       throw new Error(`Service ${serviceName} not found`);
     }
 
-    const contractNovationResult = await this._removeServiceFromContracts(service.name);
+    const contractNovationResult = await this._removeServiceFromContracts(service.name, organizationId);
 
     if (!contractNovationResult) {
       throw new Error(`Failed to remove service ${serviceName} from contracts`);
     }
 
-    const result = await this.serviceRepository.disable(service.name);
+    const result = await this.serviceRepository.disable(service.name, organizationId);
   
     this.eventService.emitServiceDisabledMessage(service.name);
-    this.cacheService.del(`service.${serviceName}`);
+    this.cacheService.del(cacheKey);
 
     return result;
   }
 
-  async destroyPricing(serviceName: string, pricingVersion: string) {
+  async destroyPricing(serviceName: string, pricingVersion: string, organizationId: string) {
 
-    let service = await this.cacheService.get(`service.${serviceName}`);
+    const cacheKey = `service.${organizationId}.${serviceName}`;
+    let service = await this.cacheService.get(cacheKey);
 
     if (!service) {
-      service = await this.serviceRepository.findByName(serviceName);
+      service = await this.serviceRepository.findByName(serviceName, organizationId);
     }
 
     if (!service) {
@@ -779,7 +792,7 @@ class ServiceService {
     const result = await this.serviceRepository.update(service.name, {
       [`activePricings.${formattedPricingVersion}`]: undefined,
       [`archivedPricings.${formattedPricingVersion}`]: undefined,
-    });
+    }, organizationId);
     await this.cacheService.set(`service.${serviceName}`, result, 3600, true);
 
     return result;
@@ -788,7 +801,8 @@ class ServiceService {
   async _novateContractsToLatestVersion(
     serviceName: string,
     pricingVersion: string,
-    fallBackSubscription: FallBackSubscription
+    fallBackSubscription: FallBackSubscription,
+    organizationId: string
   ): Promise<void> {
     const serviceContracts: LeanContract[] = await this.contractRepository.findByFilters({
       services: [serviceName],
@@ -808,7 +822,7 @@ class ServiceService {
       return;
     }
 
-    const serviceLatestPricing = await this._getLatestActivePricing(serviceName);
+    const serviceLatestPricing = await this._getLatestActivePricing(serviceName, organizationId);
 
     if (!serviceLatestPricing) {
       throw new Error(`No active pricing found for service ${serviceName}`);
@@ -853,8 +867,8 @@ class ServiceService {
     }
   }
 
-  async _getLatestActivePricing(serviceName: string): Promise<LeanPricing | null> {
-    const pricings = await this.indexPricings(serviceName, 'active');
+  async _getLatestActivePricing(serviceName: string, organizationId: string): Promise<LeanPricing | null> {
+    const pricings = await this.indexPricings(serviceName, 'active', organizationId);
 
     const sortedPricings = pricings.sort((a, b) => {
       // Sort by createdAt date (descending - newest first)
@@ -910,7 +924,7 @@ class ServiceService {
     return retrievePricingFromText(remotePricingYaml);
   }
 
-  async _removeServiceFromContracts(serviceName: string): Promise<boolean> {
+  async _removeServiceFromContracts(serviceName: string, organizationId: string): Promise<boolean> {
     const contracts: LeanContract[] = await this.contractRepository.findByFilters({});
     const novatedContracts: LeanContract[] = [];
     const contractsToDisable: LeanContract[] = [];

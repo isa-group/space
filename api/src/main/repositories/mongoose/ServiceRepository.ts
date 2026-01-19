@@ -14,13 +14,16 @@ export type ServiceQueryFilters = {
 }
 
 class ServiceRepository extends RepositoryBase {
-  async findAll(queryFilters?: ServiceQueryFilters, disabled = false) {
+  async findAll(organizationId: string, queryFilters?: ServiceQueryFilters, disabled = false) {
     const { name, page = 1, offset = 0, limit = 20, order = 'asc' } = queryFilters || {};
     
-    const services = await ServiceMongoose.find({
+    const query: any = {
       ...(name ? { name: { $regex: name, $options: 'i' } } : {}),
       disabled: disabled,
-    })
+      organizationId: organizationId
+    };
+    
+    const services = await ServiceMongoose.find(query)
       .skip(offset == 0 ? (page - 1) * limit : offset)
       .limit(limit)
       .sort({ name: order === 'asc' ? 1 : -1 });
@@ -28,8 +31,9 @@ class ServiceRepository extends RepositoryBase {
     return services.map((service) => toPlainObject<LeanService>(service.toJSON()));
   }
 
-  async findAllNoQueries(disabled = false, projection: any = { name: 1, activePricings: 1, archivedPricings: 1 }): Promise<LeanService[] | null> {
-    const services = await ServiceMongoose.find({ disabled: disabled }).select(projection);
+  async findAllNoQueries(organizationId: string, disabled = false, projection: any = { name: 1, activePricings: 1, archivedPricings: 1 }): Promise<LeanService[] | null> {
+    const query: any = { disabled: disabled, organizationId: organizationId };
+    const services = await ServiceMongoose.find(query).select(projection);
 
     if (!services || Array.isArray(services) && services.length === 0) {
       return null;
@@ -38,8 +42,9 @@ class ServiceRepository extends RepositoryBase {
     return services.map((service) => toPlainObject<LeanService>(service.toJSON()));
   }
 
-  async findByName(name: string, disabled = false): Promise<LeanService | null> {
-    const service = await ServiceMongoose.findOne({ name: { $regex: name, $options: 'i' }, disabled: disabled });
+  async findByName(name: string, organizationId: string, disabled = false): Promise<LeanService | null> {
+    const query: any = { name: { $regex: name, $options: 'i' }, disabled: disabled, organizationId: organizationId };
+    const service = await ServiceMongoose.findOne(query);
     if (!service) {
       return null;
     }
@@ -47,16 +52,18 @@ class ServiceRepository extends RepositoryBase {
     return toPlainObject<LeanService>(service.toJSON());
   }
 
-  async findByNames(names: string[], disabled = false): Promise<LeanService[] | null> {
-    const services = await ServiceMongoose.find({ name: { $in: names.map(name => new RegExp(name, 'i')) }, disabled: disabled });
+  async findByNames(names: string[], organizationId: string, disabled = false): Promise<LeanService[] | null> {
+    const query: any = { name: { $in: names.map(name => new RegExp(name, 'i')) }, disabled: disabled, organizationId: organizationId };
+    const services = await ServiceMongoose.find(query);
     if (!services || Array.isArray(services) && services.length === 0) {
       return null;
     }
     return services.map((service) => toPlainObject<LeanService>(service.toJSON()));
   }
 
-  async findPricingsByServiceName(serviceName: string, versionsToRetrieve: string[], disabled = false): Promise<LeanPricing[] | null> {
-    const pricings = await PricingMongoose.find({ _serviceName: { $regex: serviceName, $options: 'i' }, version: { $in: versionsToRetrieve } });
+  async findPricingsByServiceName(serviceName: string, versionsToRetrieve: string[], organizationId: string, disabled = false): Promise<LeanPricing[] | null> {
+    const query: any = { _serviceName: { $regex: serviceName, $options: 'i' }, version: { $in: versionsToRetrieve }, _organizationId: organizationId };
+    const pricings = await PricingMongoose.find(query);
     if (!pricings || Array.isArray(pricings) && pricings.length === 0) {
       return null;
     }
@@ -71,8 +78,12 @@ class ServiceRepository extends RepositoryBase {
     return toPlainObject<LeanService>(service.toJSON());
   }
 
-  async update(name: string, data: any) {
-    const service = await ServiceMongoose.findOne({ name: { $regex: name, $options: 'i' } });
+  async update(name: string, data: any, organizationId: string) {
+    const query: any = { name: { $regex: name, $options: 'i' } };
+    if (organizationId) {
+      query.organizationId = organizationId;
+    }
+    const service = await ServiceMongoose.findOne(query);
     if (!service) {
       return null;
     }
@@ -83,8 +94,9 @@ class ServiceRepository extends RepositoryBase {
     return toPlainObject<LeanService>(service.toJSON());
   }
 
-  async disable(name: string) {
-    const service = await ServiceMongoose.findOne({ name: { $regex: name, $options: 'i' } });
+  async disable(name: string, organizationId: string) {
+    const query: any = { name: { $regex: name, $options: 'i' }, organizationId: organizationId };
+    const service = await ServiceMongoose.findOne(query);
 
     if (!service) {
       return null;
@@ -117,8 +129,9 @@ class ServiceRepository extends RepositoryBase {
     return toPlainObject<LeanService>(service.toJSON());
   }
 
-  async destroy(name: string, ...args: any) {
-    const result = await ServiceMongoose.deleteOne({ name: { $regex: name, $options: 'i' } });
+  async destroy(name: string, organizationId: string, ...args: any) {
+    const query: any = { name: { $regex: name, $options: 'i' }, organizationId: organizationId };
+    const result = await ServiceMongoose.deleteOne(query);
     
     if (!result) {
       return null;

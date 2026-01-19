@@ -8,6 +8,7 @@ import {
   OrganizationApiKeyRole 
 } from '../config/permissions';
 import { matchPath, extractApiPath } from '../utils/routeMatcher';
+import { OrganizationMember, OrganizationUserRole } from '../types/models/Organization';
 
 /**
  * Middleware to authenticate API Keys (both User and Organization types)
@@ -81,9 +82,11 @@ async function authenticateOrgApiKey(req: Request, apiKey: string): Promise<void
   req.org = {
     id: result.organization.id,
     name: result.organization.name,
+    members: result.organization.members,
     role: result.apiKeyData.scope as OrganizationApiKeyRole,
   };
   req.authType = 'organization';
+  req.params.organizationId = result.organization.id;
 }
 
 /**
@@ -166,4 +169,44 @@ const checkPermissions = (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-export { authenticateApiKeyMiddleware };
+const memberRole = async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user && !req.org) {
+    return res.status(401).json({ 
+      error: 'Authentication required' 
+    });
+  }
+
+  if (req.authType === 'user'){
+    const organizationService = container.resolve('organizationService');
+    const organizationId = req.params.organizationId;
+    const service = await organizationService.findByName(organizationId);
+
+    const member = service.members.find((member: OrganizationMember) => member.username === req.user!.username)
+
+    if (member) {
+      req.user!.orgRole = member.role as OrganizationUserRole;
+    }
+  }else{
+    next();
+  }
+}
+
+const hasPermission = (requiredRoles: (OrganizationApiKeyRole | OrganizationUserRole)[]) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user?.orgRole) {
+      return res.status(401).json({ 
+        error: 'This route requires user authentication' 
+      });
+    }
+
+    if (!requiredRoles.includes(req.user!.orgRole as OrganizationUserRole)) {
+      return res.status(403).json({ 
+        error: 'You do not have permission to access this resource. Allowed roles: ' + requiredRoles.join(', ')
+      });
+    }
+
+    next();
+  }
+}
+
+export { authenticateApiKeyMiddleware, memberRole, hasPermission };

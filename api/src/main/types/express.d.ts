@@ -21,6 +21,7 @@ declare global {
       org?: {
         id: string;
         name: string;
+        members: {username: string, role: string}[];
         role: OrganizationApiKeyRole;
       };
 
