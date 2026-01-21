@@ -14,7 +14,7 @@ class UserService {
   async findByUsername(username: string) {
     const user = await this.userRepository.findByUsername(username);
     if (!user) {
-      throw new Error('User not found');
+      throw new Error('INVALID DATA: User not found');
     }
     return user;
   }
@@ -54,7 +54,7 @@ class UserService {
     
     const user = await this.userRepository.findByUsername(username);
     if (!user) {
-      throw new Error('User not found');
+      throw new Error('INVALID DATA:User not found');
     }
     
     if (creatorData.role !== 'ADMIN' && user.role === 'ADMIN') {
@@ -100,7 +100,7 @@ class UserService {
     
     const user = await this.userRepository.findByUsername(username);
     if (!user) {
-      throw new Error('User not found');
+      throw new Error('INVALID DATA: User not found');
     }
 
     if (creatorData.role !== 'ADMIN' && user.role === 'ADMIN') {
@@ -137,7 +137,7 @@ class UserService {
     // Comprobar si el usuario a eliminar es admin
     const user = await this.userRepository.findByUsername(username);
     if (!user) {
-      throw new Error('User not found');
+      throw new Error('INVALID DATA: User not found');
     }
     if (user.role === 'ADMIN') {
       // Contar admins restantes
@@ -149,7 +149,7 @@ class UserService {
     }
     const result = await this.userRepository.destroy(username);
     if (!result) {
-      throw new Error('User not found');
+      throw new Error('INVALID DATA: User not found');
     }
     return true;
   }

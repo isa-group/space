@@ -62,7 +62,7 @@ class UserRepository extends RepositoryBase {
     })
 
     if (!updatedUser) {
-      throw new Error('User not found');
+      throw new Error('INVALID DATA: User not found');
     }
     
     return toPlainObject<LeanUser>(updatedUser.toJSON());

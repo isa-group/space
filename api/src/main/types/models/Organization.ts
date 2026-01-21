@@ -1,11 +1,11 @@
 import { OrganizationApiKeyRole } from "../../types/permissions";
 
 export interface LeanOrganization {
-  id: string;
+  id?: string;
   name: string;
   owner: string;
   apiKeys: LeanApiKey[];
-  members: string[];
+  members: OrganizationMember[];
 }
 
 export interface LeanApiKey {

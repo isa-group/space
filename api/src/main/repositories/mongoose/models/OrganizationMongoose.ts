@@ -9,7 +9,8 @@ const organizationSchema = new Schema(
     name: { type: String, required: true },
     owner: { 
       type: String,
-      ref: 'User'
+      ref: 'User',
+      required: true
     },
     apiKeys: { type: [OrganizationApiKey], default: [] },
     members: {
@@ -29,11 +30,19 @@ const organizationSchema = new Schema(
   }
 );
 
-// Adding unique index for [name, owner, version]
+organizationSchema.virtual('ownerDetails', {
+  ref: 'User',         // El modelo donde buscar
+  localField: 'owner',  // El campo en Organization (que tiene el username)
+  foreignField: 'username', // El campo en User donde debe buscar ese valor
+  justOne: true         // Queremos un objeto, no un array
+});
+
+// Adding indexes
 organizationSchema.index({ name: 1 });
-organizationSchema.index({ apiKeys: 1 }, { unique: true });
+organizationSchema.index({ 'apiKeys.key': 1 }, { sparse: true });
 organizationSchema.index({ members: 1 }, { unique: true });
 
 const organizationModel = mongoose.model('Organization', organizationSchema, 'organizations');
 
 export default organizationModel;
+

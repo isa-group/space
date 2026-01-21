@@ -26,18 +26,22 @@ const loadFileRoutes = function (app: express.Application) {
     app
     .route(`${baseUrl}/organizations/:organizationId`)
     .get(
+      OrganizationValidation.getById,
+      handleValidation,
       organizationController.getOrganizationById
     )
     .put(
-      isOrgOwner,
       OrganizationValidation.update,
       handleValidation,
+      isOrgOwner,
       organizationController.update
     );
 
     app
-      .route(`${baseUrl}/organizations/members`)
+      .route(`${baseUrl}/organizations/:organizationId/members`)
       .post(
+        OrganizationValidation.addMember,
+        handleValidation,
         hasOrgRole(["OWNER", "ADMIN", "MANAGER"]),
         organizationController.addMember
       )
@@ -47,7 +51,7 @@ const loadFileRoutes = function (app: express.Application) {
       );
     
       app
-      .route(`${baseUrl}/organizations/api-keys`)
+      .route(`${baseUrl}/organizations/:organizationId/api-keys`)
       .post(
         hasOrgRole(["OWNER", "ADMIN", "MANAGER"]),
         organizationController.addApiKey

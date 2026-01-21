@@ -17,63 +17,183 @@ class OrganizationController {
   }
 
   async getAllOrganizations(req: any, res: any) {
-    
-    // Allows non-admin users to only see their own organizations
-    if (req.user.role !== 'ADMIN') {
-      req.query.owner = req.user.username;
-    }
+    try {
+      // Allows non-admin users to only see their own organizations
+      if (req.user.role !== 'ADMIN') {
+        req.query.owner = req.user.username;
+      }
 
-    const filters = req.query || {};
-    
-    return this.organizationService.findAll(filters);
+      const filters = req.query || {};
+      const organizations = await this.organizationService.findAll(filters);
+      res.json(organizations);
+    } catch (err: any) {
+      if (err.message.includes('PERMISSION ERROR')) {
+        return res.status(403).send({ error: err.message });
+      }
+      res.status(500).send({ error: err.message });
+    }
   }
 
   async getOrganizationById(req: any, res: any) {
+    try {
+      const organizationId = req.params.organizationId;
+      const organization = await this.organizationService.findById(organizationId);
+      
+      if (!organization) {
+        return res.status(404).send({ error: `Organization with ID ${organizationId} not found` });
+      }
 
-    const organizationId = req.params.organizationId;
-
-    return this.organizationService.findById(organizationId);
+      res.json(organization);
+    } catch (err: any) {
+      if (err.message.includes('PERMISSION ERROR')) {
+        return res.status(403).send({ error: err.message });
+      }
+      res.status(500).send({ error: err.message });
+    }
   }
 
   async createOrganization(req: any, res: any) {
-    const organizationData = req.body;
-    
-    return this.organizationService.create(organizationData);
+    try {
+      const organizationData = req.body;
+      const organization = await this.organizationService.create(organizationData, req.user);
+      res.status(201).json(organization);
+    } catch (err: any) {
+      if (err.message.includes('PERMISSION ERROR')) {
+        return res.status(403).send({ error: err.message });
+      }
+      if (err.message.includes('does not exist') || err.message.includes('not found')) {
+        return res.status(400).send({ error: err.message });
+      }
+      res.status(500).send({ error: err.message });
+    }
   }
 
   async addMember(req: any, res: any) {
-    const organizationId = req.params.organizationId;
-    const { username } = req.body;
+    try {
+      const organizationId = req.params.organizationId;
+      const { username, role } = req.body;
 
-    return this.organizationService.addMember(organizationId, username);
+      if (!organizationId) {
+        return res.status(400).send({ error: 'organizationId query parameter is required' });
+      }
+
+      if (!username) {
+        return res.status(400).send({ error: 'username field is required' });
+      }
+
+      await this.organizationService.addMember(organizationId, {username, role}, req.user);
+      res.json({ message: 'Member added successfully' });
+    } catch (err: any) {
+      if (err.message.includes('PERMISSION ERROR')) {
+        return res.status(403).send({ error: err.message });
+      }
+      if (err.message.includes('INVALID DATA')) {
+        return res.status(400).send({ error: err.message });
+      }
+      res.status(500).send({ error: err.message });
+    }
   }
 
   async update(req: any, res: any) {
-    const organizationId = req.params.organizationId;
-    const updateData = req.body;
+    try {
+      const organizationId = req.params.organizationId;
+      const updateData = req.body;
 
-    return this.organizationService.update(organizationId, updateData);
+      const organization = await this.organizationService.findById(organizationId);
+      if (!organization) {
+        return res.status(404).send({ error: `Organization with ID ${organizationId} not found` });
+      }
+
+      await this.organizationService.update(organizationId, updateData, req.user);
+      
+      const updatedOrganization = await this.organizationService.findById(organizationId);
+      res.json(updatedOrganization);
+    } catch (err: any) {
+      if (err.message.includes('PERMISSION ERROR')) {
+        return res.status(403).send({ error: err.message });
+      }
+      if (err.message.includes('INVALID DATA') || err.message.includes('does not exist')) {
+        return res.status(400).send({ error: err.message });
+      }
+      res.status(500).send({ error: err.message });
+    }
   }
 
   async addApiKey(req: any, res: any) {
-    const organizationId = req.params.organizationId;
-    const { keyScope } = req.body;
-    
-    return this.organizationService.addApiKey(organizationId, keyScope);
+    try {
+      const organizationId = req.params.organizationId;
+      const { keyScope } = req.body;
+
+      if (!organizationId) {
+        return res.status(400).send({ error: 'organizationId query parameter is required' });
+      }
+
+      if (!keyScope) {
+        return res.status(400).send({ error: 'keyScope field is required' });
+      }
+
+      await this.organizationService.addApiKey(organizationId, keyScope, req.user);
+      res.json({ message: 'API key added successfully' });
+    } catch (err: any) {
+      if (err.message.includes('PERMISSION ERROR')) {
+        return res.status(403).send({ error: err.message });
+      }else if (err.message.includes('INVALID DATA')) {
+        return res.status(400).send({ error: err.message });
+      }
+      res.status(500).send({ error: err.message });
+    }
   }
 
   async removeApiKey(req: any, res: any) {
-    const organizationId = req.params.organizationId;
-    const { apiKey } = req.body;
+    try {
+      const organizationId = req.params.organizationId;
+      const { apiKey } = req.body;
 
-    return this.organizationService.removeApiKey(organizationId, apiKey);
+      if (!organizationId) {
+        return res.status(400).send({ error: 'organizationId query parameter is required' });
+      }
+
+      if (!apiKey) {
+        return res.status(400).send({ error: 'apiKey field is required' });
+      }
+
+      await this.organizationService.removeApiKey(organizationId, apiKey, req.user);
+      res.json({ message: 'API key removed successfully' });
+    } catch (err: any) {
+      if (err.message.includes('PERMISSION ERROR')) {
+        return res.status(403).send({ error: err.message });
+      }
+      if (err.message.includes('not found')) {
+        return res.status(400).send({ error: err.message });
+      }
+      res.status(500).send({ error: err.message });
+    }
   }
 
   async removeMember(req: any, res: any) {
-    const organizationId = req.params.organizationId;
-    const { username } = req.body;
-    
-    return this.organizationService.removeMember(organizationId, username);
+    try {
+      const organizationId = req.params.organizationId;
+      const { username } = req.body;
+
+      if (!organizationId) {
+        return res.status(400).send({ error: 'organizationId query parameter is required' });
+      }
+
+      if (!username) {
+        return res.status(400).send({ error: 'username field is required' });
+      }
+
+      await this.organizationService.removeMember(organizationId, username, req.user);
+      res.json({ message: 'Member removed successfully' });
+    } catch (err: any) {
+      if (err.message.includes('PERMISSION ERROR')) {
+        return res.status(403).send({ error: err.message });
+      }
+      if (err.message.includes('not found')) {
+        return res.status(400).send({ error: err.message });
+      }
+      res.status(500).send({ error: err.message });
+    }
   }
 }
 

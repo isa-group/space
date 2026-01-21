@@ -5,7 +5,6 @@ const organizationApiKeySchema = new Schema(
     key: {
       type: String,
       required: true,
-      unique: true,
     },
     scope: {
       type: String,

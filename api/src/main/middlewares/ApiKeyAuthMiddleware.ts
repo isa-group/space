@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction, Router } from 'express';
-import { authenticateApiKey } from './AuthMiddleware';
 import container from '../config/container';
 import { OrganizationMember } from '../types/models/Organization';
+import { authenticateApiKeyMiddleware } from './AuthMiddleware';
 
 // Public routes that won't require authentication
 const PUBLIC_ROUTES = [
@@ -25,7 +25,7 @@ export const apiKeyAuthMiddleware = (req: Request, res: Response, next: NextFunc
   }
   
   // Apply authentication and permission verification
-  authenticateApiKey(req, res, (err?: any) => {
+  authenticateApiKeyMiddleware(req, res, (err?: any) => {
     next();
   });
 };
@@ -47,7 +47,11 @@ export async function isOrgOwner(req: any, res: Response, next: NextFunction) {
   const organizationId = req.params.organizationId;
   const organization = await organizationService.findById(organizationId);
 
-  if (organization.owner.username === req.user.username || req.user.role === 'ADMIN') {
+  if (!organization) {
+    return res.status(404).send({ error: `Organization with ID ${organizationId} not found` });
+  }
+
+  if (organization.owner === req.user.username || req.user.role === 'ADMIN') {
     return next();
   } else {
     return res.status(403).send({ error: `You are not the owner of organization ${organizationId}` });
@@ -61,7 +65,7 @@ export async function isOrgMember(req: any, res: Response, next: NextFunction) {
   const organizationId = req.params.organizationId;
   const organization = await organizationService.findById(organizationId);
 
-  if (organization.owner.username === req.user.username || 
+  if (organization.owner === req.user.username || 
       organization.members.map((member: OrganizationMember) => member.username).includes(req.user.username) || 
       req.user.role === 'ADMIN') {
     return next();
@@ -78,9 +82,13 @@ export function hasOrgRole(roles: string[]) {
     const organizationId = req.params.organizationId;
     const organization = await organizationService.findById(organizationId);
 
+    if (!organization) {
+      return res.status(404).send({ error: `Organization with ID ${organizationId} not found` });
+    }
+
     let userRoleInOrg = null;
 
-    if (organization.owner.username === req.user.username) {
+    if (organization.owner === req.user.username) {
       userRoleInOrg = 'OWNER';
     } else {
       const member = organization.members.find((member: OrganizationMember) => member.username === req.user.username);
@@ -89,7 +97,7 @@ export function hasOrgRole(roles: string[]) {
       }
     }
 
-    if (userRoleInOrg && roles.includes(userRoleInOrg)) {
+    if ((userRoleInOrg && roles.includes(userRoleInOrg)) || req.user.role === 'ADMIN') {
       return next();
     } else {
       return res.status(403).send({ error: `Insufficient organization permissions. Required: ${roles.join(', ')}` });
