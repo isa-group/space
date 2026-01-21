@@ -2,13 +2,12 @@ import { Request, Response, NextFunction } from 'express';
 import container from '../config/container';
 import { 
   ROUTE_PERMISSIONS, 
-  HttpMethod, 
   DEFAULT_PERMISSION_DENIED_MESSAGE,
   ORG_KEY_USER_ROUTE_MESSAGE,
-  OrganizationApiKeyRole 
 } from '../config/permissions';
 import { matchPath, extractApiPath } from '../utils/routeMatcher';
 import { OrganizationMember, OrganizationUserRole } from '../types/models/Organization';
+import { HttpMethod, OrganizationApiKeyRole } from '../types/permissions';
 
 /**
  * Middleware to authenticate API Keys (both User and Organization types)
