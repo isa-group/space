@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import mongoose, { Document, Schema } from 'mongoose';
 import { generateUserApiKey, hashPassword } from '../../../utils/users/helpers';
-import { UserRole, USER_ROLES } from '../../../types/models/User';
+import { UserRole, USER_ROLES } from '../../../types/permissions';
 
 const userSchema = new Schema({
   username: {

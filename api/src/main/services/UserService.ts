@@ -1,6 +1,7 @@
 import container from '../config/container';
 import UserRepository from '../repositories/mongoose/UserRepository';
-import { LeanUser, UserRole, USER_ROLES } from '../types/models/User';
+import { LeanUser } from '../types/models/User';
+import { UserRole, USER_ROLES } from '../types/permissions';
 import { hashPassword } from '../utils/users/helpers';
 
 class UserService {

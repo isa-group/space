@@ -2,7 +2,7 @@ import request from 'supertest';
 import { baseUrl } from '../testApp';
 import { Server } from 'http';
 import UserMongoose from '../../../main/repositories/mongoose/models/UserMongoose';
-import { UserRole, USER_ROLES } from '../../../main/types/models/User';
+import { UserRole, USER_ROLES } from '../../../main/types/permissions';
 
 // Create a test user directly in the database
 export const createTestUser = async (role: UserRole = USER_ROLES[USER_ROLES.length - 1]): Promise<any> => {

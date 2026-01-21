@@ -1,7 +1,8 @@
 import { toPlainObject } from '../../utils/mongoose';
 import RepositoryBase from '../RepositoryBase';
 import UserMongoose from './models/UserMongoose';
-import { LeanUser, UserRole } from '../../types/models/User';
+import { LeanUser } from '../../types/models/User';
+import { UserRole } from '../../types/permissions';
 import { generateUserApiKey } from '../../utils/users/helpers';
 
 class UserRepository extends RepositoryBase {

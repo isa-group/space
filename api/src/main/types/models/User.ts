@@ -1,4 +1,4 @@
-import { UserRole } from "../../config/permissions";
+import { UserRole } from '../../types/permissions';
 
 export interface LeanUser {
   id: string;

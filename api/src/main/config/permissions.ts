@@ -12,18 +12,8 @@
  * - '/organizations/**' matches '/organizations/org1', '/organizations/org1/services', etc.
  */
 
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
-export type UserRole = 'ADMIN' | 'USER';
-export type OrganizationApiKeyRole = 'ALL' | 'MANAGEMENT' | 'EVALUATION';
+import { RoutePermission } from "../types/permissions";
 
-export interface RoutePermission {
-  path: string;
-  methods: HttpMethod[];
-  allowedUserRoles?: UserRole[];
-  allowedOrgRoles?: OrganizationApiKeyRole[];
-  requiresUser?: boolean; // If true, only user API keys are allowed (not org keys)
-  isPublic?: boolean; // If true, no authentication required
-}
 
 /**
  * Route permission configuration

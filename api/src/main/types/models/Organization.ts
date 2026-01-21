@@ -1,4 +1,4 @@
-import { OrganizationApiKeyRole } from "../../config/permissions";
+import { OrganizationApiKeyRole } from "../../types/permissions";
 
 export interface LeanOrganization {
   id: string;
