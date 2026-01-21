@@ -27,6 +27,8 @@ const getMongoDBConnectionURI = () => {
     
   const wholeUri = process.env.MONGO_URI || `mongodb://${dbCredentials}localhost:27017/${databaseName}?authSource=${databaseName}`;
 
+  console.log("Using MongoDB URI: ", wholeUri);
+
   return wholeUri;
 }
 
