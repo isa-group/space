@@ -1,6 +1,6 @@
-import container from '../config/container.js';
-import UserService from '../services/UserService.js';
-import { USER_ROLES } from '../types/models/User.js';
+import container from '../config/container';
+import UserService from '../services/UserService';
+import { USER_ROLES } from '../types/permissions';
 
 class UserController {
   private userService: UserService;

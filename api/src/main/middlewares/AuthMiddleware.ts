@@ -13,7 +13,7 @@ import { HttpMethod, OrganizationApiKeyRole } from '../types/permissions';
  * Middleware to authenticate API Keys (both User and Organization types)
  * 
  * Supports two types of API Keys:
- * 1. User API Keys (prefix: "user_") - Authenticates a specific user
+ * 1. User API Keys (prefix: "usr_") - Authenticates a specific user
  * 2. Organization API Keys (prefix: "org_") - Authenticates at organization level
  * 
  * Sets req.user for User API Keys
@@ -29,7 +29,7 @@ const authenticateApiKeyMiddleware = async (req: Request, res: Response, next: N
 
   try {
     // Determine API Key type based on prefix
-    if (apiKey.startsWith('user_')) {
+    if (apiKey.startsWith('usr_')) {
       // User API Key authentication
       await authenticateUserApiKey(req, apiKey);
     } else if (apiKey.startsWith('org_')) {
@@ -37,7 +37,7 @@ const authenticateApiKeyMiddleware = async (req: Request, res: Response, next: N
       await authenticateOrgApiKey(req, apiKey);
     } else {
       return res.status(401).json({ 
-        error: 'Invalid API Key format. API Keys must start with "user_" or "org_"' 
+        error: 'Invalid API Key format. API Keys must start with "usr_" or "org_"' 
       });
     }
 
