@@ -41,20 +41,15 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
     isPublic: true,
   },
   {
+    path: '/users',
+    methods: ['POST'],
+    isPublic: true,
+  },
+  {
     path: '/users/**',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedUserRoles: ['ADMIN', 'USER'],
     requiresUser: true, // Organization API keys cannot access user routes
-  },
-
-  // ============================================
-  // Organization Management Routes (User API Keys ONLY)
-  // ============================================
-  {
-    path: '/organizations/**',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedUserRoles: ['ADMIN', 'USER'],
-    requiresUser: true, // Organization API keys cannot access these routes
   },
 
   // ============================================
@@ -87,42 +82,59 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   },
 
   // ============================================
+  // Organization Management Routes (User API Keys ONLY)
+  // ============================================
+  {
+    path: '/organizations/**',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedUserRoles: ['ADMIN', 'USER'],
+    requiresUser: true, // Organization API keys cannot access these routes
+  },
+
+  // ============================================
   // Service Management Routes (Direct access)
   // Organization API Keys can access via /services/**
   // ============================================
   {
     path: '/services',
     methods: ['GET'],
+    allowedUserRoles: ['ADMIN'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
   },
   {
     path: '/services',
     methods: ['POST'],
+    allowedUserRoles: ['ADMIN'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
   {
     path: '/services/*',
     methods: ['GET'],
+    allowedUserRoles: ['ADMIN'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
   },
   {
     path: '/services/*',
     methods: ['PUT', 'PATCH'],
+    allowedUserRoles: ['ADMIN'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
   {
     path: '/services/*',
     methods: ['DELETE'],
+    allowedUserRoles: ['ADMIN'],
     allowedOrgRoles: ['ALL'],
   },
   {
     path: '/services/*/pricings',
     methods: ['GET', 'POST'],
+    allowedUserRoles: ['ADMIN'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
   {
     path: '/services/*/pricings/*',
     methods: ['GET', 'PUT', 'PATCH', 'DELETE'],
+    allowedUserRoles: ['ADMIN'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
 
@@ -150,7 +162,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   {
     path: '/contracts/*',
     methods: ['DELETE'],
-    allowedUserRoles: ['ADMIN'],
+    allowedUserRoles: ['ADMIN', 'USER'],
     allowedOrgRoles: ['ALL'],
   },
 
