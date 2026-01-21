@@ -1,5 +1,5 @@
 import container from '../config/container';
-import { OrganizationApiKeyRole } from '../config/permissions';
+import { OrganizationApiKeyRole } from '../types/permissions';
 import OrganizationRepository from '../repositories/mongoose/OrganizationRepository';
 import { LeanApiKey, LeanOrganization, OrganizationFilter } from '../types/models/Organization';
 import { generateOrganizationApiKey } from '../utils/users/helpers';
