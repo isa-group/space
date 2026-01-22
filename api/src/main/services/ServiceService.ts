@@ -334,6 +334,8 @@ class ServiceService {
       } else {
         const serviceData = {
           name: uploadedPricing.saasName,
+          disabled: false,
+          organizationId: organizationId,
           activePricings: {
             [formattedPricingVersion]: {
               id: savedPricing.id,
@@ -362,7 +364,7 @@ class ServiceService {
 
       if (archivedExists) {
         const newKey = `${formattedPricingVersion}_${Date.now()}`;
-        updatePayload[`archivedPricings.${newKey}`] = service.archivedPricings[formattedPricingVersion];
+        updatePayload[`archivedPricings.${newKey}`] = service.archivedPricings![formattedPricingVersion];
         updatePayload[`archivedPricings.${formattedPricingVersion}`] = undefined;
       }
 
@@ -771,7 +773,7 @@ class ServiceService {
 
     if (service.activePricings[formattedPricingVersion]) {
       throw new Error(
-        `Forbidden: You cannot delete an active pricing version ${pricingVersion} for service ${serviceName}. Please archive it first.`
+        `CONFLICT: You cannot delete an active pricing version ${pricingVersion} for service ${serviceName}. Please archive it first.`
       );
     }
 

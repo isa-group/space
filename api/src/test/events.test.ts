@@ -4,7 +4,7 @@ import request from 'supertest';
 import { baseUrl, getApp, shutdownApp } from './utils/testApp';
 import { Server } from 'http';
 import { cleanupAuthResources, getTestAdminApiKey, getTestAdminUser } from './utils/auth';
-import { getRandomPricingFile } from './utils/services/service';
+import { getRandomPricingFile } from './utils/services/serviceTestUtils';
 import { v4 as uuidv4 } from 'uuid';
 
 describe('Events API Test Suite', function () {

@@ -29,7 +29,10 @@ class OrganizationRepository extends RepositoryBase {
     const organization = await OrganizationMongoose.findOne({
       'apiKeys.key': apiKey,
     })
-      .populate('owner')
+      .populate({
+        path: 'ownerDetails',
+        select: '-password',
+      })
       .exec();
 
     return organization ? (organization.toObject() as unknown as LeanOrganization) : null;

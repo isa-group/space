@@ -24,7 +24,7 @@ class UserController {
     } catch (err: any) {
       if (err.name?.includes('ValidationError') || err.code === 11000) {
         res.status(422).send({ error: err.message });
-      } else if (err.message.toLowerCase().includes('permissions')) {
+      } else if (err.message.toLowerCase().includes('permission error')) {
         res.status(403).send({ error: err.message });
       } else if (
         err.message.toLowerCase().includes('already') ||
@@ -72,7 +72,7 @@ class UserController {
     } catch (err: any) {
       if (err.name?.includes('ValidationError') || err.code === 11000) {
         res.status(422).send({ error: err.message });
-      } else if (err.message.toLowerCase().includes('permissions')) {
+      } else if (err.message.toLowerCase().includes('permission error')) {
         res.status(403).send({ error: err.message });
       }else if (
         err.message.toLowerCase().includes('already') ||
@@ -95,7 +95,7 @@ class UserController {
         err.message.toLowerCase().includes('not found')
       ) {
         res.status(404).send({ error: err.message });
-      } else if (err.message.toLowerCase().includes('permissions')) {
+      } else if (err.message.toLowerCase().includes('permission error')) {
         res.status(403).send({ error: err.message });
       }else {
         res.status(500).send({ error: err.message });
@@ -113,7 +113,7 @@ class UserController {
       const user = await this.userService.changeRole(req.params.username, role, req.user);
       res.json(user);
     } catch (err: any) {
-      if (err.message.toLowerCase().includes('permissions')) {
+      if (err.message.toLowerCase().includes('permission error')) {
         res.status(403).send({ error: err.message });
       }else if (
         err.message.toLowerCase().includes('already') ||
@@ -128,7 +128,7 @@ class UserController {
 
   async destroy(req: any, res: any) {
     try {
-      await this.userService.destroy(req.params.username);
+      await this.userService.destroy(req.params.username, req.user);
       res.status(204).send();
     } catch (err: any) {
       if (

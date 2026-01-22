@@ -1,13 +1,12 @@
 import request from 'supertest';
 import { baseUrl, getApp, shutdownApp } from './utils/testApp';
 import { Server } from 'http';
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import {
   createTestUser,
   deleteTestUser,
 } from './utils/users/userTestUtils';
 import { USER_ROLES } from '../main/types/permissions';
-import { createRandomContract } from './utils/contracts/contracts';
 
 describe('User API Test Suite', function () {
   let app: Server;
@@ -88,6 +87,25 @@ describe('User API Test Suite', function () {
 
       testUser = response.body;
     });
+    
+    it('Should create user without providing role', async function () {
+      const userData = {
+        username: `test_user_${Date.now()}`,
+        password: 'password123',
+      };
+
+      const response = await request(app)
+        .post(`${baseUrl}/users`)
+        .set('x-api-key', adminApiKey)
+        .send(userData);
+
+      expect(response.status).toBe(201);
+      expect(response.body.username).toBe(userData.username);
+      expect(response.body.role).toBe(USER_ROLES[USER_ROLES.length - 1]);
+      expect(response.body.apiKey).toBeDefined();
+
+      testUser = response.body;
+    });
 
     it('Should NOT create admin user', async function () {
       const creatorData = await createTestUser('USER');
@@ -104,7 +122,24 @@ describe('User API Test Suite', function () {
         .send(userData);
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe("Not enough permissions: Only admins can create other admins.");
+      expect(response.body.error).toBe("PERMISSION ERROR: Only admins can create other admins.");
+    });
+    
+    it('Should create admin user provided admin api key', async function () {
+      const creatorData = await createTestUser('ADMIN');
+      
+      const userData = {
+        username: `test_user_${Date.now()}`,
+        password: 'password123',
+        role: USER_ROLES[0],
+      };
+
+      const response = await request(app)
+        .post(`${baseUrl}/users`)
+        .set('x-api-key', creatorData.apiKey)
+        .send(userData);
+
+      expect(response.status).toBe(201);
     });
 
     it('Should get all users', async function () {
@@ -246,6 +281,18 @@ describe('User API Test Suite', function () {
 
       // To avoid double cleanup
       testUser = null;
+    });
+    
+    it('Should not delete a admin being user', async function () {
+      // First create a test user
+      testUser = await createTestUser(USER_ROLES[USER_ROLES.length - 1]);
+      adminUser = await createTestUser(USER_ROLES[0]);
+
+      const response = await request(app)
+        .delete(`${baseUrl}/users/${adminUser.username}`)
+        .set('x-api-key', testUser.apiKey);
+
+      expect(response.status).toBe(403);
     });
   });
 });

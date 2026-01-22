@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import { createRandomService, getAllServices, getPricingFromService } from '../services/service';
+import { createRandomService, getAllServices, getPricingFromService } from '../services/serviceTestUtils';
 import { TestService } from '../../types/models/Service';
 import { TestAddOn, TestPricing } from '../../types/models/Pricing';
 import { useApp } from '../testApp';

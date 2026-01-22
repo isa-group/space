@@ -35,12 +35,12 @@ class UserService {
     }
     
     // Stablish a default role if not provided
-    if (!userData.role) {
+    if (!creatorData || !userData.role) {
       userData.role = USER_ROLES[USER_ROLES.length - 1];
     }
 
-    if (creatorData.role !== 'ADMIN' && userData.role === 'ADMIN') {
-      throw new Error('Not enough permissions: Only admins can create other admins.');
+    if (creatorData && (creatorData.role !== 'ADMIN' && userData.role === 'ADMIN')) {
+      throw new Error('PERMISSION ERROR: Only admins can create other admins.');
     }
 
     return this.userRepository.create(userData);
@@ -48,17 +48,13 @@ class UserService {
 
   async update(username: string, userData: any, creatorData: LeanUser) {
     
-    if (creatorData.role !== 'ADMIN' && userData.role === 'ADMIN') {
-      throw new Error('Not enough permissions: Only admins can change roles to admin.');
+    if (creatorData && (creatorData.role !== 'ADMIN' && userData.role === 'ADMIN')) {
+      throw new Error('PERMISSION ERROR: Only admins can change roles to admin.');
     }
     
     const user = await this.userRepository.findByUsername(username);
     if (!user) {
       throw new Error('INVALID DATA:User not found');
-    }
-    
-    if (creatorData.role !== 'ADMIN' && user.role === 'ADMIN') {
-      throw new Error('Not enough permissions: Only admins can update admin users.');
     }
 
     // Validación: no permitir degradar al último admin
@@ -133,12 +129,17 @@ class UserService {
     return this.userRepository.findAll();
   }
 
-  async destroy(username: string) {
+  async destroy(username: string, reqUser: LeanUser) {
     // Comprobar si el usuario a eliminar es admin
     const user = await this.userRepository.findByUsername(username);
     if (!user) {
       throw new Error('INVALID DATA: User not found');
     }
+    
+    if (reqUser.role !== 'ADMIN' && user.role === 'ADMIN') {
+      throw new Error('PERMISSION ERROR: Only admins can delete admin users.');
+    }
+
     if (user.role === 'ADMIN') {
       // Contar admins restantes
       const allUsers = await this.userRepository.findAll();

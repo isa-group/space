@@ -14,6 +14,11 @@ import fs from 'fs';
 import { biasedRandomInt } from '../random';
 
 export async function generatePricingFile(serviceName?: string, version?: string): Promise<string> {
+  
+  if (!version){
+    version = uuidv4();
+  }
+  
   let pricing: TestPricing & { saasName?: string; syntaxVersion?: string } =
     generatePricing(version);
   if (serviceName) {
@@ -32,7 +37,7 @@ export async function generatePricingFile(serviceName?: string, version?: string
     lineWidth: -1, // do not cut lines
   });
 
-  const filePath = path.resolve(__dirname, `../../data/generated/${uuidv4()}.yaml`);
+  const filePath = path.resolve(__dirname, `../../data/generated/${version}.yaml`);
 
   if (!fs.existsSync(path.dirname(filePath))) {
     await mkdir(path.dirname(filePath), { recursive: true });

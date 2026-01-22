@@ -26,7 +26,7 @@ class ServiceController {
   async index(req: any, res: any) {
     try {
       const queryParams = this._transformIndexQueryParams(req.query);
-      const organizationId = req.params.organizationId;
+      const organizationId = req.org.id;
 
       const services = await this.serviceService.index(queryParams, organizationId);
 
@@ -40,7 +40,7 @@ class ServiceController {
     try {
       let { pricingStatus } = req.query;
       const serviceName = req.params.serviceName;
-      const organizationId = req.params.organizationId;
+      const organizationId = req.org.id;
 
       if (!pricingStatus) {
         pricingStatus = 'active';
@@ -68,7 +68,7 @@ class ServiceController {
   async show(req: any, res: any) {
     try {
       const serviceName = req.params.serviceName;
-      const organizationId = req.params.organizationId;
+      const organizationId = req.org.id;
       const service = await this.serviceService.show(serviceName, organizationId);
 
       return res.json(service);
@@ -85,7 +85,7 @@ class ServiceController {
     try {
       const serviceName = req.params.serviceName;
       const pricingVersion = req.params.pricingVersion;
-      const organizationId = req.params.organizationId;
+      const organizationId = req.org.id;
 
       const pricing = await this.serviceService.showPricing(serviceName, pricingVersion, organizationId);
 
@@ -104,7 +104,7 @@ class ServiceController {
   async create(req: any, res: any) {
     try {
       const receivedFile = req.file;
-      const organizationId = req.params.organizationId;
+      const organizationId = req.org.id;
       let service;
 
       if (!receivedFile) {
@@ -135,7 +135,7 @@ class ServiceController {
   async addPricingToService(req: any, res: any) {
     try {
       const serviceName = req.params.serviceName;
-      const organizationId = req.params.organizationId;
+      const organizationId = req.org.id;
       const receivedFile = req.file;
       let service;
 
@@ -172,7 +172,7 @@ class ServiceController {
     try {
       const newServiceData = req.body;
       const serviceName = req.params.serviceName;
-      const organizationId = req.params.organizationId;
+      const organizationId = req.org.id;
 
       const service = await this.serviceService.update(serviceName, newServiceData, organizationId);
 
@@ -186,7 +186,7 @@ class ServiceController {
     try {
       const serviceName = req.params.serviceName;
       const pricingVersion = req.params.pricingVersion;
-      const organizationId = req.params.organizationId;
+      const organizationId = req.org.id;
       const newAvailability = req.query.availability ?? 'archived';
       const fallBackSubscription: FallBackSubscription = req.body ?? {};
 
@@ -234,7 +234,7 @@ class ServiceController {
   async disable(req: any, res: any) {
     try {
       const serviceName = req.params.serviceName;
-      const organizationId = req.params.organizationId;
+      const organizationId = req.org.id;
       const result = await this.serviceService.disable(serviceName, organizationId);
 
       if (result) {
@@ -255,7 +255,7 @@ class ServiceController {
     try {
       const serviceName = req.params.serviceName;
       const pricingVersion = req.params.pricingVersion;
-      const organizationId = req.params.organizationId;
+      const organizationId = req.org.id;
 
       const result = await this.serviceService.destroyPricing(serviceName, pricingVersion, organizationId);
 
@@ -272,8 +272,8 @@ class ServiceController {
         res.status(404).send({ error: err.message });
       } else if (err.message.toLowerCase().includes('last active pricing')) {
         res.status(400).send({ error: err.message });
-      } else if (err.message.toLowerCase().includes('forbidden')) {
-        res.status(403).send({ error: err.message });
+      } else if (err.message.toLowerCase().includes('conflict')) {
+        res.status(409).send({ error: err.message });
       } else {
         res.status(500).send({ error: err.message });
       }

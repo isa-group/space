@@ -20,26 +20,26 @@ const loadFileRoutes = function (app: express.Application) {
 
   app
     .route(baseUrl + '/organizations/:organizationId/services')
-    .get(memberRole, hasPermission(['ADMIN', 'MANAGER', 'EVALUATOR']), serviceController.index)
-    .post(memberRole, hasPermission(['ADMIN', 'MANAGER']), upload, serviceController.create)
-    .delete(memberRole, hasPermission(['ADMIN']), serviceController.prune);
+    .get(memberRole, hasPermission(['OWNER', 'ADMIN', 'MANAGER', 'EVALUATOR']), serviceController.index)
+    .post(memberRole, hasPermission(['OWNER','ADMIN', 'MANAGER']), upload, serviceController.create)
+    .delete(memberRole, hasPermission(['OWNER','ADMIN']), serviceController.prune);
   
   app
     .route(baseUrl + '/organizations/:organizationId/services/:serviceName')
-    .get(memberRole, hasPermission(['ADMIN', 'MANAGER', 'EVALUATOR']), serviceController.show)
-    .put(memberRole, hasPermission(['ADMIN', 'MANAGER']), ServiceValidator.update, handleValidation, serviceController.update)
-    .delete(memberRole, hasPermission(['ADMIN']), serviceController.disable);
+    .get(memberRole, hasPermission(['OWNER', 'ADMIN', 'MANAGER', 'EVALUATOR']), serviceController.show)
+    .put(memberRole, hasPermission(['OWNER','ADMIN', 'MANAGER']), ServiceValidator.update, handleValidation, serviceController.update)
+    .delete(memberRole, hasPermission(['OWNER','ADMIN']), serviceController.disable);
 
   app
     .route(baseUrl + '/organizations/:organizationId/services/:serviceName/pricings')
-    .get(memberRole, hasPermission(['ADMIN', 'MANAGER', 'EVALUATOR']), serviceController.indexPricings)
-    .post(memberRole, hasPermission(['ADMIN', 'MANAGER']), upload, serviceController.addPricingToService);
+    .get(memberRole, hasPermission(['OWNER', 'ADMIN', 'MANAGER', 'EVALUATOR']), serviceController.indexPricings)
+    .post(memberRole, hasPermission(['OWNER','ADMIN', 'MANAGER']), upload, serviceController.addPricingToService);
 
   app
     .route(baseUrl + '/organizations/:organizationId/services/:serviceName/pricings/:pricingVersion')
-    .get(memberRole, hasPermission(['ADMIN', 'MANAGER', 'EVALUATOR']), serviceController.showPricing)
-    .put(memberRole, hasPermission(['ADMIN', 'MANAGER']), PricingValidator.updateAvailability, handleValidation, serviceController.updatePricingAvailability)
-    .delete(memberRole, hasPermission(['ADMIN']), serviceController.destroyPricing);
+    .get(memberRole, hasPermission(['OWNER', 'ADMIN', 'MANAGER', 'EVALUATOR']), serviceController.showPricing)
+    .put(memberRole, hasPermission(['OWNER','ADMIN', 'MANAGER']), PricingValidator.updateAvailability, handleValidation, serviceController.updatePricingAvailability)
+    .delete(memberRole, hasPermission(['OWNER','ADMIN']), serviceController.destroyPricing);
 
   // ============================================
   // Direct service routes (Organization API Keys)

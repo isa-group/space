@@ -6,8 +6,8 @@ import {
   createRandomService,
   getRandomPricingFile,
   getService,
-} from './utils/services/service';
-import { generatePricingFile } from './utils/services/pricing';
+} from './utils/services/serviceTestUtils';
+import { generatePricingFile } from './utils/services/pricingTestUtils';
 
 describe('Service disable / re-enable flow', function () {
   let app: Server;

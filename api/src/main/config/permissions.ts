@@ -88,44 +88,62 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   {
     path: '/services',
     methods: ['GET'],
-    allowedUserRoles: ['ADMIN'],
+    allowedUserRoles: [],
     allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
   },
   {
     path: '/services',
     methods: ['POST'],
-    allowedUserRoles: ['ADMIN'],
+    allowedUserRoles: [],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
   {
     path: '/services/*',
     methods: ['GET'],
-    allowedUserRoles: ['ADMIN'],
+    allowedUserRoles: [],
     allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
   },
   {
     path: '/services/*',
     methods: ['PUT', 'PATCH'],
-    allowedUserRoles: ['ADMIN'],
+    allowedUserRoles: [],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
   {
     path: '/services/*',
     methods: ['DELETE'],
-    allowedUserRoles: ['ADMIN'],
+    allowedUserRoles: [],
     allowedOrgRoles: ['ALL'],
   },
   {
     path: '/services/*/pricings',
-    methods: ['GET', 'POST'],
-    allowedUserRoles: ['ADMIN'],
+    methods: ['GET'],
+    allowedUserRoles: [],
+    allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
+  },
+  {
+    path: '/services/*/pricings',
+    methods: ['POST'],
+    allowedUserRoles: [],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
   {
     path: '/services/*/pricings/*',
-    methods: ['GET', 'PUT', 'PATCH', 'DELETE'],
-    allowedUserRoles: ['ADMIN'],
+    methods: ['GET'],
+    allowedUserRoles: [],
+    allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
+  },
+  {
+    path: '/services/*/pricings/*',
+    methods: ['PUT', 'PATCH'],
+    allowedUserRoles: [],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
+  },
+  {
+    path: '/services/*/pricings/*',
+    methods: ['DELETE'],
+    allowedUserRoles: [],
+    allowedOrgRoles: ['ALL'],
   },
 
   // ============================================
@@ -186,6 +204,24 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
     methods: ['GET'],
     allowedUserRoles: ['ADMIN', 'USER'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
+  },
+
+  // ============================================
+  // Cache Routes (Admin Only)
+  // ============================================
+  {
+    path: '/cache/**',
+    methods: ['GET', 'POST'],
+    allowedUserRoles: ['ADMIN'],
+  },
+
+  // ============================================
+  // Event Routes (Public)
+  // ============================================
+  {
+    path: '/events/**',
+    methods: ['GET', 'POST'],
+    isPublic: true,
   },
 
   // ============================================

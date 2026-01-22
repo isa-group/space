@@ -2,14 +2,51 @@ import fs from 'fs';
 import request from 'supertest';
 import { baseUrl, getApp, useApp } from '../testApp';
 import { clockifyPricingPath, githubPricingPath, zoomPricingPath } from './ServiceTestData';
-import { generatePricingFile } from './pricing';
+import { generatePricingFile } from './pricingTestUtils';
 import { v4 as uuidv4 } from 'uuid';
 import { TestService } from '../../types/models/Service';
 import { TestPricing } from '../../types/models/Pricing';
 import { getTestAdminApiKey } from '../auth';
+import { createTestOrganization } from '../organization/organizationTestUtils';
+import ServiceMongoose from '../../../main/repositories/mongoose/models/ServiceMongoose';
+import PricingMongoose from '../../../main/repositories/mongoose/models/PricingMongoose';
+import { LeanService } from '../../../main/types/models/Service';
+import container from '../../../main/config/container';
 
 function getRandomPricingFile(name?: string) {
   return generatePricingFile(name);
+}
+
+async function createTestService(organizationId?: string, serviceName?: string): Promise<LeanService> {
+
+  if (!serviceName){
+    serviceName = `test-service-${Date.now()}`;
+  }
+
+  if (!organizationId){
+    const testOrganization = await createTestOrganization();
+    organizationId = testOrganization.id!;
+  }
+
+  const enabledPricingPath = await generatePricingFile(serviceName);
+  const serviceService = container.resolve('serviceService');
+
+  const service = await serviceService.create({path: enabledPricingPath}, "file", organizationId);
+  
+  return service as unknown as LeanService;
+}
+
+async function addPricingToService(organizationId?: string, serviceName?: string): Promise<string> {
+  const pricingPath = await generatePricingFile(serviceName);
+  const serviceService = container.resolve('serviceService');
+  await serviceService.addPricingToService(serviceName!, {path: pricingPath}, "file", organizationId!);
+  
+  return pricingPath.split('/').pop()!.replace('.yaml', '');
+}
+
+async function deleteTestService(serviceId: string): Promise<void> {
+  const serviceService = container.resolve('serviceService');
+  await serviceService.delete(serviceId);
 }
 
 async function getAllServices(app?: any): Promise<TestService[]> {
@@ -179,6 +216,7 @@ async function createRandomService(app?: any) {
 }
 
 async function archivePricingFromService(
+  organizationId: string,
   serviceName: string,
   pricingVersion: string,
   app?: any
@@ -187,7 +225,7 @@ async function archivePricingFromService(
 
   const apiKey = await getTestAdminApiKey();
   const response = await request(appCopy)
-    .put(`${baseUrl}/services/${serviceName}/pricings/${pricingVersion}?availability=archived`)
+    .put(`${baseUrl}/organizations/${organizationId}/services/${serviceName}/pricings/${pricingVersion}?availability=archived`)
     .set('x-api-key', apiKey)
     .send({
       subscriptionPlan: "BASIC"
@@ -225,13 +263,16 @@ async function deletePricingFromService(
 }
 
 export {
+  addPricingToService,
   getAllServices,
   getRandomPricingFile,
   getService,
   getPricingFromService,
   getRandomService,
   createService,
+  createTestService,
   createRandomService,
   archivePricingFromService,
   deletePricingFromService,
+  deleteTestService,
 };

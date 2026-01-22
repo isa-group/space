@@ -8,7 +8,7 @@ import {
   deletePricingFromService,
   getRandomPricingFile,
   getService,
-} from './utils/services/service';
+} from './utils/services/serviceTestUtils';
 import { zoomPricingPath } from './utils/services/ServiceTestData';
 import { retrievePricingFromPath } from 'pricing4ts/server';
 import { ExpectedPricingType } from '../main/types/models/Pricing';
@@ -16,7 +16,7 @@ import { TestContract } from './types/models/Contract';
 import { createRandomContract, createRandomContractsForService } from './utils/contracts/contracts';
 import { isSubscriptionValid } from '../main/controllers/validation/ContractValidation';
 import { cleanupAuthResources, getTestAdminApiKey, getTestAdminUser } from './utils/auth';
-import { generatePricingFile } from './utils/services/pricing';
+import { generatePricingFile } from './utils/services/pricingTestUtils';
 
 describe('Services API Test Suite', function () {
   let app: Server;
