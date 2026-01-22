@@ -10,12 +10,11 @@ import {
   createTestOrganization,
   addApiKeyToOrganization,
   addMemberToOrganization,
-  removeApiKeyFromOrganization,
-  removeMemberFromOrganization,
   deleteTestOrganization,
 } from './utils/organization/organizationTestUtils';
-import { USER_ROLES } from '../main/types/permissions';
 import { LeanOrganization } from '../main/types/models/Organization';
+import { LeanUser } from '../main/types/models/User';
+import crypto from 'crypto';
 
 describe('Organization API Test Suite', function () {
   let app: Server;
@@ -462,6 +461,31 @@ describe('Organization API Test Suite', function () {
       expect(response.body.error).toBeDefined();
     });
 
+    it('Should return 403 when EVALUATOR tries to add member', async function () {
+      
+      const evaluatorUser = await createTestUser('USER');
+      await addMemberToOrganization(testOrganization.id!, {username: evaluatorUser.username, role: 'EVALUATOR'});
+      
+      const response = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/members`)
+        .set('x-api-key', evaluatorUser.apiKey)
+        .send({ username: memberUser.username, role: 'EVALUATOR' })
+        .expect(403);
+
+      expect(response.body.error).toBeDefined();
+    });
+    
+    it('Should return 403 when MANAGER tries to add ADMIN member', async function () {
+      
+      const response = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/members`)
+        .set('x-api-key', managerUser.apiKey)
+        .send({ username: memberUser.username, role: 'ADMIN' })
+        .expect(403);
+
+      expect(response.body.error).toBeDefined();
+    });
+
     it('Should return 422 when empty request body is sent', async function () {
       const response = await request(app)
         .post(`${baseUrl}/organizations/${testOrganization.id}/members`)
@@ -521,73 +545,156 @@ describe('Organization API Test Suite', function () {
 
       expect(response.body.error).toBeDefined();
     });
+    
+    it('Should return 422 when role field is OWNER', async function () {
+      const response = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/members`)
+        .set('x-api-key', adminApiKey)
+        .send({username: memberUser.username, role: "OWNER"})
+        .expect(422);
+
+      expect(response.body.error).toBeDefined();
+    });
   });
 
   describe('POST /organizations/api-keys', function () {
+    let orgOwner: LeanUser;
+    let adminMember: LeanUser;
+    let managerMember: LeanUser;
+    let evaluatorMember: LeanUser;
     let testOrganization: LeanOrganization;
     let regularUserNoPermission: any;
 
     beforeEach(async function () {
-      testOrganization = await createTestOrganization();
+      orgOwner = await createTestUser('USER');
+      testOrganization = await createTestOrganization(orgOwner.username);
+      adminMember = await createTestUser('USER');
+      managerMember = await createTestUser('USER');
+      evaluatorMember = await createTestUser('USER');
       regularUserNoPermission = await createTestUser('USER');
+
+      // Add members to organization
+      await addMemberToOrganization(testOrganization.id!, {username: adminMember.username, role: 'ADMIN'});
+      await addMemberToOrganization(testOrganization.id!, {username: managerMember.username, role: 'MANAGER'});
+      await addMemberToOrganization(testOrganization.id!, {username: evaluatorMember.username, role: 'EVALUATOR'});
     });
 
     afterEach(async function () {
+      if (testOrganization?.id) {
+        await deleteTestOrganization(testOrganization.id);
+      }
       if (regularUserNoPermission?.username) {
         await deleteTestUser(regularUserNoPermission.username);
       }
+      if (evaluatorMember?.username) {
+        await deleteTestUser(evaluatorMember.username);
+      }
+      if (managerMember?.username) {
+        await deleteTestUser(managerMember.username);
+      }
+      if (orgOwner?.username) {
+        await deleteTestUser(orgOwner.username);
+      }
     });
 
-    it('Should return 200 and create new API key with scope ALL', async function () {
+    it('Should return 200 and create new API key with scope ALL with ADMIN request', async function () {
       const response = await request(app)
-        .post(`${baseUrl}/organizations/api-keys`)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', adminApiKey)
-        .query({ organizationId: testOrganization.id })
+        .send({ keyScope: 'ALL' })
+        .expect(200);
+
+      expect(response.body).toBeDefined();
+    });
+    
+    it('Should return 200 and create new API key with scope ALL with OWNER request', async function () {
+      const response = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .set('x-api-key', orgOwner.apiKey)
         .send({ keyScope: 'ALL' })
         .expect(200);
 
       expect(response.body).toBeDefined();
     });
 
-    it('Should return 200 and create new API key with custom scope', async function () {
+    it('Should return 200 and create new API key with scope ALL with organization ADMIN request', async function () {
       const response = await request(app)
-        .post(`${baseUrl}/organizations/api-keys`)
-        .set('x-api-key', adminApiKey)
-        .query({ organizationId: testOrganization.id })
-        .send({ keyScope: 'READ' })
+        .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .set('x-api-key', adminMember.apiKey)
+        .send({ keyScope: 'ALL' })
         .expect(200);
+
+      expect(response.body).toBeDefined();
+    });
+    
+    it('Should return 200 and create new API key with scope MANAGEMENT with MANAGER request', async function () {
+      const response = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .set('x-api-key', managerMember.apiKey)
+        .send({ keyScope: 'MANAGEMENT' })
+        .expect(200);
+
+      expect(response.body).toBeDefined();
+    });
+
+    it('Should return 403 and create new API key with scope ALL with MANAGER request', async function () {
+      const response = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .set('x-api-key', managerMember.apiKey)
+        .send({ keyScope: 'ALL' })
+        .expect(403);
 
       expect(response.body).toBeDefined();
     });
 
     it('Should return 403 when user without org role tries to add API key', async function () {
       const response = await request(app)
-        .post(`${baseUrl}/organizations/api-keys`)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', regularUserNoPermission.apiKey)
-        .query({ organizationId: testOrganization.id })
         .send({ keyScope: 'ALL' })
         .expect(403);
 
       expect(response.body.error).toBeDefined();
     });
 
+    it('Should return 400 when creating API key with custom scope', async function () {
+      const response = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .set('x-api-key', adminApiKey)
+        .send({ keyScope: 'READ' })
+        .expect(400);
+
+      expect(response.body).toBeDefined();
+    });
+
     it('Should return 400 when keyScope is missing', async function () {
       const response = await request(app)
-        .post(`${baseUrl}/organizations/api-keys`)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', adminApiKey)
-        .query({ organizationId: testOrganization.id })
         .send({})
         .expect(400);
 
       expect(response.body.error).toBeDefined();
     });
 
-    it('Should return 400 when organizationId query parameter is missing', async function () {
+    it('Should return 404 when organization does not exist', async function () {
+      const fakeId = '000000000000000000000000';
+      
       const response = await request(app)
-        .post(`${baseUrl}/organizations/api-keys`)
+        .post(`${baseUrl}/organizations/${fakeId}/api-keys`)
         .set('x-api-key', adminApiKey)
         .send({ keyScope: 'ALL' })
-        .expect(400);
+        .expect(404);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 422 with invalid organization ID format', async function () {
+      const response = await request(app)
+        .post(`${baseUrl}/organizations/invalid-id/api-keys`)
+        .set('x-api-key', adminApiKey)
+        .send({ keyScope: 'ALL' })
+        .expect(422);
 
       expect(response.body.error).toBeDefined();
     });
@@ -595,62 +702,159 @@ describe('Organization API Test Suite', function () {
 
   describe('DELETE /organizations/members', function () {
     let testOrganization: LeanOrganization;
-    let memberUser: any;
+    let ownerUser: any;
+    let adminUser: any;
+    let managerUser: any;
+    let evaluatorUser: any;
     let regularUserNoPermission: any;
 
     beforeEach(async function () {
-      testOrganization = await createTestOrganization();
-      memberUser = await createTestUser('USER');
+      ownerUser = await createTestUser('USER');
+      testOrganization = await createTestOrganization(ownerUser.username);
+      adminUser = await createTestUser('USER');
+      managerUser = await createTestUser('USER');
+      evaluatorUser = await createTestUser('USER');
       regularUserNoPermission = await createTestUser('USER');
+
+      // Add owner to organization
+      await addMemberToOrganization(testOrganization.id!, {username: adminUser.username, role: 'ADMIN'});
+      await addMemberToOrganization(testOrganization.id!, {username: managerUser.username, role: 'MANAGER'});
+      await addMemberToOrganization(testOrganization.id!, {username: evaluatorUser.username, role: 'EVALUATOR'});
     });
 
     afterEach(async function () {
-      if (memberUser?.username) {
-        await deleteTestUser(memberUser.username);
+      if (testOrganization?.id) {
+        await deleteTestOrganization(testOrganization.id);
+      }
+      if (ownerUser?.username) {
+        await deleteTestUser(ownerUser.username);
+      }
+      if (adminUser?.username) {
+        await deleteTestUser(adminUser.username);
+      }
+      if (managerUser?.username) {
+        await deleteTestUser(managerUser.username);
+      }
+      if (evaluatorUser?.username) {
+        await deleteTestUser(evaluatorUser.username);
       }
       if (regularUserNoPermission?.username) {
         await deleteTestUser(regularUserNoPermission.username);
       }
     });
 
-    it('Should return 200 and remove member from organization', async function () {
+    it('Should return 200 and remove member from organization with SPACE admin request', async function () {
       const response = await request(app)
         .delete(`${baseUrl}/organizations/${testOrganization.id}/members`)
         .set('x-api-key', adminApiKey)
-        .send({ username: memberUser.username, role: 'MANAGER' }).expect(200);
-
+        .send({ username: managerUser.username }).expect(200);
+      expect(response.body).toBeDefined();
+    });
+    
+    it('Should return 200 and remove member from organization with OWNER request', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/members`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ username: managerUser.username }).expect(200);
+      expect(response.body).toBeDefined();
+    });
+    
+    it('Should return 200 and remove member from organization with org ADMIN request', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/members`)
+        .set('x-api-key', adminUser.apiKey)
+        .send({ username: managerUser.username }).expect(200);
       expect(response.body).toBeDefined();
     });
 
-    it('Should return 400 when removing non-existent member', async function () {
+    it('Should return 200 and remove EVALUATOR member from organization with org MANAGER request', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/members`)
-        .set('x-api-key', adminApiKey)
-        .query({ organizationId: testOrganization.id })
-        .send({ username: `nonexistent_user_${Date.now()}` })
-        .expect(400);
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/members`)
+        .set('x-api-key', managerUser.apiKey)
+        .send({ username: evaluatorUser.username }).expect(200);
+      expect(response.body).toBeDefined();
+    });
+    
+    it('Should return 200 and remove himself with org EVALUATOR request', async function () {
+      
+      await addMemberToOrganization(testOrganization.id!, {username: regularUserNoPermission.username, role: 'EVALUATOR'});
+      
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/members`)
+        .set('x-api-key', evaluatorUser.apiKey)
+        .send({ username: evaluatorUser.username }).expect(403);
+      expect(response.body).toBeDefined();
+    });
+
+    it('Should return 403 with org EVALUATOR request', async function () {
+      
+      await addMemberToOrganization(testOrganization.id!, {username: regularUserNoPermission.username, role: 'EVALUATOR'});
+      
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/members`)
+        .set('x-api-key', evaluatorUser.apiKey)
+        .send({ username: regularUserNoPermission.username, role: 'EVALUATOR' }).expect(403);
+      expect(response.body).toBeDefined();
+    });
+
+    it('Should return 403 when MANAGER user tries to remove ADMIN member', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/members`)
+        .set('x-api-key', managerUser.apiKey)
+        .send({ username: adminUser.username })
+        .expect(403);
 
       expect(response.body.error).toBeDefined();
     });
 
     it('Should return 403 when user without org role tries to remove member', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/members`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/members`)
         .set('x-api-key', regularUserNoPermission.apiKey)
-        .query({ organizationId: testOrganization.id })
-        .send({ username: memberUser.username })
+        .send({ username: managerUser.username })
         .expect(403);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 400 when removing non-existent member', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/members`)
+        .set('x-api-key', adminApiKey)
+        .send({ username: `nonexistent_user_${Date.now()}` })
+        .expect(400);
 
       expect(response.body.error).toBeDefined();
     });
 
     it('Should return 400 when username field is missing', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/members`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/members`)
         .set('x-api-key', adminApiKey)
-        .query({ organizationId: testOrganization.id })
         .send({})
         .expect(400);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 404 when organization does not exist', async function () {
+      const fakeId = '000000000000000000000000';
+      
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${fakeId}/members`)
+        .set('x-api-key', adminApiKey)
+        .send({ username: managerUser.username })
+        .expect(404);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 422 with invalid organization ID format', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/invalid-id/members`)
+        .set('x-api-key', adminApiKey)
+        .send({ username: managerUser.username })
+        .expect(422);
 
       expect(response.body.error).toBeDefined();
     });
@@ -658,78 +862,182 @@ describe('Organization API Test Suite', function () {
 
   describe('DELETE /organizations/api-keys', function () {
     let testOrganization: LeanOrganization;
-    let testApiKey: string;
+    let ownerUser: any;
+    let adminUser: any;
+    let managerUser: any;
+    let evaluatorUser: any;
     let regularUserNoPermission: any;
+    let testAllApiKey: string;
+    let testManagementApiKey: string;
+    let testEvaluationApiKey: string;
 
     beforeEach(async function () {
-      testOrganization = await createTestOrganization();
+      ownerUser = await createTestUser('USER');
+      testOrganization = await createTestOrganization(ownerUser.username);
+      adminUser = await createTestUser('USER');
+      managerUser = await createTestUser('USER');
+      evaluatorUser = await createTestUser('USER');
       regularUserNoPermission = await createTestUser('USER');
       
       // Create an API key to delete
-      const apiKeyData = {
-        key: `test_key_${Date.now()}`,
+      const allApiKeyData = {
+        key: `org_${crypto.randomBytes(32).toString('hex')}`,
         scope: 'ALL' as const,
       };
-      await addApiKeyToOrganization(testOrganization.id, apiKeyData);
-      testApiKey = apiKeyData.key;
+
+      const managementApiKeyData = {
+        key: `org_${crypto.randomBytes(32).toString('hex')}`,
+        scope: 'MANAGEMENT' as const,
+      };
+
+      const evaluationApiKeyData = {
+        key: `org_${crypto.randomBytes(32).toString('hex')}`,
+        scope: 'EVALUATION' as const,
+      };
+
+      await addApiKeyToOrganization(testOrganization.id!, allApiKeyData);
+      await addApiKeyToOrganization(testOrganization.id!, managementApiKeyData);
+      await addApiKeyToOrganization(testOrganization.id!, evaluationApiKeyData);
+      
+      testAllApiKey = allApiKeyData.key;
+      testManagementApiKey = managementApiKeyData.key;
+      testEvaluationApiKey = evaluationApiKeyData.key;
+
+      // Add members to organization
+      await addMemberToOrganization(testOrganization.id!, {username: adminUser.username, role: 'ADMIN'});
+      await addMemberToOrganization(testOrganization.id!, {username: managerUser.username, role: 'MANAGER'});
+      await addMemberToOrganization(testOrganization.id!, {username: evaluatorUser.username, role: 'EVALUATOR'});
     });
 
     afterEach(async function () {
+      if (testOrganization?.id) {
+        await deleteTestOrganization(testOrganization.id);
+      }
+      if (ownerUser?.username) {
+        await deleteTestUser(ownerUser.username);
+      }
+      if (adminUser?.username) {
+        await deleteTestUser(adminUser.username);
+      }
+      if (managerUser?.username) {
+        await deleteTestUser(managerUser.username);
+      }
+      if (evaluatorUser?.username) {
+        await deleteTestUser(evaluatorUser.username);
+      }
       if (regularUserNoPermission?.username) {
         await deleteTestUser(regularUserNoPermission.username);
       }
     });
 
-    it('Should return 200 and delete API key from organization', async function () {
+    it('Should return 200 and delete API key from organization with SPACE ADMIN request', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/api-keys`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', adminApiKey)
-        .query({ organizationId: testOrganization.id })
-        .send({ apiKey: testApiKey })
+        .send({ apiKey: testEvaluationApiKey })
         .expect(200);
 
       expect(response.body).toBeDefined();
     });
+    
+    it('Should return 200 and delete API key from organization with organization ADMIN request', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .set('x-api-key', adminUser.apiKey)
+        .send({ apiKey: testEvaluationApiKey })
+        .expect(200);
+
+      expect(response.body).toBeDefined();
+    });
+    
+    it('Should return 200 and delete API key from organization with organization MANAGER request', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .set('x-api-key', managerUser.apiKey)
+        .send({ apiKey: testEvaluationApiKey })
+        .expect(200);
+
+      expect(response.body).toBeDefined();
+    });
+    
+    it('Should return 200 and delete MANAGEMENT API key from organization with organization MANAGER request', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .set('x-api-key', managerUser.apiKey)
+        .send({ apiKey: testManagementApiKey })
+        .expect(200);
+
+      expect(response.body).toBeDefined();
+    });
+    
+    it('Should return 403 when user without org role tries to delete API key', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .set('x-api-key', regularUserNoPermission.apiKey)
+        .send({ apiKey: testEvaluationApiKey })
+        .expect(403);
+
+      expect(response.body.error).toBeDefined();
+    });
+    
+    it('Should return 403 when MANAGER user tries to delete ALL API key', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .set('x-api-key', managerUser.apiKey)
+        .send({ apiKey: testAllApiKey })
+        .expect(403);
+
+      expect(response.body.error).toBeDefined();
+    });
+    
+    it('Should return 403 when EVALUATOR user tries to delete API key', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .set('x-api-key', evaluatorUser.apiKey)
+        .send({ apiKey: testEvaluationApiKey })
+        .expect(403);
+
+      expect(response.body.error).toBeDefined();
+    });
 
     it('Should return 400 when deleting non-existent API key', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/api-keys`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', adminApiKey)
-        .query({ organizationId: testOrganization.id })
         .send({ apiKey: `nonexistent_key_${Date.now()}` })
         .expect(400);
 
       expect(response.body.error).toBeDefined();
     });
 
-    it('Should return 403 when user without org role tries to delete API key', async function () {
-      const response = await request(app)
-        .delete(`${baseUrl}/organizations/api-keys`)
-        .set('x-api-key', regularUserNoPermission.apiKey)
-        .query({ organizationId: testOrganization.id })
-        .send({ apiKey: testApiKey })
-        .expect(403);
-
-      expect(response.body.error).toBeDefined();
-    });
-
     it('Should return 400 when apiKey field is missing', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/api-keys`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', adminApiKey)
-        .query({ organizationId: testOrganization.id })
         .send({})
         .expect(400);
 
       expect(response.body.error).toBeDefined();
     });
 
-    it('Should return 400 when organizationId query parameter is missing', async function () {
+    it('Should return 404 when organization does not exist', async function () {
+      const fakeId = '000000000000000000000000';
+      
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/api-keys`)
+        .delete(`${baseUrl}/organizations/${fakeId}/api-keys`)
         .set('x-api-key', adminApiKey)
-        .send({ apiKey: testApiKey })
-        .expect(400);
+        .send({ apiKey: testEvaluationApiKey })
+        .expect(404);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 422 with invalid organization ID format', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/invalid-id/api-keys`)
+        .set('x-api-key', adminApiKey)
+        .send({ apiKey: testEvaluationApiKey })
+        .expect(422);
 
       expect(response.body.error).toBeDefined();
     });

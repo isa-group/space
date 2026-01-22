@@ -40,12 +40,15 @@ const loadFileRoutes = function (app: express.Application) {
     app
       .route(`${baseUrl}/organizations/:organizationId/members`)
       .post(
+        OrganizationValidation.getById,
         OrganizationValidation.addMember,
         handleValidation,
         hasOrgRole(["OWNER", "ADMIN", "MANAGER"]),
         organizationController.addMember
       )
       .delete(
+        OrganizationValidation.getById,
+        handleValidation,
         hasOrgRole(["OWNER", "ADMIN", "MANAGER"]),
         organizationController.removeMember
       );
@@ -53,10 +56,14 @@ const loadFileRoutes = function (app: express.Application) {
       app
       .route(`${baseUrl}/organizations/:organizationId/api-keys`)
       .post(
+        OrganizationValidation.getById,
+        handleValidation,
         hasOrgRole(["OWNER", "ADMIN", "MANAGER"]),
         organizationController.addApiKey
       )
       .delete(
+        OrganizationValidation.getById,
+        handleValidation,
         hasOrgRole(["OWNER", "ADMIN", "MANAGER"]),
         organizationController.removeApiKey
       );
