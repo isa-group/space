@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { matchPath, extractApiPath, findMatchingPattern } from '../main/utils/routeMatcher';
+import { matchPath, extractApiPath, findMatchingPattern } from '../../main/utils/routeMatcher';
 
 describe('routeMatcher', () => {
   describe('matchPath', () => {
