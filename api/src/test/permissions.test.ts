@@ -12,7 +12,7 @@ import {
 import { LeanOrganization, LeanApiKey } from '../main/types/models/Organization';
 import { generateOrganizationApiKey } from '../main/utils/users/helpers';
 import { LeanService } from '../main/types/models/Service';
-import { addPricingToService, archivePricingFromService, createTestService, deleteTestService } from './utils/services/serviceTestUtils';
+import { createTestService, deleteTestService } from './utils/services/serviceTestUtils';
 
 describe('Permissions Test Suite', function () {
   let app: Server;
@@ -25,7 +25,9 @@ describe('Permissions Test Suite', function () {
 
   beforeAll(async function () {
     app = await getApp();
+  });
 
+  beforeEach(async function () {
     // Create an admin user for tests
     adminUser = await createTestUser('ADMIN');
     adminApiKey = adminUser.apiKey;
@@ -47,7 +49,7 @@ describe('Permissions Test Suite', function () {
     }
   });
 
-  afterAll(async function () {
+  afterEach(async function () {
     // Clean up the created users and organization
     if (testOrganization?.id) {
       await deleteTestOrganization(testOrganization.id!);
@@ -58,6 +60,9 @@ describe('Permissions Test Suite', function () {
     if (regularUser?.username) {
       await deleteTestUser(regularUser.username);
     }
+  });
+
+  afterAll(async function () {
     await shutdownApp();
   });
 
@@ -1288,13 +1293,80 @@ describe('Permissions Test Suite', function () {
   });
 
   describe('Contract Routes (ADMIN, USER with Org Roles)', function () {
+    let contractTestOrganization: LeanOrganization;
+    let contractOwnerUser: any;
+    let contractAllApiKey: LeanApiKey;
+    let contractManagementApiKey: LeanApiKey;
+    let contractEvaluationApiKey: LeanApiKey;
+
+    beforeAll(async function () {
+      // Create owner user for organization
+      contractOwnerUser = await createTestUser('USER');
+
+      // Create organization
+      contractTestOrganization = await createTestOrganization(contractOwnerUser.username);
+
+      // Add organization API keys
+      contractAllApiKey = { key: generateOrganizationApiKey(), scope: 'ALL' };
+      contractManagementApiKey = { key: generateOrganizationApiKey(), scope: 'MANAGEMENT' };
+      contractEvaluationApiKey = { key: generateOrganizationApiKey(), scope: 'EVALUATION' };
+
+      await addApiKeyToOrganization(contractTestOrganization.id!, contractAllApiKey);
+      await addApiKeyToOrganization(contractTestOrganization.id!, contractManagementApiKey);
+      await addApiKeyToOrganization(contractTestOrganization.id!, contractEvaluationApiKey);
+    });
+
+    afterAll(async function () {
+      // Delete organization
+      if (contractTestOrganization?.id) {
+        await deleteTestOrganization(contractTestOrganization.id!);
+      }
+
+      // Delete owner user
+      if (contractOwnerUser?.username) {
+        await deleteTestUser(contractOwnerUser.username);
+      }
+    });
+
     describe('GET /contracts - Org Role: ALL, MANAGEMENT', function () {
-      it('Should allow access with user API key', async function () {
+      it('Should return 200 with ADMIN user API key', async function () {
         const response = await request(app)
           .get(`${baseUrl}/contracts`)
           .set('x-api-key', adminApiKey);
 
         expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 200 with USER user API key', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/contracts`)
+          .set('x-api-key', regularUserApiKey);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 200 with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/contracts`)
+          .set('x-api-key', contractAllApiKey.key);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 200 with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/contracts`)
+          .set('x-api-key', contractManagementApiKey.key);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/contracts`)
+          .set('x-api-key', contractEvaluationApiKey.key);
+
+        expect(response.status).toBe(403);
       });
 
       it('Should return 401 without API key', async function () {
@@ -1305,13 +1377,49 @@ describe('Permissions Test Suite', function () {
     });
 
     describe('POST /contracts - Org Role: ALL, MANAGEMENT', function () {
-      it('Should allow creation with user API key', async function () {
+      it('Should allow creation with ADMIN user API key', async function () {
         const response = await request(app)
           .post(`${baseUrl}/contracts`)
           .set('x-api-key', adminApiKey)
           .send({ userId: 'test-user' });
 
         expect([201, 400, 422]).toContain(response.status);
+      });
+
+      it('Should allow creation with USER user API key', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/contracts`)
+          .set('x-api-key', regularUserApiKey)
+          .send({ userId: 'test-user' });
+
+        expect([201, 400, 422]).toContain(response.status);
+      });
+
+      it('Should allow creation with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/contracts`)
+          .set('x-api-key', contractAllApiKey.key)
+          .send({ userId: 'test-user' });
+
+        expect([201, 400, 422]).toContain(response.status);
+      });
+
+      it('Should allow creation with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/contracts`)
+          .set('x-api-key', contractManagementApiKey.key)
+          .send({ userId: 'test-user' });
+
+        expect([201, 400, 422]).toContain(response.status);
+      });
+
+      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/contracts`)
+          .set('x-api-key', contractEvaluationApiKey.key)
+          .send({ userId: 'test-user' });
+
+        expect(response.status).toBe(403);
       });
 
       it('Should return 401 without API key', async function () {
@@ -1322,12 +1430,44 @@ describe('Permissions Test Suite', function () {
     });
 
     describe('GET /contracts/:userId', function () {
-      it('Should allow access with user API key', async function () {
+      it('Should return 200 with ADMIN user API key', async function () {
         const response = await request(app)
           .get(`${baseUrl}/contracts/test-user`)
           .set('x-api-key', adminApiKey);
 
         expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 200 with USER user API key', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/contracts/test-user`)
+          .set('x-api-key', regularUserApiKey);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 200 with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/contracts/test-user`)
+          .set('x-api-key', contractAllApiKey.key);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 200 with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/contracts/test-user`)
+          .set('x-api-key', contractManagementApiKey.key);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/contracts/test-user`)
+          .set('x-api-key', contractEvaluationApiKey.key);
+
+        expect(response.status).toBe(403);
       });
 
       it('Should return 401 without API key', async function () {
@@ -1338,13 +1478,49 @@ describe('Permissions Test Suite', function () {
     });
 
     describe('PUT /contracts/:userId', function () {
-      it('Should allow update with user API key', async function () {
+      it('Should allow update with ADMIN user API key', async function () {
         const response = await request(app)
           .put(`${baseUrl}/contracts/test-user`)
           .set('x-api-key', adminApiKey)
           .send({ serviceName: 'test' });
 
         expect([200, 400, 404, 422]).toContain(response.status);
+      });
+
+      it('Should allow update with USER user API key', async function () {
+        const response = await request(app)
+          .put(`${baseUrl}/contracts/test-user`)
+          .set('x-api-key', regularUserApiKey)
+          .send({ serviceName: 'test' });
+
+        expect([200, 400, 404, 422]).toContain(response.status);
+      });
+
+      it('Should allow update with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .put(`${baseUrl}/contracts/test-user`)
+          .set('x-api-key', contractAllApiKey.key)
+          .send({ serviceName: 'test' });
+
+        expect([200, 400, 404, 422]).toContain(response.status);
+      });
+
+      it('Should allow update with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .put(`${baseUrl}/contracts/test-user`)
+          .set('x-api-key', contractManagementApiKey.key)
+          .send({ serviceName: 'test' });
+
+        expect([200, 400, 404, 422]).toContain(response.status);
+      });
+
+      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .put(`${baseUrl}/contracts/test-user`)
+          .set('x-api-key', contractEvaluationApiKey.key)
+          .send({ serviceName: 'test' });
+
+        expect(response.status).toBe(403);
       });
 
       it('Should return 401 without API key', async function () {
@@ -1355,12 +1531,44 @@ describe('Permissions Test Suite', function () {
     });
 
     describe('DELETE /contracts/:userId - Org Role: ALL', function () {
-      it('Should allow deletion with user API key', async function () {
+      it('Should allow deletion with ADMIN user API key', async function () {
         const response = await request(app)
           .delete(`${baseUrl}/contracts/test-user`)
           .set('x-api-key', adminApiKey);
 
         expect([200, 204, 404]).toContain(response.status);
+      });
+
+      it('Should allow deletion with USER user API key', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/contracts/test-user`)
+          .set('x-api-key', regularUserApiKey);
+
+        expect([200, 204, 404]).toContain(response.status);
+      });
+
+      it('Should allow deletion with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/contracts/test-user`)
+          .set('x-api-key', contractAllApiKey.key);
+
+        expect([200, 204, 404]).toContain(response.status);
+      });
+
+      it('Should return 403 with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/contracts/test-user`)
+          .set('x-api-key', contractManagementApiKey.key);
+
+        expect(response.status).toBe(403);
+      });
+
+      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/contracts/test-user`)
+          .set('x-api-key', contractEvaluationApiKey.key);
+
+        expect(response.status).toBe(403);
       });
 
       it('Should return 401 without API key', async function () {
@@ -1372,11 +1580,78 @@ describe('Permissions Test Suite', function () {
   });
 
   describe('Feature Evaluation Routes', function () {
-    describe('GET /features', function () {
-      it('Should allow access with user API key', async function () {
+    let featureTestOrganization: LeanOrganization;
+    let featureOwnerUser: any;
+    let featureAllApiKey: LeanApiKey;
+    let featureManagementApiKey: LeanApiKey;
+    let featureEvaluationApiKey: LeanApiKey;
+
+    beforeAll(async function () {
+      // Create owner user for organization
+      featureOwnerUser = await createTestUser('USER');
+
+      // Create organization
+      featureTestOrganization = await createTestOrganization(featureOwnerUser.username);
+
+      // Add organization API keys
+      featureAllApiKey = { key: generateOrganizationApiKey(), scope: 'ALL' };
+      featureManagementApiKey = { key: generateOrganizationApiKey(), scope: 'MANAGEMENT' };
+      featureEvaluationApiKey = { key: generateOrganizationApiKey(), scope: 'EVALUATION' };
+
+      await addApiKeyToOrganization(featureTestOrganization.id!, featureAllApiKey);
+      await addApiKeyToOrganization(featureTestOrganization.id!, featureManagementApiKey);
+      await addApiKeyToOrganization(featureTestOrganization.id!, featureEvaluationApiKey);
+    });
+
+    afterAll(async function () {
+      // Delete organization
+      if (featureTestOrganization?.id) {
+        await deleteTestOrganization(featureTestOrganization.id!);
+      }
+
+      // Delete owner user
+      if (featureOwnerUser?.username) {
+        await deleteTestUser(featureOwnerUser.username);
+      }
+    });
+
+    describe('GET /features - User Role: ADMIN, USER | Org Role: ALL, MANAGEMENT, EVALUATION', function () {
+      it('Should return 200 with ADMIN user API key', async function () {
         const response = await request(app)
           .get(`${baseUrl}/features`)
           .set('x-api-key', adminApiKey);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 200 with USER user API key', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/features`)
+          .set('x-api-key', regularUserApiKey);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 200 with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/features`)
+          .set('x-api-key', featureAllApiKey.key);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 200 with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/features`)
+          .set('x-api-key', featureManagementApiKey.key);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 200 with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/features`)
+          .set('x-api-key', featureEvaluationApiKey.key);
 
         expect([200, 404]).toContain(response.status);
       });
@@ -1388,64 +1663,210 @@ describe('Permissions Test Suite', function () {
       });
     });
 
-    describe('POST /features/evaluate - Org Role: ALL, MANAGEMENT, EVALUATION', function () {
-      it('Should allow evaluation with user API key', async function () {
+    describe('POST /features/evaluate - Org Role: ALL, MANAGEMENT, EVALUATION only', function () {
+      it('Should return 403 with ADMIN user API key', async function () {
         const response = await request(app)
           .post(`${baseUrl}/features/evaluate`)
           .set('x-api-key', adminApiKey)
+          .send({ userId: 'test-user' });
+
+        expect(response.status).toBe(403);
+      });
+
+      it('Should return 403 with USER user API key', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/features/evaluate`)
+          .set('x-api-key', regularUserApiKey)
+          .send({ userId: 'test-user' });
+
+        expect(response.status).toBe(403);
+      });
+
+      it('Should allow evaluation with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/features/evaluate`)
+          .set('x-api-key', featureAllApiKey.key)
+          .send({ userId: 'test-user' });
+
+        expect([200, 400, 404, 422]).toContain(response.status);
+      });
+
+      it('Should allow evaluation with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/features/evaluate`)
+          .set('x-api-key', featureManagementApiKey.key)
+          .send({ userId: 'test-user' });
+
+        expect([200, 400, 404, 422]).toContain(response.status);
+      });
+
+      it('Should allow evaluation with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/features/evaluate`)
+          .set('x-api-key', featureEvaluationApiKey.key)
           .send({ userId: 'test-user' });
 
         expect([200, 400, 404, 422]).toContain(response.status);
       });
 
       it('Should return 401 without API key', async function () {
-        const response = await request(app).post(`${baseUrl}/features/evaluate`);
+        const response = await request(app)
+          .post(`${baseUrl}/features/evaluate`)
+          .send({ userId: 'test-user' });
 
         expect(response.status).toBe(401);
       });
     });
 
-    describe('POST /features/:userId', function () {
-      it('Should allow feature operation with user API key', async function () {
+    describe('POST /features/:userId - Org Role: ALL, MANAGEMENT only', function () {
+      it('Should return 403 with ADMIN user API key', async function () {
         const response = await request(app)
           .post(`${baseUrl}/features/test-user`)
           .set('x-api-key', adminApiKey)
           .send({ features: [] });
 
+        expect(response.status).toBe(403);
+      });
+
+      it('Should return 403 with USER user API key', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/features/test-user`)
+          .set('x-api-key', regularUserApiKey)
+          .send({ features: [] });
+
+        expect(response.status).toBe(403);
+      });
+
+      it('Should allow with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/features/test-user`)
+          .set('x-api-key', featureAllApiKey.key)
+          .send({ features: [] });
+
         expect([200, 400, 404, 422]).toContain(response.status);
       });
 
+      it('Should allow with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/features/test-user`)
+          .set('x-api-key', featureManagementApiKey.key)
+          .send({ features: [] });
+
+        expect([200, 400, 404, 422]).toContain(response.status);
+      });
+
+      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/features/test-user`)
+          .set('x-api-key', featureEvaluationApiKey.key)
+          .send({ features: [] });
+
+        expect(response.status).toBe(403);
+      });
+
       it('Should return 401 without API key', async function () {
-        const response = await request(app).post(`${baseUrl}/features/test-user`);
+        const response = await request(app)
+          .post(`${baseUrl}/features/test-user`)
+          .send({ features: [] });
 
         expect(response.status).toBe(401);
       });
     });
 
-    describe('PUT /features - Org Role: ALL, MANAGEMENT', function () {
-      it('Should allow update with user API key', async function () {
+    describe('PUT /features - Org Role: ALL, MANAGEMENT only', function () {
+      it('Should return 403 with ADMIN user API key', async function () {
         const response = await request(app)
           .put(`${baseUrl}/features`)
           .set('x-api-key', adminApiKey)
           .send({ feature: 'test' });
 
+        expect(response.status).toBe(403);
+      });
+
+      it('Should return 403 with USER user API key', async function () {
+        const response = await request(app)
+          .put(`${baseUrl}/features`)
+          .set('x-api-key', regularUserApiKey)
+          .send({ feature: 'test' });
+
+        expect(response.status).toBe(403);
+      });
+
+      it('Should allow update with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .put(`${baseUrl}/features`)
+          .set('x-api-key', featureAllApiKey.key)
+          .send({ feature: 'test' });
+
         expect([200, 400, 404, 422]).toContain(response.status);
       });
 
+      it('Should allow update with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .put(`${baseUrl}/features`)
+          .set('x-api-key', featureManagementApiKey.key)
+          .send({ feature: 'test' });
+
+        expect([200, 400, 404, 422]).toContain(response.status);
+      });
+
+      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .put(`${baseUrl}/features`)
+          .set('x-api-key', featureEvaluationApiKey.key)
+          .send({ feature: 'test' });
+
+        expect(response.status).toBe(403);
+      });
+
       it('Should return 401 without API key', async function () {
-        const response = await request(app).put(`${baseUrl}/features`);
+        const response = await request(app)
+          .put(`${baseUrl}/features`)
+          .send({ feature: 'test' });
 
         expect(response.status).toBe(401);
       });
     });
 
-    describe('DELETE /features', function () {
-      it('Should allow deletion with user API key', async function () {
+    describe('DELETE /features - Org Role: ALL, MANAGEMENT only', function () {
+      it('Should return 403 with ADMIN user API key', async function () {
         const response = await request(app)
           .delete(`${baseUrl}/features`)
           .set('x-api-key', adminApiKey);
 
+        expect(response.status).toBe(403);
+      });
+
+      it('Should return 403 with USER user API key', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/features`)
+          .set('x-api-key', regularUserApiKey);
+
+        expect(response.status).toBe(403);
+      });
+
+      it('Should allow deletion with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/features`)
+          .set('x-api-key', featureAllApiKey.key);
+
         expect([200, 204, 404]).toContain(response.status);
+      });
+
+      it('Should allow deletion with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/features`)
+          .set('x-api-key', featureManagementApiKey.key);
+
+        expect([200, 204, 404]).toContain(response.status);
+      });
+
+      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/features`)
+          .set('x-api-key', featureEvaluationApiKey.key);
+
+        expect(response.status).toBe(403);
       });
 
       it('Should return 401 without API key', async function () {
@@ -1457,13 +1878,74 @@ describe('Permissions Test Suite', function () {
   });
 
   describe('Analytics Routes - Org Role: ALL, MANAGEMENT', function () {
+    let analyticsTestOrganization: LeanOrganization;
+    let analyticsOwnerUser: any;
+    let analyticsAllApiKey: LeanApiKey;
+    let analyticsManagementApiKey: LeanApiKey;
+    let analyticsEvaluationApiKey: LeanApiKey;
+
+    beforeAll(async function () {
+      analyticsOwnerUser = await createTestUser('USER');
+      analyticsTestOrganization = await createTestOrganization(analyticsOwnerUser.username);
+
+      analyticsAllApiKey = { key: generateOrganizationApiKey(), scope: 'ALL' };
+      analyticsManagementApiKey = { key: generateOrganizationApiKey(), scope: 'MANAGEMENT' };
+      analyticsEvaluationApiKey = { key: generateOrganizationApiKey(), scope: 'EVALUATION' };
+
+      await addApiKeyToOrganization(analyticsTestOrganization.id!, analyticsAllApiKey);
+      await addApiKeyToOrganization(analyticsTestOrganization.id!, analyticsManagementApiKey);
+      await addApiKeyToOrganization(analyticsTestOrganization.id!, analyticsEvaluationApiKey);
+    });
+
+    afterAll(async function () {
+      if (analyticsTestOrganization?.id) {
+        await deleteTestOrganization(analyticsTestOrganization.id!);
+      }
+
+      if (analyticsOwnerUser?.username) {
+        await deleteTestUser(analyticsOwnerUser.username);
+      }
+    });
+
     describe('GET /analytics/api-calls', function () {
-      it('Should allow access with user API key', async function () {
+      it('Should allow access with ADMIN user API key', async function () {
         const response = await request(app)
           .get(`${baseUrl}/analytics/api-calls`)
           .set('x-api-key', adminApiKey);
 
         expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should allow access with USER user API key', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/analytics/api-calls`)
+          .set('x-api-key', regularUserApiKey);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should allow access with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/analytics/api-calls`)
+          .set('x-api-key', analyticsAllApiKey.key);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should allow access with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/analytics/api-calls`)
+          .set('x-api-key', analyticsManagementApiKey.key);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/analytics/api-calls`)
+          .set('x-api-key', analyticsEvaluationApiKey.key);
+
+        expect(response.status).toBe(403);
       });
 
       it('Should return 401 without API key', async function () {
@@ -1474,12 +1956,44 @@ describe('Permissions Test Suite', function () {
     });
 
     describe('GET /analytics/evaluations', function () {
-      it('Should allow access with user API key', async function () {
+      it('Should allow access with ADMIN user API key', async function () {
         const response = await request(app)
           .get(`${baseUrl}/analytics/evaluations`)
           .set('x-api-key', adminApiKey);
 
         expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should allow access with USER user API key', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/analytics/evaluations`)
+          .set('x-api-key', regularUserApiKey);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should allow access with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/analytics/evaluations`)
+          .set('x-api-key', analyticsAllApiKey.key);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should allow access with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/analytics/evaluations`)
+          .set('x-api-key', analyticsManagementApiKey.key);
+
+        expect([200, 404]).toContain(response.status);
+      });
+
+      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/analytics/evaluations`)
+          .set('x-api-key', analyticsEvaluationApiKey.key);
+
+        expect(response.status).toBe(403);
       });
 
       it('Should return 401 without API key', async function () {
@@ -1494,21 +2008,29 @@ describe('Permissions Test Suite', function () {
     describe('GET /cache/get', function () {
       it('Should allow access with ADMIN user API key', async function () {
         const response = await request(app)
-          .get(`${baseUrl}/cache/get`)
+          .get(`${baseUrl}/cache/get?key=test`)
           .set('x-api-key', adminApiKey);
 
         expect([200, 400, 404]).toContain(response.status);
       });
 
+      it('Should return 403 with organization API key', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/cache/get?key=test`)
+          .set('x-api-key', orgApiKey.key);
+
+        expect(response.status).toBe(403);
+      });
+
       it('Should return 401 without API key', async function () {
-        const response = await request(app).get(`${baseUrl}/cache/get`);
+        const response = await request(app).get(`${baseUrl}/cache/get?key=test`);
 
         expect(response.status).toBe(401);
       });
 
       it('Should return 403 with non-admin user API key', async function () {
         const response = await request(app)
-          .get(`${baseUrl}/cache/get`)
+          .get(`${baseUrl}/cache/get?key=test`)
           .set('x-api-key', regularUserApiKey);
 
         expect(response.status).toBe(403);
@@ -1520,13 +2042,22 @@ describe('Permissions Test Suite', function () {
         const response = await request(app)
           .post(`${baseUrl}/cache/set`)
           .set('x-api-key', adminApiKey)
-          .send({ key: 'test', value: 'test' });
+          .send({ key: 'test', value: 'test', expirationInSeconds: 60 });
 
         expect([200, 201, 400, 422]).toContain(response.status);
       });
 
+      it('Should return 403 with organization API key', async function () {
+        const response = await request(app)
+          .post(`${baseUrl}/cache/set`)
+          .set('x-api-key', orgApiKey.key)
+          .send({ key: 'test', value: 'test', expirationInSeconds: 60 });
+
+        expect(response.status).toBe(403);
+      });
+
       it('Should return 401 without API key', async function () {
-        const response = await request(app).post(`${baseUrl}/cache/set`);
+        const response = await request(app).post(`${baseUrl}/cache/set`).send({ key: 'test', value: 'test', expirationInSeconds: 60 });
 
         expect(response.status).toBe(401);
       });
@@ -1535,108 +2066,7 @@ describe('Permissions Test Suite', function () {
         const response = await request(app)
           .post(`${baseUrl}/cache/set`)
           .set('x-api-key', regularUserApiKey)
-          .send({ key: 'test', value: 'test' });
-
-        expect(response.status).toBe(403);
-      });
-    });
-  });
-
-  describe('Organization Role Tests', function () {
-    let managementOrg: LeanOrganization;
-    let managementApiKey: LeanApiKey;
-    let evaluationOrg: LeanOrganization;
-    let evaluationApiKey: LeanApiKey;
-
-    beforeAll(async function () {
-      // Create organization with MANAGEMENT role
-      managementOrg = await createTestOrganization(adminUser.username);
-      if (managementOrg && managementOrg.id) {
-        managementApiKey = {
-          key: `org_management_key_${Date.now()}`,
-          scope: 'MANAGEMENT',
-        };
-        await addApiKeyToOrganization(managementOrg.id, managementApiKey);
-      }
-
-      // Create organization with EVALUATION role
-      evaluationOrg = await createTestOrganization(adminUser.username);
-      if (evaluationOrg && evaluationOrg.id) {
-        evaluationApiKey = {
-          key: `org_evaluation_key_${Date.now()}`,
-          scope: 'EVALUATION',
-        };
-        await addApiKeyToOrganization(evaluationOrg.id, evaluationApiKey);
-      }
-    });
-
-    afterAll(async function () {
-      if (managementOrg?.id) {
-        await deleteTestOrganization(managementOrg.id!);
-      }
-      if (evaluationOrg?.id) {
-        await deleteTestOrganization(evaluationOrg.id!);
-      }
-    });
-
-    describe('MANAGEMENT Role Permissions', function () {
-      it('Should allow GET /services with MANAGEMENT role', async function () {
-        const response = await request(app)
-          .get(`${baseUrl}/services`)
-          .set('x-api-key', managementApiKey.key);
-
-        expect([200, 404]).toContain(response.status);
-      });
-
-      it('Should allow POST /services with MANAGEMENT role', async function () {
-        const response = await request(app)
-          .post(`${baseUrl}/services`)
-          .set('x-api-key', managementApiKey.key)
-          .send({ name: '${testService.name}' });
-
-        expect([201, 400, 422]).toContain(response.status);
-      });
-
-      it('Should deny DELETE /services/:serviceName with MANAGEMENT role (requires ALL)', async function () {
-        const response = await request(app)
-          .delete(`${baseUrl}/services/${testService.name}`)
-          .set('x-api-key', managementApiKey.key);
-
-        expect([403, 404]).toContain(response.status);
-      });
-    });
-
-    describe('EVALUATION Role Permissions', function () {
-      it('Should allow GET /services with EVALUATION role', async function () {
-        const response = await request(app)
-          .get(`${baseUrl}/services`)
-          .set('x-api-key', evaluationApiKey.key);
-
-        expect([200, 404]).toContain(response.status);
-      });
-
-      it('Should deny POST /services with EVALUATION role (requires MANAGEMENT or ALL)', async function () {
-        const response = await request(app)
-          .post(`${baseUrl}/services`)
-          .set('x-api-key', evaluationApiKey.key)
-          .send({ name: '${testService.name}' });
-
-        expect(response.status).toBe(403);
-      });
-
-      it('Should deny PUT /services/:serviceName with EVALUATION role', async function () {
-        const response = await request(app)
-          .put(`${baseUrl}/services/${testService.name}`)
-          .set('x-api-key', evaluationApiKey.key)
-          .send({ description: 'Updated' });
-
-        expect(response.status).toBe(403);
-      });
-
-      it('Should deny DELETE /services/:serviceName with EVALUATION role', async function () {
-        const response = await request(app)
-          .delete(`${baseUrl}/services/${testService.name}`)
-          .set('x-api-key', evaluationApiKey.key);
+          .send({ key: 'test', value: 'test', expirationInSeconds: 60 });
 
         expect(response.status).toBe(403);
       });

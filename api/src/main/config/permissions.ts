@@ -180,7 +180,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   {
     path: '/features/evaluate',
     methods: ['POST'],
-    allowedUserRoles: ['ADMIN', 'USER'],
+    allowedUserRoles: [],
     allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
   },
   {
@@ -192,7 +192,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   {
     path: '/features/**',
     methods: ['POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedUserRoles: ['ADMIN', 'USER'],
+    allowedUserRoles: [],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
 
@@ -213,6 +213,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
     path: '/cache/**',
     methods: ['GET', 'POST'],
     allowedUserRoles: ['ADMIN'],
+    requiresUser: true,
   },
 
   // ============================================
@@ -228,7 +229,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   // Health Check (Public)
   // ============================================
   {
-    path: '/health',
+    path: '/healthcheck',
     methods: ['GET'],
     isPublic: true, // No authentication required
   },

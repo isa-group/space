@@ -25,7 +25,7 @@ const authenticateApiKeyMiddleware = async (req: Request, res: Response, next: N
   try {
     // Determine API Key type based on prefix
     if (!apiKey) {
-      checkPermissions(req, res, next);
+      return checkPermissions(req, res, next);
     } else if (apiKey.startsWith('usr_')) {
       // User API Key authentication
       await authenticateUserApiKey(req, apiKey);
@@ -38,7 +38,7 @@ const authenticateApiKeyMiddleware = async (req: Request, res: Response, next: N
       });
     }
 
-    checkPermissions(req, res, next);
+    return checkPermissions(req, res, next);
   } catch (err: any) {
     if (!res.headersSent) {
       return res.status(401).json({

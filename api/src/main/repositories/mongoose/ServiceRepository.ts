@@ -14,13 +14,13 @@ export type ServiceQueryFilters = {
 }
 
 class ServiceRepository extends RepositoryBase {
-  async findAll(organizationId: string, queryFilters?: ServiceQueryFilters, disabled = false) {
+  async findAll(organizationId?: string, queryFilters?: ServiceQueryFilters, disabled = false) {
     const { name, page = 1, offset = 0, limit = 20, order = 'asc' } = queryFilters || {};
     
     const query: any = {
       ...(name ? { name: { $regex: name, $options: 'i' } } : {}),
       disabled: disabled,
-      organizationId: organizationId
+      ...(organizationId ? { organizationId: organizationId } : {})
     };
     
     const services = await ServiceMongoose.find(query)
@@ -31,8 +31,8 @@ class ServiceRepository extends RepositoryBase {
     return services.map((service) => toPlainObject<LeanService>(service.toJSON()));
   }
 
-  async findAllNoQueries(organizationId: string, disabled = false, projection: any = { name: 1, activePricings: 1, archivedPricings: 1 }): Promise<LeanService[] | null> {
-    const query: any = { disabled: disabled, organizationId: organizationId };
+  async findAllNoQueries(organizationId?: string, disabled = false, projection: any = { name: 1, activePricings: 1, archivedPricings: 1 }): Promise<LeanService[] | null> {
+    const query: any = { disabled: disabled, ...(organizationId ? { organizationId: organizationId } : {}) };
     const services = await ServiceMongoose.find(query).select(projection);
 
     if (!services || Array.isArray(services) && services.length === 0) {
@@ -61,7 +61,7 @@ class ServiceRepository extends RepositoryBase {
     return services.map((service) => toPlainObject<LeanService>(service.toJSON()));
   }
 
-  async findPricingsByServiceName(serviceName: string, versionsToRetrieve: string[], organizationId: string, disabled = false): Promise<LeanPricing[] | null> {
+  async findPricingsByServiceName(serviceName: string, versionsToRetrieve: string[], organizationId?: string, disabled = false): Promise<LeanPricing[] | null> {
     const query: any = { _serviceName: { $regex: serviceName, $options: 'i' }, version: { $in: versionsToRetrieve }, _organizationId: organizationId };
     const pricings = await PricingMongoose.find(query);
     if (!pricings || Array.isArray(pricings) && pricings.length === 0) {

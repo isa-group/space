@@ -26,7 +26,11 @@ class ServiceController {
   async index(req: any, res: any) {
     try {
       const queryParams = this._transformIndexQueryParams(req.query);
-      const organizationId = req.org.id;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
 
       const services = await this.serviceService.index(queryParams, organizationId);
 
@@ -40,7 +44,11 @@ class ServiceController {
     try {
       let { pricingStatus } = req.query;
       const serviceName = req.params.serviceName;
-      const organizationId = req.org.id;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
 
       if (!pricingStatus) {
         pricingStatus = 'active';
@@ -68,7 +76,12 @@ class ServiceController {
   async show(req: any, res: any) {
     try {
       const serviceName = req.params.serviceName;
-      const organizationId = req.org.id;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+      
       const service = await this.serviceService.show(serviceName, organizationId);
 
       return res.json(service);
@@ -85,7 +98,11 @@ class ServiceController {
     try {
       const serviceName = req.params.serviceName;
       const pricingVersion = req.params.pricingVersion;
-      const organizationId = req.org.id;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
 
       const pricing = await this.serviceService.showPricing(serviceName, pricingVersion, organizationId);
 
@@ -104,7 +121,12 @@ class ServiceController {
   async create(req: any, res: any) {
     try {
       const receivedFile = req.file;
-      const organizationId = req.org.id;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
       let service;
 
       if (!receivedFile) {
@@ -135,7 +157,12 @@ class ServiceController {
   async addPricingToService(req: any, res: any) {
     try {
       const serviceName = req.params.serviceName;
-      const organizationId = req.org.id;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
       const receivedFile = req.file;
       let service;
 
@@ -172,7 +199,11 @@ class ServiceController {
     try {
       const newServiceData = req.body;
       const serviceName = req.params.serviceName;
-      const organizationId = req.org.id;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
 
       const service = await this.serviceService.update(serviceName, newServiceData, organizationId);
 
@@ -186,7 +217,12 @@ class ServiceController {
     try {
       const serviceName = req.params.serviceName;
       const pricingVersion = req.params.pricingVersion;
-      const organizationId = req.org.id;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
       const newAvailability = req.query.availability ?? 'archived';
       const fallBackSubscription: FallBackSubscription = req.body ?? {};
 
@@ -234,7 +270,12 @@ class ServiceController {
   async disable(req: any, res: any) {
     try {
       const serviceName = req.params.serviceName;
-      const organizationId = req.org.id;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
       const result = await this.serviceService.disable(serviceName, organizationId);
 
       if (result) {
@@ -255,7 +296,11 @@ class ServiceController {
     try {
       const serviceName = req.params.serviceName;
       const pricingVersion = req.params.pricingVersion;
-      const organizationId = req.org.id;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
 
       const result = await this.serviceService.destroyPricing(serviceName, pricingVersion, organizationId);
 

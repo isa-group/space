@@ -29,13 +29,20 @@ class FeatureEvaluationController {
     try {
       const userId = req.params.userId;
       const options = this._transformEvalQueryParams(req.query);
-      const featureEvaluation = await this.featureEvaluationService.eval(userId, options);
+      
+      if (!req.org) {
+        throw new Error('PERMISSION ERROR: This endpoint can only be invoqued with organization authentication');
+      }
+
+      const featureEvaluation = await this.featureEvaluationService.eval(userId, req.org, options);
       res.json(featureEvaluation);
     } catch (err: any) {
       if (err.message.toLowerCase().includes('not found')) {
         res.status(404).send({ error: err.message });
       }else if (err.message.toLowerCase().includes('invalid')) {
         res.status(400).send({ error: err.message });
+      }else if (err.message.toLowerCase().includes('permission error')) {
+        res.status(403).send({ error: err.message });
       }else {
         res.status(500).send({ error: err.message });
       }
@@ -46,13 +53,20 @@ class FeatureEvaluationController {
     try {
       const userId = req.params.userId;
       const options = this._transformGenerateTokenQueryParams(req.query);
-      const token = await this.featureEvaluationService.generatePricingToken(userId, options);
+
+      if (!req.org) {
+        throw new Error('PERMISSION ERROR: This endpoint can only be invoqued with organization authentication');
+      }
+
+      const token = await this.featureEvaluationService.generatePricingToken(userId, req.org, options);
       res.json({pricingToken: token});
     } catch (err: any) {
       if (err.message.toLowerCase().includes('not found')) {
         res.status(404).send({ error: err.message });
       }else if (err.message.toLowerCase().includes('invalid')) {
         res.status(400).send({ error: err.message });
+      }else if (err.message.toLowerCase().includes('permission error')) {
+        res.status(403).send({ error: err.message });
       }else {
         res.status(500).send({ error: err.message });
       }
@@ -65,7 +79,12 @@ class FeatureEvaluationController {
       const featureId = req.params.featureId;
       const expectedConsumption = req.body ?? {};
       const options = this._transformFeatureEvalQueryParams(req.query);
-      const featureEvaluation: boolean | FeatureEvaluationResult = await this.featureEvaluationService.evalFeature(userId, featureId, expectedConsumption, options);
+
+      if (!req.org) {
+        throw new Error('PERMISSION ERROR: This endpoint can only be invoqued with organization authentication');
+      }
+
+      const featureEvaluation: boolean | FeatureEvaluationResult = await this.featureEvaluationService.evalFeature(userId, featureId, expectedConsumption, req.org, options);
 
       if (typeof featureEvaluation === 'boolean') {
         res.status(204).json("Usage level reset successfully");
@@ -78,6 +97,8 @@ class FeatureEvaluationController {
         res.status(404).send({ error: err.message });
       }else if (err.message.toLowerCase().includes('invalid')) {
         res.status(400).send({ error: err.message });
+      }else if (err.message.toLowerCase().includes('permission error')) {
+        res.status(403).send({ error: err.message });
       }else {
         res.status(500).send({ error: err.message });
       }
