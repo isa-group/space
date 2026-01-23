@@ -16,6 +16,8 @@ import { performNovation } from '../utils/contracts/novation';
 import CacheService from './CacheService';
 import { addPeriodToDate, convertKeysToLowercase, escapeVersion, resetEscapeVersion } from '../utils/helpers';
 import { generateUsageLevels, resetEscapeContractedServiceVersions } from '../utils/contracts/helpers';
+import { query } from 'express';
+import { LeanUser } from '../types/models/User';
 
 class ContractService {
   private readonly contractRepository: ContractRepository;
@@ -28,7 +30,7 @@ class ContractService {
     this.cacheService = container.resolve('cacheService');
   }
 
-  async index(queryParams: any) {
+  async index(queryParams: any, organizationId?: string): Promise<LeanContract[]> {
     const errors = validateContractQueryFilters(queryParams);
 
     if (errors.length > 0) {
@@ -36,6 +38,8 @@ class ContractService {
         'Errors where found during validation of query params: ' + errors.join(' | ')
       );
     }
+
+    queryParams.organizationId = organizationId;
 
     const contracts: LeanContract[] = await this.contractRepository.findByFilters(queryParams);
 
@@ -70,6 +74,10 @@ class ContractService {
       throw new Error('Invalid request: Missing userContact.userId');
     }
 
+    if (!contractData.organizationId) {
+      throw new Error('INVALID DATA: Missing organizationId');
+    }
+
     const existingContract = await this.contractRepository.findByUserId(
       contractData.userContact.userId
     );
@@ -81,7 +89,7 @@ class ContractService {
     }
 
     const servicesKeys = Object.keys(contractData.contractedServices || {}).map((key) => key.toLowerCase());
-    const services = await this.serviceService.indexByNames(servicesKeys);
+    const services = await this.serviceService.indexByNames(servicesKeys, contractData.organizationId);
 
     if (!services || services.length === 0) {
       throw new Error(`Invalid contract: Services not found: ${servicesKeys.join(', ')}`);
@@ -130,7 +138,7 @@ class ContractService {
         autoRenew: contractData.billingPeriod?.autoRenew ?? false,
         renewalDays: renewalDays,
       },
-      usageLevels: (await this._createUsageLevels(contractData.contractedServices)) || {},
+      usageLevels: (await this._createUsageLevels(contractData.contractedServices, contractData.organizationId)) || {},
       history: [],
     };
     try {
@@ -138,7 +146,7 @@ class ContractService {
         contractedServices: contractData.contractedServices,
         subscriptionPlans: contractData.subscriptionPlans,
         subscriptionAddOns: contractData.subscriptionAddOns,
-      });
+      }, contractData.organizationId);
     } catch (error) {
       throw new Error(`Invalid subscription: ${error}`);
     }
@@ -162,6 +170,8 @@ class ContractService {
     if (!contract) {
       throw new Error(`Contract with userId ${userId} not found`);
     }
+
+    await isSubscriptionValid(newSubscription, contract.organizationId);
 
     const newContract = performNovation(contract, newSubscription);
 
@@ -302,9 +312,9 @@ class ContractService {
     }
 
     if (queryParams.usageLimit) {
-      await this._resetUsageLimitUsageLevels(contract, queryParams.usageLimit);
+      await this._resetUsageLimitUsageLevels(contract, queryParams.usageLimit, contract.organizationId);
     } else if (queryParams.reset) {
-      await this._resetUsageLevels(contract, queryParams.renewableOnly);
+      await this._resetUsageLevels(contract, queryParams.renewableOnly, contract.organizationId);
     } else if (usageLevelsIncrements) {
       for (const serviceName in usageLevelsIncrements) {
         for (const usageLimit in usageLevelsIncrements[serviceName]) {
@@ -420,8 +430,12 @@ class ContractService {
     }
   }
 
-  async prune(): Promise<number> {
-    const result: number = await this.contractRepository.prune();
+  async prune(organizationId?: string, reqUser?: LeanUser): Promise<number> {
+    if (reqUser && reqUser.role !== 'ADMIN' && reqUser.orgRole !== 'ADMIN') {
+      throw new Error('PERMISSION ERROR: Only ADMIN users can prune organization contracts');
+    }
+    
+    const result: number = await this.contractRepository.prune(organizationId);
 
     return result;
   }
@@ -467,14 +481,16 @@ class ContractService {
   }
 
   async _createUsageLevels(
-    services: Record<string, string>
+    services: Record<string, string>,
+    organizationId: string
   ): Promise<Record<string, Record<string, UsageLevel>>> {
     const usageLevels: Record<string, Record<string, UsageLevel>> = {};
 
     for (const serviceName in services) {
       const pricing: LeanPricing = await this.serviceService.showPricing(
         serviceName,
-        services[serviceName]
+        services[serviceName],
+        organizationId
       );
 
       const serviceUsageLevels: Record<string, UsageLevel> | undefined = generateUsageLevels(pricing);
@@ -497,7 +513,7 @@ class ContractService {
     return serviceNames;
   }
 
-  async _resetUsageLimitUsageLevels(contract: LeanContract, usageLimit: string): Promise<void> {
+  async _resetUsageLimitUsageLevels(contract: LeanContract, usageLimit: string, organizationId: string): Promise<void> {
     const serviceNames: string[] = this._discoverUsageLimitServices(contract, usageLimit);
 
     if (serviceNames.length === 0) {
@@ -510,7 +526,7 @@ class ContractService {
       contract.usageLevels[serviceName][usageLimit].consumed = 0;
 
       if (contract.usageLevels[serviceName][usageLimit].resetTimeStamp) {
-        await this._setResetTimeStamp(contract, serviceName, usageLimit);
+        await this._setResetTimeStamp(contract, serviceName, usageLimit, organizationId);
       }
     }
   }
@@ -518,13 +534,15 @@ class ContractService {
   async _setResetTimeStamp(
     contract: LeanContract,
     serviceName: string,
-    usageLimit: string
+    usageLimit: string,
+    organizationId: string
   ): Promise<void> {
     const pricingVersion = contract.contractedServices[serviceName];
 
     const servicePricing: LeanPricing = await this.serviceService.showPricing(
       serviceName,
-      pricingVersion
+      pricingVersion,
+      organizationId
     );
 
     contract.usageLevels[serviceName][usageLimit].resetTimeStamp = addPeriodToDate(
@@ -533,7 +551,7 @@ class ContractService {
     );
   }
 
-  async _resetUsageLevels(contract: LeanContract, renewableOnly: boolean): Promise<void> {
+  async _resetUsageLevels(contract: LeanContract, renewableOnly: boolean, organizationId: string): Promise<void> {
     for (const serviceName in contract.usageLevels) {
       for (const usageLimit in contract.usageLevels[serviceName]) {
         if (renewableOnly && !contract.usageLevels[serviceName][usageLimit].resetTimeStamp) {
@@ -541,13 +559,13 @@ class ContractService {
         }
         contract.usageLevels[serviceName][usageLimit].consumed = 0;
         if (contract.usageLevels[serviceName][usageLimit].resetTimeStamp) {
-          await this._setResetTimeStamp(contract, serviceName, usageLimit);
+          await this._setResetTimeStamp(contract, serviceName, usageLimit, organizationId);
         }
       }
     }
   }
 
-  async _resetRenewableUsageLevels(contract: LeanContract, usageLimitsToRenew: string[]): Promise<LeanContract> {
+  async _resetRenewableUsageLevels(contract: LeanContract, usageLimitsToRenew: string[], organizationId: string): Promise<LeanContract> {
     
     if (usageLimitsToRenew.length === 0) {
       return contract;
@@ -563,7 +581,8 @@ class ContractService {
       if (currentResetTimeStamp && isAfter(new Date(), currentResetTimeStamp)) {
         const pricing: LeanPricing = await this.serviceService.showPricing(
           serviceName,
-          contractToUpdate.contractedServices[serviceName]
+          contractToUpdate.contractedServices[serviceName],
+          organizationId
         );
         currentResetTimeStamp = addPeriodToDate(
           currentResetTimeStamp,

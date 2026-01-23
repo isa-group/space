@@ -52,6 +52,7 @@ interface AddOn {
 interface Pricing {
   _id: { $oid: string };
   _serviceName: string;
+  _organizationId: string;
   version: string;
   currency: string;
   createdAt: string;

@@ -23,6 +23,7 @@ class ContractRepository extends RepositoryBase {
       sort,
       order = 'asc',
       filters,
+      organizationId,
     } = queryFilters || {};
 
     const matchConditions: any[] = [];
@@ -38,6 +39,9 @@ class ContractRepository extends RepositoryBase {
     }
     if (email) {
       matchConditions.push({ 'userContact.email': { $regex: email, $options: 'i' } });
+    }
+    if (organizationId) {
+      matchConditions.push({ organizationId: organizationId });
     }
 
     // We'll convert contractedServices object to array to ease matching
@@ -172,8 +176,9 @@ class ContractRepository extends RepositoryBase {
     return true;
   }
 
-  async prune(): Promise<number> {
-    const result = await ContractMongoose.deleteMany({});
+  async prune(organizationId?: string): Promise<number> {
+    const filter = organizationId ? { organizationId } : {};
+    const result = await ContractMongoose.deleteMany(filter);
     if (result.deletedCount === 0) {
       throw new Error('No contracts found to delete');
     }

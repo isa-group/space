@@ -150,9 +150,15 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   // Contract Routes
   // ============================================
   {
-    path: '/contracts',
-    methods: ['GET'],
+    path: '/organizations/*/contracts',
+    methods: ['GET', 'POST', 'DELETE'],
     allowedUserRoles: ['ADMIN', 'USER'],
+    allowedOrgRoles: [],
+  },
+  {
+    path: '/contracts',
+    methods: ['GET', 'POST'],
+    allowedUserRoles: [],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
   {

@@ -1,32 +1,65 @@
 import { faker } from '@faker-js/faker';
-import { ContractToCreate, UsageLevel } from '../../../main/types/models/Contract';
+import { ContractToCreate, LeanContract, UsageLevel } from '../../../main/types/models/Contract';
 import { baseUrl, getApp, useApp } from '../testApp';
 import request from 'supertest';
 import { generateContract, generateContractAndService } from './generators';
 import { TestContract } from '../../types/models/Contract';
 import { getTestAdminApiKey } from '../auth';
+import { LeanService } from '../../../main/types/models/Service';
+import { createMultipleTestServices } from '../services/serviceTestUtils';
+import { LeanUser } from '../../../main/types/models/User';
+import { createTestUser } from '../users/userTestUtils';
+
+async function createTestContract(organizationId: string, services: LeanService[], app: any): Promise<LeanContract> {
+  if (services.length === 0) {
+    services = await createMultipleTestServices(3, organizationId);
+  }
+
+  const contractedServices: Record<string, string> = services.reduce(
+    (acc, service) => {
+      acc[service.name] = Object.keys(service.activePricings)[0]!;
+      return acc;
+    },
+    {} as Record<string, string>
+  );
+
+  const contractData: ContractToCreate = await generateContract(contractedServices, organizationId, undefined, app);
+  const adminUser: LeanUser = await createTestUser('ADMIN');
+  const apiKey = adminUser.apiKey;
+
+  const response = await fetch(`${baseUrl}/organizations/${organizationId}/contracts`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+    },
+    body: JSON.stringify(contractData),
+  });
+
+  return (await response.json()) as unknown as LeanContract;
+}
 
 async function getAllContracts(app?: any): Promise<any[]> {
-  
   const copyApp = await useApp(app);
-  const apiKey = await getTestAdminApiKey();
-  
-  const response = await request(copyApp)
-    .get(`${baseUrl}/contracts`)
-    .set('x-api-key', apiKey);
+  const adminUser: LeanUser = await createTestUser('ADMIN');
+  const apiKey = adminUser.apiKey;
+
+  const response = await request(copyApp).get(`${baseUrl}/contracts`).set('x-api-key', apiKey);
 
   if (response.status !== 200) {
-    throw new Error(`Failed to fetch contracts. Status: ${response.status}. Body: ${response.body}`);
+    throw new Error(
+      `Failed to fetch contracts. Status: ${response.status}. Body: ${response.body}`
+    );
   }
 
   return response.body;
 }
 
 async function getContractByUserId(userId: string, app?: any): Promise<TestContract> {
-  
   const copyApp = await useApp(app);
-  const apiKey = await getTestAdminApiKey();
-  
+  const adminUser: LeanUser = await createTestUser('ADMIN');
+  const apiKey = adminUser.apiKey;
+
   const response = await request(copyApp)
     .get(`${baseUrl}/contracts/${userId}`)
     .set('x-api-key', apiKey)
@@ -36,7 +69,6 @@ async function getContractByUserId(userId: string, app?: any): Promise<TestContr
 }
 
 async function getRandomContract(app?: any): Promise<any[]> {
-  
   const contracts = await getAllContracts(app);
 
   const randomIndex = faker.number.int({ min: 0, max: contracts.length - 1 });
@@ -44,32 +76,40 @@ async function getRandomContract(app?: any): Promise<any[]> {
   return contracts[randomIndex];
 }
 
-async function createRandomContract(app?: any): Promise<TestContract> {
+async function createRandomContract(organizationId: string, app?: any): Promise<TestContract> {
   const copyApp = await useApp(app);
   const apiKey = await getTestAdminApiKey();
-  
-  const {contract} = await generateContractAndService(undefined, copyApp);
-  
+
+  const { contract } = await generateContractAndService(organizationId, undefined, copyApp);
+
   const response = await request(copyApp)
     .post(`${baseUrl}/contracts`)
     .set('x-api-key', apiKey)
     .send(contract);
-  
+
   if (response.status !== 201) {
     throw new Error(`Failed to create contract. Body: ${JSON.stringify(response.body)}`);
   }
-  
+
   return response.body;
 }
 
-async function createRandomContracts(amount: number, app?: any): Promise<TestContract[]> {
+async function createRandomContracts(
+  organizationId: string,
+  amount: number,
+  app?: any
+): Promise<TestContract[]> {
   const copyApp = await useApp(app);
   const apiKey = await getTestAdminApiKey();
-  
+
   const createdContracts: TestContract[] = [];
-  
-  const {contract, services} = await generateContractAndService(undefined, copyApp);
-  
+
+  const { contract, services } = await generateContractAndService(
+    organizationId,
+    undefined,
+    copyApp
+  );
+
   let response = await request(copyApp)
     .post(`${baseUrl}/contracts`)
     .set('x-api-key', apiKey)
@@ -78,12 +118,12 @@ async function createRandomContracts(amount: number, app?: any): Promise<TestCon
   if (response.status !== 201) {
     throw new Error(`Failed to create contract. Body: ${JSON.stringify(response.body)}`);
   }
-  
+
   createdContracts.push(response.body);
 
   for (let i = 0; i < amount - 1; i++) {
-    const generatedContract = await generateContract(services, undefined, copyApp);
-    
+    const generatedContract = await generateContract(services, organizationId, undefined, copyApp);
+
     response = await request(copyApp)
       .post(`${baseUrl}/contracts`)
       .set('x-api-key', apiKey)
@@ -99,15 +139,26 @@ async function createRandomContracts(amount: number, app?: any): Promise<TestCon
   return createdContracts;
 }
 
-async function createRandomContractsForService(serviceName: string, pricingVersion: string, amount: number, app?: any): Promise<TestContract[]> {
+async function createRandomContractsForService(
+  organizationId: string,
+  serviceName: string,
+  pricingVersion: string,
+  amount: number,
+  app?: any
+): Promise<TestContract[]> {
   const copyApp = await useApp(app);
   const apiKey = await getTestAdminApiKey();
-  
+
   const createdContracts: TestContract[] = [];
 
   for (let i = 0; i < amount - 1; i++) {
-    const generatedContract = await generateContract({ [serviceName]: pricingVersion }, undefined, copyApp);
-    
+    const generatedContract = await generateContract(
+      { [serviceName]: pricingVersion },
+      organizationId,
+      undefined,
+      copyApp
+    );
+
     const response = await request(copyApp)
       .post(`${baseUrl}/contracts`)
       .set('x-api-key', apiKey)
@@ -123,34 +174,49 @@ async function createRandomContractsForService(serviceName: string, pricingVersi
   return createdContracts;
 }
 
-async function incrementUsageLevel(userId: string, serviceName: string, usageLimitName: string, app?: any): Promise<TestContract> {
+async function incrementUsageLevel(
+  userId: string,
+  serviceName: string,
+  usageLimitName: string,
+  app?: any
+): Promise<TestContract> {
   const copyApp = await useApp(app);
   const apiKey = await getTestAdminApiKey();
-  
+
   const response = await request(copyApp)
     .put(`${baseUrl}/contracts/${userId}/usageLevels`)
     .set('x-api-key', apiKey)
     .send({
       [serviceName]: {
-        [usageLimitName]: 5
-      }
+        [usageLimitName]: 5,
+      },
     })
     .expect(200);
 
   return response.body;
 }
 
-async function incrementAllUsageLevel(userId: string, usageLevels: Record<string, Record<string, UsageLevel>>, app?: any): Promise<TestContract> {
+async function incrementAllUsageLevel(
+  userId: string,
+  usageLevels: Record<string, Record<string, UsageLevel>>,
+  app?: any
+): Promise<TestContract> {
   const copyApp = await useApp(app);
   const apiKey = await getTestAdminApiKey();
-  
-  const updatedUsageLevels = Object.keys(usageLevels).reduce((acc, serviceName) => {
-    acc[serviceName] = Object.keys(usageLevels[serviceName]).reduce((innerAcc, usageLimitName) => {
-      innerAcc[usageLimitName] = 5;
-      return innerAcc;
-    }, {} as Record<string, number>);
-    return acc;
-  }, {} as Record<string, Record<string, number>>);
+
+  const updatedUsageLevels = Object.keys(usageLevels).reduce(
+    (acc, serviceName) => {
+      acc[serviceName] = Object.keys(usageLevels[serviceName]).reduce(
+        (innerAcc, usageLimitName) => {
+          innerAcc[usageLimitName] = 5;
+          return innerAcc;
+        },
+        {} as Record<string, number>
+      );
+      return acc;
+    },
+    {} as Record<string, Record<string, number>>
+  );
 
   const response = await request(copyApp)
     .put(`${baseUrl}/contracts/${userId}/usageLevels`)
@@ -161,4 +227,14 @@ async function incrementAllUsageLevel(userId: string, usageLevels: Record<string
   return response.body;
 }
 
-export { createRandomContracts, getContractByUserId, getAllContracts, getRandomContract, createRandomContract, createRandomContractsForService, incrementAllUsageLevel, incrementUsageLevel };
+export {
+  createTestContract,
+  createRandomContracts,
+  getContractByUserId,
+  getAllContracts,
+  getRandomContract,
+  createRandomContract,
+  createRandomContractsForService,
+  incrementAllUsageLevel,
+  incrementUsageLevel,
+};

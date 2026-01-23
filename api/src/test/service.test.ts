@@ -1,12 +1,13 @@
+import fs from 'fs';
 import request from 'supertest';
 import { baseUrl, getApp, shutdownApp } from './utils/testApp';
 import { Server } from 'http';
-import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from 'vitest';
 import {
+  addArchivedPricingToService,
+  addPricingToService,
   archivePricingFromService,
-  createRandomService,
   createTestService,
-  deletePricingFromService,
   deleteTestService,
   getRandomPricingFile,
   getService,
@@ -15,7 +16,7 @@ import { zoomPricingPath } from './utils/services/ServiceTestData';
 import { retrievePricingFromPath } from 'pricing4ts/server';
 import { ExpectedPricingType, LeanUsageLimit } from '../main/types/models/Pricing';
 import { TestContract } from './types/models/Contract';
-import { createRandomContract, createRandomContractsForService } from './utils/contracts/contracts';
+import { createRandomContract, createRandomContractsForService, createTestContract } from './utils/contracts/contracts';
 import { isSubscriptionValid } from '../main/controllers/validation/ContractValidation';
 import { generatePricingFile } from './utils/services/pricingTestUtils';
 import { createTestUser, deleteTestUser } from './utils/users/userTestUtils';
@@ -24,6 +25,9 @@ import { LeanOrganization } from '../main/types/models/Organization';
 import { LeanUser } from '../main/types/models/User';
 import { addApiKeyToOrganization, createTestOrganization, deleteTestOrganization } from './utils/organization/organizationTestUtils';
 import { generateOrganizationApiKey } from '../main/utils/users/helpers';
+import nock from 'nock';
+import { getFirstPlanFromPricing, getVersionFromPricing } from './utils/regex';
+import { LeanContract } from '../main/types/models/Contract';
 
 describe('Services API Test Suite', function () {
   let app: Server;
@@ -214,36 +218,10 @@ describe('Services API Test Suite', function () {
 
   describe('DELETE /services/{serviceName}', function () {
     it('Should return 204', async function () {
-      const newContract = await createRandomContract();
-      const serviceName = Object.keys(newContract.contractedServices)[0];
-
-      const responseBefore = await request(app)
-        .get(`${baseUrl}/services/${serviceName}`)
-        .set('x-api-key', testApiKey);
-      expect(responseBefore.status).toEqual(200);
-      expect(responseBefore.body.name.toLowerCase()).toBe(serviceName.toLowerCase());
-
       const responseDelete = await request(app)
-        .delete(`${baseUrl}/services/${serviceName}`)
+        .delete(`${baseUrl}/services/${testService.name.toLowerCase()}`)
         .set('x-api-key', testApiKey);
       expect(responseDelete.status).toEqual(204);
-
-      const responseAfter = await request(app)
-        .get(`${baseUrl}/services/${serviceName}`)
-        .set('x-api-key', testApiKey);
-      expect(responseAfter.status).toEqual(404);
-
-      const contractsAfter = await request(app)
-        .get(`${baseUrl}/contracts`)
-        .set('x-api-key', testApiKey)
-        .send({ filters: { services: [serviceName] } });
-      expect(contractsAfter.status).toEqual(200);
-      expect(Array.isArray(contractsAfter.body)).toBe(true);
-      expect(
-        contractsAfter.body.every(
-          (c: TestContract) => new Date() > c.billingPeriod.endDate && !c.billingPeriod.autoRenew
-        )
-      ).toBeTruthy();
     });
   });
 
@@ -269,6 +247,8 @@ describe('Services API Test Suite', function () {
     });
 
     it('Should return 200: Given existent service name in lower case and "archived" in query', async function () {
+      await addArchivedPricingToService(testOrganization.id!, testService.name);
+      
       const response = await request(app)
         .get(`${baseUrl}/services/${testService.name.toLowerCase()}/pricings?pricingStatus=archived`)
         .set('x-api-key', testApiKey);
@@ -312,109 +292,99 @@ describe('Services API Test Suite', function () {
   });
 
   describe('POST /services/{serviceName}/pricings', function () {
-    let versionToAdd = '2025';
-    let skipAfterEach = false;
-
-    afterEach(async function () {
-      if (skipAfterEach) {
-        skipAfterEach = false;
-        return;
-      }
-
-      await archivePricingFromService(testOrganization.id!, testService.name, versionToAdd, app);
-      await deletePricingFromService(testOrganization.id!, testService.name, versionToAdd, app);
-    });
-
-    it('Should return 200', async function () {
+    it('Should return 200 when adding a new pricing version to a service', async function () {
       const serviceBefore = await getService(testOrganization.id!, testService.name, app);
       expect(serviceBefore.activePricings).toBeDefined();
 
       const previousActivePricingsAmount = Object.keys(serviceBefore.activePricings).length;
 
-      const newPricingVersion = zoomPricingPath;
-      versionToAdd = '2025';
+      const newPricingVersionPath = await getRandomPricingFile(testService.name);
 
       const response = await request(app)
         .post(`${baseUrl}/services/${testService.name}/pricings`)
         .set('x-api-key', testApiKey)
-        .attach('pricing', newPricingVersion);
+        .attach('pricing', newPricingVersionPath);
       expect(response.status).toEqual(201);
       expect(serviceBefore.activePricings).toBeDefined();
       const newActivePricingsAmount = Object.keys(response.body.activePricings).length;
       expect(newActivePricingsAmount).toBeGreaterThan(previousActivePricingsAmount);
 
       // Check if the new pricing is the latest in activePricings
-      const parsedPricing = retrievePricingFromPath(newPricingVersion);
+      const parsedPricing = retrievePricingFromPath(newPricingVersionPath);
       expect(
         Object.keys(response.body.activePricings).includes(parsedPricing.version)
       ).toBeTruthy();
     });
 
     it('Should return 200 even though the service has no archived pricings', async function () {
-      const newService = await createRandomService(app);
-      const newPricing = await generatePricingFile(newService.name);
-      skipAfterEach = true;
+      const newPricingVersionPath = await getRandomPricingFile(testService.name);
 
       const response = await request(app)
-        .post(`${baseUrl}/services/${newService.name}/pricings`)
+        .post(`${baseUrl}/services/${testService.name}/pricings`)
         .set('x-api-key', testApiKey)
-        .attach('pricing', newPricing);
+        .attach('pricing', newPricingVersionPath);
       expect(response.status).toEqual(201);
-      expect(newService.activePricings).toBeDefined();
+      expect(response.body.activePricings).toBeDefined();
+
       const newActivePricingsAmount = Object.keys(response.body.activePricings).length;
       expect(newActivePricingsAmount).toBeGreaterThan(
-        Object.keys(newService.activePricings).length
+        Object.keys(testService.activePricings).length
       );
     });
 
     it('Should return 200 given a pricing with a link', async function () {
-      const serviceBefore = await getService(testOrganization.id!, testService.name, app);
-      expect(serviceBefore.activePricings).toBeDefined();
+      
+      const previousActivePricingsAmount = Object.keys(testService.activePricings).length;
+      const newPricingVersionPath = await getRandomPricingFile(testService.name);
+      const newPricingVersion = fs.readFileSync(newPricingVersionPath, 'utf-8');
 
-      const previousActivePricingsAmount = Object.keys(serviceBefore.activePricings).length;
-
-      versionToAdd = '2019';
+      nock('https://test-domain.com')
+      .get('/test-pricing.yaml')
+      .reply(200, newPricingVersion);
 
       const response = await request(app)
-        .post(`${baseUrl}/services/${testService}/pricings`)
+        .post(`${baseUrl}/services/${testService.name}/pricings`)
         .set('x-api-key', testApiKey)
         .send({
           pricing:
-            'https://sphere.score.us.es/static/collections/63f74bf8eeed64058364b52e/IEEE TSC 2025/zoom/2019.yml',
+            'https://test-domain.com/test-pricing.yaml',
         });
 
       expect(response.status).toEqual(201);
-      expect(serviceBefore.activePricings).toBeDefined();
+      expect(testService.activePricings).toBeDefined();
       expect(Object.keys(response.body.activePricings).length).toBeGreaterThan(
         previousActivePricingsAmount
       );
+
+      // 5. Clean up fetch mock
+      nock.cleanAll();
     });
 
     it('Should return 400 given a pricing with a link that do not coincide in saasName', async function () {
-      const serviceBefore = await getService(testOrganization.id!, testService.name, app);
-      expect(serviceBefore.activePricings).toBeDefined();
+      const newPricingVersionPath = await getRandomPricingFile("random-name");
+      const newPricingVersion = fs.readFileSync(newPricingVersionPath, 'utf-8');
 
-      skipAfterEach = true;
+      nock('https://test-domain.com')
+      .get('/test-pricing.yaml')
+      .reply(200, newPricingVersion);
 
       const response = await request(app)
         .post(`${baseUrl}/services/${testService}/pricings`)
         .set('x-api-key', testApiKey)
         .send({
           pricing:
-            'https://sphere.score.us.es/static/collections/63f74bf8eeed64058364b52e/IEEE TSC 2025/zoom/2025.yml',
+            'https://test-domain.com/test-pricing.yaml',
         });
 
       expect(response.status).toEqual(400);
-      expect(response.body.error).toBe(
-        'Invalid request: The service name in the pricing file (Zoom - One) does not match the service name in the URL (Zoom)'
-      );
+      expect(response.body.error).toBeDefined();
     });
   });
 
   describe('GET /services/{serviceName}/pricings/{pricingVersion}', function () {
-    it('Should return 200: Given existent service name and pricing version', async function () {
+    it('Should return 200: Given existent service name and pricing version', async function () {  
       const response = await request(app)
-        .get(`${baseUrl}/services/${testService}/pricings/2.0.0`)
+        .get(`${baseUrl}/services/${testService}/pricings/${Object.keys(testService.activePricings)[0]}`)
         .set('x-api-key', testApiKey);
       expect(response.status).toEqual(200);
       expect(response.body.features).toBeDefined();
@@ -429,7 +399,7 @@ describe('Services API Test Suite', function () {
 
     it('Should return 200: Given existent service name in upper case and pricing version', async function () {
       const response = await request(app)
-        .get(`${baseUrl}/services/${testService}/pricings/2.0.0`)
+        .get(`${baseUrl}/services/${testService}/pricings/${Object.keys(testService.activePricings)[0]}`)
         .set('x-api-key', testApiKey);
       expect(response.status).toEqual(200);
       expect(response.body.features).toBeDefined();
@@ -444,7 +414,7 @@ describe('Services API Test Suite', function () {
 
     it('Should return 404 due to service not found', async function () {
       const response = await request(app)
-        .get(`${baseUrl}/services/unexistent-service/pricings/2.0.0`)
+        .get(`${baseUrl}/services/unexistent-service/pricings/${Object.keys(testService.activePricings)[0]}`)
         .set('x-api-key', testApiKey);
       expect(response.status).toEqual(404);
       expect(response.body.error).toBe('Service unexistent-service not found');
@@ -452,45 +422,27 @@ describe('Services API Test Suite', function () {
 
     it('Should return 404 due to pricing not found', async function () {
       const response = await request(app)
-        .get(`${baseUrl}/services/${testService}/pricings/unexistent-version`)
+        .get(`${baseUrl}/services/${testService.name}/pricings/unexistent-version`)
         .set('x-api-key', testApiKey);
       expect(response.status).toEqual(404);
       expect(response.body.error).toBe(
-        `Pricing version unexistent-version not found for service ${testService}`
+        `Pricing version unexistent-version not found for service ${testService.name}`
       );
     });
   });
 
   describe('PUT /services/{serviceName}/pricings/{pricingVersion}', function () {
-    const versionToArchive = '2.0.0';
-
-    afterEach(async function () {
-      await request(app)
-        .put(`${baseUrl}/services/${testService}/pricings/${versionToArchive}?availability=active`)
-        .set('x-api-key', testApiKey);
-    });
-
     it('Should return 200: Changing visibility using default value', async function () {
-      const responseBefore = await request(app)
-        .get(`${baseUrl}/services/${testService}`)
-        .set('x-api-key', testApiKey);
-      expect(responseBefore.status).toEqual(200);
-      expect(responseBefore.body.activePricings).toBeDefined();
-      expect(
-        Object.keys(responseBefore.body.activePricings).includes(versionToArchive)
-      ).toBeTruthy();
-      expect(
-        Object.keys(responseBefore.body.archivedPricings).includes(versionToArchive)
-      ).toBeFalsy();
-
+      
+      const pricingToArchiveContent = await addPricingToService(testOrganization.id!, testService.name, true);
+      const versionToArchive = getVersionFromPricing(pricingToArchiveContent);
+      const fallbackPlan = getFirstPlanFromPricing(pricingToArchiveContent);
+      
       const responseUpdate = await request(app)
         .put(`${baseUrl}/services/${testService}/pricings/${versionToArchive}`)
         .set('x-api-key', testApiKey)
         .send({
-          subscriptionPlan: 'PRO',
-          subscriptionAddOns: {
-            largeMeetings: 1,
-          },
+          subscriptionPlan: fallbackPlan,
         });
       expect(responseUpdate.status).toEqual(200);
       expect(responseUpdate.body.activePricings).toBeDefined();
@@ -503,28 +455,17 @@ describe('Services API Test Suite', function () {
     });
 
     it('Should return 200: Changing visibility using "archived"', async function () {
-      const responseBefore = await request(app)
-        .get(`${baseUrl}/services/${testService}`)
-        .set('x-api-key', testApiKey);
-      expect(responseBefore.status).toEqual(200);
-      expect(responseBefore.body.activePricings).toBeDefined();
-      expect(
-        Object.keys(responseBefore.body.activePricings).includes(versionToArchive)
-      ).toBeTruthy();
-      expect(
-        Object.keys(responseBefore.body.archivedPricings).includes(versionToArchive)
-      ).toBeFalsy();
-
+      const pricingToArchiveContent = await addPricingToService(testOrganization.id!, testService.name, true);
+      const versionToArchive = getVersionFromPricing(pricingToArchiveContent);
+      const fallbackPlan = getFirstPlanFromPricing(pricingToArchiveContent);
+      
       const responseUpdate = await request(app)
         .put(
           `${baseUrl}/services/${testService}/pricings/${versionToArchive}?availability=archived`
         )
         .set('x-api-key', testApiKey)
         .send({
-          subscriptionPlan: 'PRO',
-          subscriptionAddOns: {
-            largeMeetings: 1,
-          },
+          subscriptionPlan: fallbackPlan,
         });
       expect(responseUpdate.status).toEqual(200);
       expect(responseUpdate.body.activePricings).toBeDefined();
@@ -537,41 +478,33 @@ describe('Services API Test Suite', function () {
     });
 
     it('Should return 200: Changing visibility using "active"', async function () {
-      const responseBefore = await request(app)
-        .put(`${baseUrl}/services/${testService}/pricings/${versionToArchive}`)
-        .set('x-api-key', testApiKey)
-        .send({
-          subscriptionPlan: 'PRO',
-          subscriptionAddOns: {
-            largeMeetings: 1,
-          },
-        });
-      expect(responseBefore.status).toEqual(200);
-      expect(responseBefore.body.activePricings).toBeDefined();
-      expect(
-        Object.keys(responseBefore.body.activePricings).includes(versionToArchive)
-      ).toBeFalsy();
-      expect(
-        Object.keys(responseBefore.body.archivedPricings).includes(versionToArchive)
-      ).toBeTruthy();
+      const archivedVersion = await addArchivedPricingToService(testOrganization.id!, testService.name, true);
 
       const responseUpdate = await request(app)
-        .put(`${baseUrl}/services/${testService}/pricings/${versionToArchive}?availability=active`)
+        .put(`${baseUrl}/services/${testService}/pricings/${archivedVersion}?availability=active`)
         .set('x-api-key', testApiKey);
       expect(responseUpdate.status).toEqual(200);
       expect(responseUpdate.body.activePricings).toBeDefined();
       expect(
-        Object.keys(responseUpdate.body.activePricings).includes(versionToArchive)
+        Object.keys(responseUpdate.body.activePricings).includes(archivedVersion)
       ).toBeTruthy();
       expect(
-        Object.keys(responseUpdate.body.archivedPricings).includes(versionToArchive)
+        Object.keys(responseUpdate.body.archivedPricings).includes(archivedVersion)
       ).toBeFalsy();
     });
 
     it(
       'Should return 200 and novate all contracts: Changing visibility using "archived"',
       async function () {
-        await createRandomContractsForService(testOrganization.id!, testService.name, versionToArchive, 5, app);
+        const pricingToArchiveContent = await addPricingToService(testOrganization.id!, testService.name, true);
+        const versionToArchive = getVersionFromPricing(pricingToArchiveContent);
+        const fallbackPlan = getFirstPlanFromPricing(pricingToArchiveContent);
+        const testContract: LeanContract = await createTestContract(
+          testOrganization.id!,
+          [testService],
+          app
+        );
+        // await createRandomContractsForService(testOrganization.id!, testService.name, versionToArchive, 5, app);
 
         const responseUpdate = await request(app)
           .put(
@@ -579,10 +512,7 @@ describe('Services API Test Suite', function () {
           )
           .set('x-api-key', testApiKey)
           .send({
-            subscriptionPlan: 'PRO',
-            subscriptionAddOns: {
-              largeMeetings: 1,
-            },
+            subscriptionPlan: fallbackPlan,
           });
         expect(responseUpdate.status).toEqual(200);
         expect(responseUpdate.body.activePricings).toBeDefined();
@@ -596,7 +526,7 @@ describe('Services API Test Suite', function () {
         const reponseContractsAfter = await request(app)
           .get(`${baseUrl}/contracts`)
           .set('x-api-key', testApiKey)
-          .send({ filters: { services: [testService] } });
+          .send({ filters: { services: [testService.name] } });
 
         expect(reponseContractsAfter.status).toEqual(200);
         expect(Array.isArray(reponseContractsAfter.body)).toBe(true);

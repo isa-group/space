@@ -8,7 +8,7 @@ export interface LeanService {
   name: string;
   disabled: boolean;
   organizationId: string;
-  activePricings?: Record<string, PricingEntry>;
+  activePricings: Record<string, PricingEntry>;
   archivedPricings?: Record<string, PricingEntry>;
 }
 

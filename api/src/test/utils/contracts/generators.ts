@@ -7,6 +7,7 @@ import { ContractToCreate } from '../../../main/types/models/Contract';
 import { biasedRandomInt } from '../random';
 
 async function generateContractAndService(
+  organizationId: string,
   userId?: string,
   app?: any
 ): Promise<{ contract: ContractToCreate; services: Record<string, string> }> {
@@ -14,13 +15,14 @@ async function generateContractAndService(
 
   const contractedServices: Record<string, string> = await _generateNewContractedServices(appCopy);
 
-  const contract = await generateContract(contractedServices, userId, appCopy);
+  const contract = await generateContract(contractedServices, organizationId,userId, appCopy);
 
   return { contract, services: contractedServices };
 }
 
 async function generateContract(
   contractedServices: Record<string, string>,
+  organizationId: string,
   userId?: string,
   app?: any
 ): Promise<ContractToCreate> {
@@ -37,12 +39,14 @@ async function generateContract(
 
   const subscriptionPlans: Record<string, string> = await _generateSubscriptionPlans(
     servicesToConsider,
+    organizationId,
     appCopy
   );
 
   const subscriptionAddOns = await _generateSubscriptionAddOns(
     servicesToConsider,
     subscriptionPlans,
+    organizationId,
     appCopy
   );
 
@@ -59,25 +63,27 @@ async function generateContract(
       autoRenew: faker.datatype.boolean(),
       renewalDays: faker.helpers.arrayElement([30, 365]),
     },
+    organizationId: organizationId,
     contractedServices: contractedServices,
     subscriptionPlans: subscriptionPlans,
     subscriptionAddOns: subscriptionAddOns,
   };
 }
 
-async function generateNovation(app?: any) {
+async function generateNovation(organizationId: string, app?: any) {
   const appCopy = await useApp(app);
 
   const contractedServices: Record<string, string> =
     await _generateExistentContractedServices(appCopy);
   const subscriptionPlans: Record<string, string> = await _generateSubscriptionPlans(
     contractedServices,
+    organizationId,
     appCopy
   );
   const subscriptionAddOns: Record<
     string,
     Record<string, number>
-  > = await _generateSubscriptionAddOns(contractedServices, subscriptionPlans, appCopy);
+  > = await _generateSubscriptionAddOns(contractedServices, subscriptionPlans, organizationId, appCopy);
 
   return {
     contractedServices: contractedServices,
@@ -86,13 +92,13 @@ async function generateNovation(app?: any) {
   };
 }
 
-async function _generateNewContractedServices(app?: any): Promise<Record<string, string>> {
+async function _generateNewContractedServices(organizationId: string, app?: any): Promise<Record<string, string>> {
   const appCopy = await useApp(app);
 
   const contractedServices: Record<string, string> = {};
 
   for (let i = 0; i < biasedRandomInt(1, 3); i++) {
-    const createdService: TestService = await createRandomService(appCopy);
+    const createdService: TestService = await createRandomService(organizationId, appCopy);
     const pricingVersion = Object.keys(createdService.activePricings)[0];
     contractedServices[createdService.name] = pricingVersion;
   }
@@ -100,11 +106,11 @@ async function _generateNewContractedServices(app?: any): Promise<Record<string,
   return contractedServices;
 }
 
-async function _generateExistentContractedServices(app?: any): Promise<Record<string, string>> {
+async function _generateExistentContractedServices(organizationId: string, app?: any): Promise<Record<string, string>> {
   const appCopy = await useApp(app);
 
   const contractedServices: Record<string, string> = {};
-  const services = await getAllServices(appCopy);
+  const services = await getAllServices(organizationId, appCopy);
 
   const randomServices = faker.helpers.arrayElements(
     services,
@@ -121,6 +127,7 @@ async function _generateExistentContractedServices(app?: any): Promise<Record<st
 
 async function _generateSubscriptionPlans(
   contractedServices: Record<string, string>,
+  organizationId: string,
   app?: any
 ): Promise<Record<string, string>> {
   const appCopy = await useApp(app);
@@ -131,6 +138,7 @@ async function _generateSubscriptionPlans(
     const pricing = await getPricingFromService(
       serviceName,
       contractedServices[serviceName],
+      organizationId,
       appCopy
     );
 
@@ -145,6 +153,7 @@ async function _generateSubscriptionPlans(
 async function _generateSubscriptionAddOns(
   contractedServices: Record<string, string>,
   subscriptionPlans: Record<string, string>,
+  organizationId: string,
   app?: any
 ): Promise<Record<string, Record<string, number>>> {
   const appCopy = await useApp(app);
@@ -157,6 +166,7 @@ async function _generateSubscriptionAddOns(
     const pricing = await getPricingFromService(
       serviceName,
       contractedServices[serviceName],
+      organizationId,
       appCopy
     );
 

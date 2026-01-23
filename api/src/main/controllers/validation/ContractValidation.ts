@@ -57,6 +57,16 @@ const create = [
     .isInt({ min: 1 })
     .withMessage('billingPeriod.renewalDays must be a positive integer'),
 
+  // OrganizationId (required)
+  check('organizationId')
+    .exists({ checkNull: true })
+    .withMessage('The organizationId field is required')
+    .isString()
+    .withMessage('The organizationId field must be a string')
+    .notEmpty()
+    .withMessage('The organizationId field cannot be empty')
+    .isLength({ min: 24, max: 24 })
+    .withMessage('The organizationId must be a valid MongoDB ObjectId string'),
   // contractedServices (optional)
   check('contractedServices')
     .exists({ checkNull: true })
@@ -238,7 +248,7 @@ const novateBillingPeriod = [
     .withMessage('renewalDays must be a positive integer'),
 ];
 
-async function isSubscriptionValid(subscription: Subscription): Promise<void> {
+async function isSubscriptionValid(subscription: Subscription, organizationId: string): Promise<void> {
   const selectedPricings: Record<string, LeanPricing> = {};
   const serviceService: ServiceService = container.resolve('serviceService');
 
@@ -246,11 +256,17 @@ async function isSubscriptionValid(subscription: Subscription): Promise<void> {
   const pricingPromises = Object.entries(subscription.contractedServices).map(
     async ([serviceName, pricingVersion]) => {
       try {
-        const pricing = await serviceService.showPricing(serviceName, pricingVersion);
+        const pricing = await serviceService.showPricing(serviceName, pricingVersion, organizationId);
+        if (!pricing) {
+          throw new Error(
+            `Pricing version ${pricingVersion} for service ${serviceName} not found in the request organization`
+          );
+        }
+        
         return { serviceName, pricing };
       } catch (error) {
         throw new Error(
-          `Pricing version ${pricingVersion} for service ${serviceName} not found`
+          `Pricing version ${pricingVersion} for service ${serviceName} not found in the request organization`
         );
       }
     }
@@ -276,7 +292,7 @@ async function isSubscriptionValid(subscription: Subscription): Promise<void> {
 
     if (!pricing) {
       throw new Error(
-        `Service ${serviceName} not found. Please check the services declared in subscriptionPlans and subscriptionAddOns.`
+        `Service ${serviceName} not found in the request organization. Please check the services declared in subscriptionPlans and subscriptionAddOns.`
       );
     }
 
@@ -300,7 +316,7 @@ function isSubscriptionValidInPricing(
 
   if (selectedPlan && !(pricing.plans || {})[selectedPlan]) {
     throw new Error(
-      `Plan ${selectedPlan} for service ${serviceName} not found`
+      `Plan ${selectedPlan} for service ${serviceName} not found in the request organization`
     );
   }
 
@@ -319,7 +335,7 @@ function _validateAddOns(
   for (const addOnName in selectedAddOns) {
 
     if (!pricing.addOns![addOnName]){
-      throw new Error(`Add-on ${addOnName} declared in the subscription not found in pricing version ${pricing.version}`);
+      throw new Error(`Add-on ${addOnName} declared in the subscription not found in pricing version ${pricing.version} in the request organization`);
     }
 
     _validateAddOnAvailability(addOnName, selectedPlan, pricing);
@@ -339,7 +355,7 @@ function _validateAddOnAvailability(
     !(pricing.addOns![addOnName].availableFor ?? Object.keys(pricing.plans!))?.includes(selectedPlan)
   ) {
     throw new Error(
-      `Add-on ${addOnName} is not available for plan ${selectedPlan}`
+      `Add-on ${addOnName} is not available for plan ${selectedPlan} in the request organization`
     );
   }
 }
@@ -353,7 +369,7 @@ function _validateDependentAddOns(
   const dependentAddOns = pricing.addOns![addOnName].dependsOn ?? [];
   if (!dependentAddOns.every(dependentAddOn => selectedAddOns.hasOwnProperty(dependentAddOn))) {
     throw new Error(
-      `Add-on ${addOnName} requires the following add-ons to be selected: ${dependentAddOns.join(', ')}`
+      `Add-on ${addOnName} requires the following add-ons to be selected in the request organization: ${dependentAddOns.join(', ')}`
     );
   }
 }
@@ -366,7 +382,7 @@ function _validateExcludedAddOns(
   const excludedAddOns = pricing.addOns![addOnName].excludes ?? [];
   if (excludedAddOns.some(excludedAddOn => selectedAddOns.hasOwnProperty(excludedAddOn))) {
     throw new Error(
-      `Add-on ${addOnName} cannot be selected with the following add-ons: ${excludedAddOns.join(', ')}`
+      `Add-on ${addOnName} cannot be selected with the following add-ons in the request organization: ${excludedAddOns.join(', ')}`
     );
   }
 }
@@ -388,7 +404,7 @@ function _validateAddOnQuantity(
 
   if (!isValidQuantity) {
     throw new Error(
-      `Add-on ${addOnName} quantity ${quantity} is not valid. It must be between ${minQuantity} and ${maxQuantity}, and a multiple of ${quantityStep}`
+      `Add-on ${addOnName} quantity ${quantity} is not valid. It must be between ${minQuantity} and ${maxQuantity}, and a multiple of ${quantityStep} in the request organization`
     );
   }
 }

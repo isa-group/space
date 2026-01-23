@@ -28,16 +28,21 @@ class ContractController {
     try {
       const queryParams = this._transformIndexQueryParams(req.query);
       const filters = req.body?.filters;
+      let organizationId = req.org?.id ?? req.params.organizationId;
+      
+      if (req.user && req.user.role === 'ADMIN') {
+        organizationId = undefined;
+      }
 
       if (filters) {
         // merge filters into top-level params and delegate to index which will call repository.findByFilters
         const merged = { ...queryParams, filters };
-        const contracts = await this.contractService.index(merged);
+        const contracts = await this.contractService.index(merged, organizationId);
         res.json(contracts);
         return;
       }
 
-      const contracts = await this.contractService.index(queryParams);
+      const contracts = await this.contractService.index(queryParams, organizationId);
       res.json(contracts);
     } catch (err: any) {
       if (err.message.toLowerCase().includes('validation of query params')) {
@@ -65,11 +70,20 @@ class ContractController {
   async create(req: any, res: any) {
     try {
       const contractData: ContractToCreate = req.body;
+      const authOrganizationId = req.org?.id ?? req.params.organizationId;
+      
+      if (!contractData.organizationId || contractData.organizationId !== authOrganizationId) {
+        res.status(403).send({ error: 'PERMISSION ERROR: Organization ID mismatch' });
+        return;
+      }
+
       const contract = await this.contractService.create(contractData);
       res.status(201).json(contract);
     } catch (err: any) {
       if (err.message.toLowerCase().includes('invalid')) {
         res.status(400).send({ error: err.message });
+      } else if (err.message.toLowerCase().includes('permission error')) {
+        res.status(403).send({ error: err.message });
       } else {
       res.status(500).send({ error: err.message });
       }
@@ -147,7 +161,10 @@ class ContractController {
 
   async prune(req: any, res: any) {
     try {
-      const result: number = await this.contractService.prune();
+
+      const organizationId = req.org.id ?? req.params.organizationId;
+
+      const result: number = await this.contractService.prune(organizationId, req.user);
       res.status(204).json({ message: `Deleted ${result} contracts successfully` });
     } catch (err: any) {
       if (err.message.toLowerCase().includes('not found')) {

@@ -19,6 +19,18 @@ function getRandomPricingFile(name?: string) {
   return generatePricingFile(name);
 }
 
+async function createMultipleTestServices(amount: number, organizationId?: string): Promise<LeanService[]> {
+  const services: LeanService[] = [];
+
+  for (let i = 0; i < amount; i++) {
+    const service = await createTestService(organizationId);
+    services.push(service);
+  }
+
+  return services;
+
+}
+
 async function createTestService(organizationId?: string, serviceName?: string): Promise<LeanService> {
 
   if (!serviceName){
@@ -38,12 +50,34 @@ async function createTestService(organizationId?: string, serviceName?: string):
   return service as unknown as LeanService;
 }
 
-async function addPricingToService(organizationId?: string, serviceName?: string): Promise<string> {
+async function addArchivedPricingToService(organizationId: string, serviceName: string): Promise<string> {
   const pricingPath = await generatePricingFile(serviceName);
+  const pricingContent = fs.readFileSync(pricingPath, 'utf-8');
+  const regex = /plans:\s*(?:\r\n|\n|\r)\s+([^\s:]+)/;
+  const fallbackPlan = pricingContent.match(regex)?.[1];
+
+  const serviceService = container.resolve('serviceService');
+  const updatedService = await serviceService.addPricingToService(serviceName!, {path: pricingPath}, "file", organizationId!);
+  
+  const pricingVersion = pricingPath.split('/').pop()!.replace('.yaml', '');
+  const pricingToArchive = Object.keys(updatedService.activePricings).find((version) => version !== pricingVersion);
+
+  if (!pricingToArchive) {
+    throw new Error('No pricing found to archive');
+  }
+
+  await serviceService.updatePricingAvailability(serviceName, pricingToArchive, "archived", {subscriptionPlan: fallbackPlan}, organizationId);
+
+  return pricingToArchive;
+}
+
+async function addPricingToService(organizationId?: string, serviceName?: string, returnContent: boolean = false): Promise<string> {
+  const pricingPath = await generatePricingFile(serviceName);
+  const pricingContent = fs.readFileSync(pricingPath, 'utf-8');
   const serviceService = container.resolve('serviceService');
   await serviceService.addPricingToService(serviceName!, {path: pricingPath}, "file", organizationId!);
   
-  return pricingPath.split('/').pop()!.replace('.yaml', '');
+  return returnContent ? pricingContent : pricingPath.split('/').pop()!.replace('.yaml', '');
 }
 
 async function deleteTestService(serviceId: string): Promise<void> {
@@ -51,15 +85,16 @@ async function deleteTestService(serviceId: string): Promise<void> {
   await serviceService.delete(serviceId);
 }
 
-async function getAllServices(app?: any): Promise<TestService[]> {
+async function getAllServices(organizationId: string, app?: any): Promise<TestService[]> {
   let appCopy = app;
 
   if (!app) {
     appCopy = getApp();
   }
 
-  const apiKey = await getTestAdminApiKey();
-  const services = await request(appCopy).get(`${baseUrl}/services`).set('x-api-key', apiKey);
+  const adminUser: LeanUser = await createTestUser('ADMIN');
+  const apiKey = adminUser.apiKey;
+  const services = await request(appCopy).get(`${baseUrl}/organizations/${organizationId}/services`).set('x-api-key', apiKey);
 
   return services.body;
 }
@@ -67,6 +102,7 @@ async function getAllServices(app?: any): Promise<TestService[]> {
 async function getPricingFromService(
   serviceName: string,
   pricingVersion: string,
+  organizationId: string,
   app?: any
 ): Promise<TestPricing> {
   let appCopy = app;
@@ -75,9 +111,10 @@ async function getPricingFromService(
     appCopy = getApp();
   }
 
-  const apiKey = await getTestAdminApiKey();
+  const adminUser: LeanUser = await createTestUser('ADMIN');
+  const apiKey = adminUser.apiKey;
   const pricing = await request(appCopy)
-    .get(`${baseUrl}/services/${serviceName}/pricings/${pricingVersion}`)
+    .get(`${baseUrl}/organizations/${organizationId}/services/${serviceName}/pricings/${pricingVersion}`)
     .set('x-api-key', apiKey);
 
   return pricing.body;
@@ -193,7 +230,7 @@ async function createService(testService?: string) {
   }
 }
 
-async function createRandomService(app?: any) {
+async function createRandomService(organizationId: string,app?: any) {
   let appCopy = app;
 
   if (!app) {
@@ -204,9 +241,10 @@ async function createRandomService(app?: any) {
     uuidv4()
   );
 
-  const apiKey = await getTestAdminApiKey();
+  const adminUser: LeanUser = await createTestUser('ADMIN');
+  const apiKey = adminUser.apiKey;
   const response = await request(appCopy)
-    .post(`${baseUrl}/services`)
+    .post(`${baseUrl}/organizations/${organizationId}/services`)
     .set('x-api-key', apiKey)
     .attach('pricing', pricingFilePath);
 
@@ -268,6 +306,7 @@ async function deletePricingFromService(
 
 export {
   addPricingToService,
+  addArchivedPricingToService,
   getAllServices,
   getRandomPricingFile,
   getService,
@@ -275,6 +314,7 @@ export {
   getRandomService,
   createService,
   createTestService,
+  createMultipleTestServices,
   createRandomService,
   archivePricingFromService,
   deletePricingFromService,

@@ -152,8 +152,8 @@ class ServiceService {
     }
 
     const pricingLocator =
-      service.activePricings[formattedPricingVersion] ||
-      service.archivedPricings[formattedPricingVersion];
+      service.activePricings?.[formattedPricingVersion] ??
+      service.archivedPricings?.[formattedPricingVersion];
 
     if (!pricingLocator) {
       throw new Error(`Pricing version ${pricingVersion} not found for service ${serviceName}`);
@@ -253,8 +253,9 @@ class ServiceService {
       }
     }
 
-    const pricingData: ExpectedPricingType & { _serviceName: string } = {
+    const pricingData: ExpectedPricingType & { _serviceName: string, _organizationId: string } = {
       _serviceName: uploadedPricing.saasName,
+      _organizationId: organizationId,
       ...parsePricingToSpacePricingObject(uploadedPricing),
     };
 
@@ -618,7 +619,10 @@ class ServiceService {
       throw new Error(`Service ${serviceName} not found`);
     }
 
+    // TODO: Change name in affected contracts and pricings
+
     const updatedService = await this.serviceRepository.update(service.name, newServiceData, organizationId);
+
     if (newServiceData.name && newServiceData.name !== service.name) {
       // If the service name has changed, we need to update the cache key
       await this.cacheService.del(cacheKey);

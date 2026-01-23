@@ -464,6 +464,7 @@ describe('Permissions Test Suite', function () {
 
     describe('Organization-scoped Service Routes', function () {
       let testServicesOrganization: LeanOrganization;
+      let testServicesOrganizationWithoutMembers: LeanOrganization;
       let testOwnerUser: any;
       let testMemberUser: any;
       let testEvaluatorMemberUser: any;
@@ -478,6 +479,7 @@ describe('Permissions Test Suite', function () {
 
         // Create organization
         testServicesOrganization = await createTestOrganization(testOwnerUser.username);
+        testServicesOrganizationWithoutMembers = await createTestOrganization();
 
         // Add member to organization
         await addMemberToOrganization(testServicesOrganization.id!, {
@@ -538,6 +540,14 @@ describe('Permissions Test Suite', function () {
           const response = await request(app).get(
             `${baseUrl}/organizations/${testOrganization.id}/services`
           );
+
+          expect(response.status).toBe(401);
+        });
+
+        it('Should return 401 when not member of request organization', async function () {
+          const response = await request(app)
+            .get(`${baseUrl}/organizations/${testServicesOrganizationWithoutMembers.id}/services`)
+            .set('x-api-key', testOwnerUser.apiKey);
 
           expect(response.status).toBe(401);
         });
