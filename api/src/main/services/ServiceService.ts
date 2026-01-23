@@ -488,6 +488,7 @@ class ServiceService {
 
         const updateData: any = {
           disabled: false,
+          organizationId: organizationId,
           activePricings: {
             [formattedPricingVersion]: {
               url: pricingUrl,
@@ -506,6 +507,8 @@ class ServiceService {
 
       const serviceData = {
         name: uploadedPricing.saasName,
+        disabled: false,
+        organizationId: organizationId,
         activePricings: {
           [formattedPricingVersion]: {
             url: pricingUrl,
@@ -574,6 +577,7 @@ class ServiceService {
         }
 
         updatePayload.disabled = false;
+        updatePayload.organizationId = organizationId;
         updatePayload.activePricings = {
           [formattedPricingVersion]: {
             url: pricingUrl,
@@ -620,7 +624,13 @@ class ServiceService {
       await this.cacheService.del(cacheKey);
       serviceName = newServiceData.name;
     }
-    const newCacheKey = `service.${organizationId}.${serviceName}`;
+
+    let newCacheKey = `service.${organizationId}.${serviceName}`;
+
+    if (newServiceData.organizationId && newServiceData.organizationId !== organizationId) {
+      newCacheKey = `service.${newServiceData.organizationId}.${serviceName}`;
+    }
+
     await this.cacheService.set(newCacheKey, updatedService, 3600, true);
 
     return updatedService;

@@ -25,6 +25,7 @@ const contractSchema = new Schema(
       renewalDays: { type: Number, default: 30 },
     },
     usageLevels: {type: Map, of: {type: Map, of: usageLevelSchema}},
+    organizationId: { type: String, ref: "Organization", required: true },
     contractedServices: {type: Map, of: String},
     subscriptionPlans: { type: Map, of: String },
     subscriptionAddOns: { type: Map, of: {type: Map, of: Number} },

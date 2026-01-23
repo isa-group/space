@@ -12,6 +12,8 @@ import ServiceMongoose from '../../../main/repositories/mongoose/models/ServiceM
 import PricingMongoose from '../../../main/repositories/mongoose/models/PricingMongoose';
 import { LeanService } from '../../../main/types/models/Service';
 import container from '../../../main/config/container';
+import { createTestUser } from '../users/userTestUtils';
+import { LeanUser } from '../../../main/types/models/User';
 
 function getRandomPricingFile(name?: string) {
   return generatePricingFile(name);
@@ -111,16 +113,17 @@ async function getRandomService(app?: any): Promise<TestService> {
   return randomService;
 }
 
-async function getService(serviceName: string, app?: any): Promise<TestService> {
+async function getService(organizationId: string, serviceName: string, app?: any): Promise<TestService> {
   let appCopy = app;
 
   if (!app) {
     appCopy = await getApp();
   }
 
-  const apiKey = await getTestAdminApiKey();
+  const adminUser: LeanUser = await createTestUser('ADMIN');
+  const apiKey = adminUser.apiKey;
   const response = await request(appCopy)
-    .get(`${baseUrl}/services/${serviceName}`)
+    .get(`${baseUrl}/organizations/${organizationId}/services/${serviceName}`)
     .set('x-api-key', apiKey);
 
   if (response.status !== 200) {
@@ -242,6 +245,7 @@ async function archivePricingFromService(
 }
 
 async function deletePricingFromService(
+  organizationId: string,
   serviceName: string,
   pricingVersion: string,
   app?: any
@@ -254,7 +258,7 @@ async function deletePricingFromService(
 
   const apiKey = await getTestAdminApiKey();
   const response = await request(appCopy)
-    .delete(`${baseUrl}/services/${serviceName}/pricings/${pricingVersion}`)
+    .delete(`${baseUrl}/organizations/${organizationId}/services/${serviceName}/pricings/${pricingVersion}`)
     .set('x-api-key', apiKey);
 
   if (response.status !== 204 && response.status !== 404) {

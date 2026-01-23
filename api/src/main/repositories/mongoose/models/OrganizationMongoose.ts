@@ -40,7 +40,7 @@ organizationSchema.virtual('ownerDetails', {
 // Adding indexes
 organizationSchema.index({ name: 1 });
 organizationSchema.index({ 'apiKeys.key': 1 }, { sparse: true });
-organizationSchema.index({ members: 1 }, { unique: true });
+organizationSchema.index({ members: 1 });
 
 const organizationModel = mongoose.model('Organization', organizationSchema, 'organizations');
 
