@@ -74,13 +74,13 @@ class ServiceService {
       return [];
     }
 
-    const versionsToRetrieve = Object.keys(pricingsToReturn);
+    const versionsToRetrieve = Array.from(pricingsToReturn.keys()) as string[];
 
-    const versionsToRetrieveLocally = versionsToRetrieve.filter(
-      version => pricingsToReturn[version]?.id
+    const versionsToRetrieveLocally: string[] = versionsToRetrieve.filter(
+      version => pricingsToReturn.get(version)?.id
     );
-    const versionsToRetrieveRemotely = versionsToRetrieve.filter(
-      version => !pricingsToReturn[version]?.id
+    const versionsToRetrieveRemotely: string[] = versionsToRetrieve.filter(
+      version => !pricingsToReturn.get(version)?.id
     );
 
     const locallySavedPricings =
@@ -98,7 +98,7 @@ class ServiceService {
       const batch = versionsToRetrieveRemotely.slice(i, i + concurrency);
       const batchResults = await Promise.all(
         batch.map(async (version) => {
-          const url = pricingsToReturn[version].url;
+          const url = pricingsToReturn.get(version)?.url;
           // Try cache first
           let pricing = await this.cacheService.get(`pricing.url.${url}`);
           if (!pricing) {
@@ -117,7 +117,7 @@ class ServiceService {
       remotePricings.push(...batchResults);
     }
 
-    return (locallySavedPricings as unknown as ExpectedPricingType[]).concat(remotePricings);
+    return (locallySavedPricings as unknown as LeanPricing[]).concat(remotePricings);
   }
 
   async show(serviceName: string, organizationId: string) {
@@ -152,8 +152,8 @@ class ServiceService {
     }
 
     const pricingLocator =
-      service.activePricings?.[formattedPricingVersion] ??
-      service.archivedPricings?.[formattedPricingVersion];
+      service.activePricings.get(formattedPricingVersion) ??
+      service.archivedPricings?.get(formattedPricingVersion);
 
     if (!pricingLocator) {
       throw new Error(`Pricing version ${pricingVersion} not found for service ${serviceName}`);
@@ -244,8 +244,8 @@ class ServiceService {
       }
 
       if (
-        (service.activePricings && service.activePricings[formattedPricingVersion]) ||
-        (service.archivedPricings && service.archivedPricings[formattedPricingVersion])
+        (service.activePricings && service.activePricings.get(formattedPricingVersion)) ||
+        (service.archivedPricings && service.archivedPricings.get(formattedPricingVersion))
       ) {
         throw new Error(
           `Pricing version ${uploadedPricing.version} already exists for service ${serviceName}`
@@ -303,14 +303,14 @@ class ServiceService {
           for (const key of Object.keys(existingDisabled.activePricings)) {
             if (key === formattedPricingVersion) {
               const newKey = `${key}_${Date.now()}`;
-              newArchived[newKey] = existingDisabled.activePricings[key];
+              newArchived.set(newKey, existingDisabled.activePricings.get(key)!);
             } else {
               // if archived already has this key, append timestamp
-              if (newArchived[key]) {
+              if (newArchived.has(key)) {
                 const newKey = `${key}_${Date.now()}`;
-                newArchived[newKey] = existingDisabled.activePricings[key];
+                newArchived.set(newKey, existingDisabled.activePricings.get(key)!);
               } else {
-                newArchived[key] = existingDisabled.activePricings[key];
+                newArchived.set(key, existingDisabled.activePricings.get(key)!);
               }
             }
           }
@@ -318,11 +318,11 @@ class ServiceService {
 
         const updateData: any = {
           disabled: false,
-          activePricings: {
-            [formattedPricingVersion]: {
+          activePricings: new Map([
+            [formattedPricingVersion, {
               id: savedPricing.id,
-            },
-          },
+            }],
+          ]),
           archivedPricings: newArchived,
         };
 
@@ -337,11 +337,11 @@ class ServiceService {
           name: uploadedPricing.saasName,
           disabled: false,
           organizationId: organizationId,
-          activePricings: {
-            [formattedPricingVersion]: {
+          activePricings: new Map([
+            [formattedPricingVersion, {
               id: savedPricing.id,
-            },
-          },
+            }],
+          ]),
         };
 
         try {
@@ -353,19 +353,19 @@ class ServiceService {
     } else {
       // service exists (serviceName provided)
       // If pricing already exists as ACTIVE, we disallow
-      if (service.activePricings && service.activePricings[formattedPricingVersion]) {
+      if (service.activePricings && service.activePricings.get(formattedPricingVersion)) {
         throw new Error(
           `Pricing version ${uploadedPricing.version} already exists for service ${serviceName}`
         );
       }
 
       // If pricing exists in archived, rename archived entry to free the key
-      const archivedExists = service.archivedPricings && service.archivedPricings[formattedPricingVersion];
+      const archivedExists = service.archivedPricings && service.archivedPricings.get(formattedPricingVersion);
       const updatePayload: any = {};
 
       if (archivedExists) {
         const newKey = `${formattedPricingVersion}_${Date.now()}`;
-        updatePayload[`archivedPricings.${newKey}`] = service.archivedPricings![formattedPricingVersion];
+        updatePayload[`archivedPricings.${newKey}`] = service.archivedPricings!.get(formattedPricingVersion);
         updatePayload[`archivedPricings.${formattedPricingVersion}`] = undefined;
       }
 
@@ -390,24 +390,24 @@ class ServiceService {
           for (const key of Object.keys(service.activePricings)) {
             if (key === formattedPricingVersion) {
               const newKey = `${key}_${Date.now()}`;
-              newArchived[newKey] = service.activePricings[key];
+              newArchived.set(newKey, service.activePricings.get(key)!);
             } else {
-              if (newArchived[key]) {
+              if (newArchived.has(key)) {
                 const newKey = `${key}_${Date.now()}`;
-                newArchived[newKey] = service.activePricings[key];
+                newArchived.set(newKey, service.activePricings.get(key)!);
               } else {
-                newArchived[key] = service.activePricings[key];
+                newArchived.set(key, service.activePricings.get(key)!);
               }
             }
           }
         }
 
         updatePayload.disabled = false;
-        updatePayload.activePricings = {
-          [formattedPricingVersion]: {
+        updatePayload.activePricings = new Map([
+          [formattedPricingVersion, {
             id: savedPricing.id,
-          },
-        };
+          }],
+        ]);
         updatePayload.archivedPricings = newArchived;
       } else {
         // Normal update: keep existing active pricings and just add the new one
@@ -475,13 +475,13 @@ class ServiceService {
           for (const key of Object.keys(existingDisabled.activePricings)) {
             if (key === formattedPricingVersion) {
               const newKey = `${key}_${Date.now()}`;
-              newArchived[newKey] = existingDisabled.activePricings[key];
+              newArchived.set(newKey, existingDisabled.activePricings.get(key)!);
             } else {
-              if (newArchived[key]) {
+              if (newArchived.has(key)) {
                 const newKey = `${key}_${Date.now()}`;
-                newArchived[newKey] = existingDisabled.activePricings[key];
+                newArchived.set(newKey, existingDisabled.activePricings.get(key)!);
               } else {
-                newArchived[key] = existingDisabled.activePricings[key];
+                newArchived.set(key, existingDisabled.activePricings.get(key)!);
               }
             }
           }
@@ -536,7 +536,7 @@ class ServiceService {
       }
 
       // If already active, reject
-      if (service.activePricings && service.activePricings[formattedPricingVersion]) {
+      if (service.activePricings && service.activePricings.has(formattedPricingVersion)) {
         throw new Error(
           `Pricing version ${uploadedPricing.version} already exists for service ${serviceName}`
         );
@@ -545,9 +545,9 @@ class ServiceService {
       const updatePayload: any = {};
 
       // If exists in archived, rename archived entry first
-      if (service.archivedPricings && service.archivedPricings[formattedPricingVersion]) {
+      if (service.archivedPricings && service.archivedPricings.has(formattedPricingVersion)) {
         const newKey = `${formattedPricingVersion}_${Date.now()}`;
-        updatePayload[`archivedPricings.${newKey}`] = service.archivedPricings[formattedPricingVersion];
+        updatePayload[`archivedPricings.${newKey}`] = service.archivedPricings.get(formattedPricingVersion);
         updatePayload[`archivedPricings.${formattedPricingVersion}`] = undefined;
       }
 
@@ -565,13 +565,13 @@ class ServiceService {
           for (const key of Object.keys(service.activePricings)) {
             if (key === formattedPricingVersion) {
               const newKey = `${key}_${Date.now()}`;
-              newArchived[newKey] = service.activePricings[key];
+              newArchived.set(newKey, service.activePricings.get(key)!);
             } else {
-              if (newArchived[key]) {
+              if (newArchived.has(key)) {
                 const newKey = `${key}_${Date.now()}`;
-                newArchived[newKey] = service.activePricings[key];
+                newArchived.set(newKey, service.activePricings.get(key)!);
               } else {
-                newArchived[key] = service.activePricings[key];
+                newArchived.set(key, service.activePricings.get(key)!);
               }
             }
           }
@@ -663,18 +663,18 @@ class ServiceService {
 
     // If newAvailability is the same as the current one, return the service
     if (
-      (newAvailability === 'active' && service.activePricings[formattedPricingVersion]) ||
+      (newAvailability === 'active' && service.activePricings.has(formattedPricingVersion)) ||
       (newAvailability === 'archived' &&
         service.archivedPricings &&
-        service.archivedPricings[formattedPricingVersion])
+        service.archivedPricings.has(formattedPricingVersion))
     ) {
       return service;
     }
 
     if (
       newAvailability === 'archived' &&
-      Object.keys(service.activePricings).length === 1 &&
-      service.activePricings[formattedPricingVersion]
+      service.activePricings.size === 1 &&
+      service.activePricings.has(formattedPricingVersion)
     ) {
       throw new Error(`You cannot archive the last active pricing for service ${serviceName}`);
     }
@@ -686,8 +686,8 @@ class ServiceService {
     }
 
     const pricingLocator =
-      service.activePricings[formattedPricingVersion] ??
-      service.archivedPricings[formattedPricingVersion];
+      service.activePricings.get(formattedPricingVersion) ??
+      service.archivedPricings.get(formattedPricingVersion);
 
     if (!pricingLocator) {
       throw new Error(`Pricing version ${pricingVersion} not found for service ${serviceName}`);
@@ -739,8 +739,8 @@ class ServiceService {
     return updatedService;
   }
 
-  async prune() {
-    const result = await this.serviceRepository.prune();
+  async prune(organizationId?: string) {
+    const result = await this.serviceRepository.prune(organizationId);
     return result;
   }
 
@@ -791,7 +791,7 @@ class ServiceService {
       );
     }
 
-    const pricingLocator = service.archivedPricings[formattedPricingVersion];
+    const pricingLocator = service.archivedPricings?.get(formattedPricingVersion);
 
     if (!pricingLocator) {
       throw new Error(
@@ -821,7 +821,10 @@ class ServiceService {
     organizationId: string
   ): Promise<void> {
     const serviceContracts: LeanContract[] = await this.contractRepository.findByFilters({
-      services: [serviceName],
+      filters: {
+        services: [serviceName],
+      },
+      organizationId: organizationId,
     });
 
     if (Object.keys(fallBackSubscription).length === 0) {
@@ -850,7 +853,7 @@ class ServiceService {
       pricingVersionContracts.forEach(contract => {
         contract.contractedServices[serviceName] = serviceLatestPricing.version;
         contract.subscriptionPlans[serviceName] = fallBackSubscription.subscriptionPlan;
-        contract.subscriptionAddOns[serviceName] = fallBackSubscription.subscriptionAddOns;
+        contract.subscriptionAddOns[serviceName] = fallBackSubscription.subscriptionAddOns ?? {};
 
         try {
           isSubscriptionValidInPricing(

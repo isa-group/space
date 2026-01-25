@@ -10,7 +10,7 @@ const loadFileRoutes = function (app: express.Application) {
   const baseUrl = process.env.BASE_URL_PATH || '/api/v1';
 
   app
-    .route(baseUrl + 'organizations/:organizationId/contracts')
+    .route(baseUrl + '/organizations/:organizationId/contracts')
     .get(contractController.index)
     .post(ContractValidator.create, handleValidation, contractController.create)
     .delete(contractController.prune);

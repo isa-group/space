@@ -11,13 +11,17 @@ import { LeanUser } from '../../../main/types/models/User';
 import { createTestUser } from '../users/userTestUtils';
 
 async function createTestContract(organizationId: string, services: LeanService[], app: any): Promise<LeanContract> {
+  if (!app){
+    app = await getApp();
+  }
+  
   if (services.length === 0) {
     services = await createMultipleTestServices(3, organizationId);
   }
 
   const contractedServices: Record<string, string> = services.reduce(
     (acc, service) => {
-      acc[service.name] = Object.keys(service.activePricings)[0]!;
+      acc[service.name] = service.activePricings.keys().next().value!;
       return acc;
     },
     {} as Record<string, string>
@@ -27,16 +31,18 @@ async function createTestContract(organizationId: string, services: LeanService[
   const adminUser: LeanUser = await createTestUser('ADMIN');
   const apiKey = adminUser.apiKey;
 
-  const response = await fetch(`${baseUrl}/organizations/${organizationId}/contracts`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-    },
-    body: JSON.stringify(contractData),
-  });
+  try{
 
-  return (await response.json()) as unknown as LeanContract;
+    const response = await request(app)
+        .post(`${baseUrl}/organizations/${organizationId}/contracts`)
+        .set('x-api-key', apiKey)
+        .send(contractData);
+    
+    return response.body as unknown as LeanContract;
+  }catch(error){
+    console.error('Error creating test contract:', error);
+    throw error;
+  }
 }
 
 async function getAllContracts(app?: any): Promise<any[]> {

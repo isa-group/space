@@ -699,7 +699,7 @@ describe('Permissions Test Suite', function () {
 
     afterEach(async function () {
       if (testService?.id) {
-        await deleteTestService(testService.id!);
+        await deleteTestService(testService.name!, testServicesOrganization.id!);
       }
       
       // Delete organization
@@ -808,6 +808,63 @@ describe('Permissions Test Suite', function () {
           .send({ name: '${testService.name}' });
 
         expect(response.status).toBe(403);
+      });
+
+      it('Should return 403 with USER API key (requires org key)', async function () {
+        const testUser = await createTestUser('USER');
+        
+        const response = await request(app)
+          .post(`${baseUrl}/services`)
+          .set('x-api-key', testUser.apiKey)
+          .send({ name: '${testService.name}' });
+
+        expect(response.status).toBe(403);
+
+        await deleteTestUser(testUser.username);
+      });
+    });
+    
+    describe('DELETE /services - Organization Role: ALL', function () {
+      it('Should return 200 with organization API key with ALL scope', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/services`)
+          .set('x-api-key', allApiKey.key);
+
+        expect(response.status).toBe(200);
+
+        testService.id = undefined;
+      });
+
+      it('Should return 200 with ADMIN user API key', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/services`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(200);
+
+        testService.id = undefined;
+      });
+
+      it('Should return 403 with organization API key with MANAGEMENT scope', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/services`)
+          .set('x-api-key', managementApiKey.key);
+        expect(response.status).toBe(403);
+      });
+
+      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/services`)
+          .set('x-api-key', evaluationApiKey.key);
+
+        expect(response.status).toBe(403);
+      });
+
+      it('Should return 401 without API key', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/services`);
+
+        expect(response.status).toBe(401);
       });
 
       it('Should return 403 with USER API key (requires org key)', async function () {

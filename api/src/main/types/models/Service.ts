@@ -8,8 +8,8 @@ export interface LeanService {
   name: string;
   disabled: boolean;
   organizationId: string;
-  activePricings: Record<string, PricingEntry>;
-  archivedPricings?: Record<string, PricingEntry>;
+  activePricings: Map<string, PricingEntry>;
+  archivedPricings?: Map<string, PricingEntry>;
 }
 
 export type ServiceQueryFilters = {

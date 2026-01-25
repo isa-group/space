@@ -112,7 +112,7 @@ class ContractService {
         throw new Error(`Invalid contract: Services not found: ${serviceName}`);
       }
 
-      if (!Object.keys(service.activePricings).includes(pricingVersion)) {
+      if (!service.activePricings.get(pricingVersion)) {
         throw new Error(
           `Invalid contract: Pricing version ${pricingVersion} for service ${serviceName} not found`
         );

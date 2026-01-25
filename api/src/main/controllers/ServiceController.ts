@@ -260,7 +260,20 @@ class ServiceController {
 
   async prune(req: any, res: any) {
     try {
-      const result = await this.serviceService.prune();
+      let organizationId = req.org ? req.org.id : req.params.organizationId;
+      if (!organizationId && req.user && req.user.role !== "ADMIN"){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
+      if (req.user && req.user.orgRole !== "OWNER" && req.user.orgRole !== "ADMIN" && req.user.role !== "ADMIN"){
+        return res.status(403).send({ error: 'Forbidden: You do not have permission to prune services' });
+      }
+
+      if (req.user && req.user.role === "ADMIN"){
+        organizationId = undefined;        
+      }
+
+      const result = await this.serviceService.prune(organizationId);
       res.json({ message: `Pruned ${result} services` });
     } catch (err: any) {
       res.status(500).send({ error: err.message });

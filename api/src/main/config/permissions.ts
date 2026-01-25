@@ -98,6 +98,12 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
   {
+    path: '/services',
+    methods: ['DELETE'],
+    allowedUserRoles: ['ADMIN'],
+    allowedOrgRoles: ['ALL'],
+  },
+  {
     path: '/services/*',
     methods: ['GET'],
     allowedUserRoles: [],

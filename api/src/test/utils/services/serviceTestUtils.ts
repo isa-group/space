@@ -14,6 +14,7 @@ import { LeanService } from '../../../main/types/models/Service';
 import container from '../../../main/config/container';
 import { createTestUser } from '../users/userTestUtils';
 import { LeanUser } from '../../../main/types/models/User';
+import { getVersionFromPricing } from '../regex';
 
 function getRandomPricingFile(name?: string) {
   return generatePricingFile(name);
@@ -50,8 +51,8 @@ async function createTestService(organizationId?: string, serviceName?: string):
   return service as unknown as LeanService;
 }
 
-async function addArchivedPricingToService(organizationId: string, serviceName: string): Promise<string> {
-  const pricingPath = await generatePricingFile(serviceName);
+async function addArchivedPricingToService(organizationId: string, serviceName: string, version?: string,returnContent: boolean = false): Promise<string> {
+  const pricingPath = await generatePricingFile(serviceName, version);
   const pricingContent = fs.readFileSync(pricingPath, 'utf-8');
   const regex = /plans:\s*(?:\r\n|\n|\r)\s+([^\s:]+)/;
   const fallbackPlan = pricingContent.match(regex)?.[1];
@@ -59,8 +60,7 @@ async function addArchivedPricingToService(organizationId: string, serviceName: 
   const serviceService = container.resolve('serviceService');
   const updatedService = await serviceService.addPricingToService(serviceName!, {path: pricingPath}, "file", organizationId!);
   
-  const pricingVersion = pricingPath.split('/').pop()!.replace('.yaml', '');
-  const pricingToArchive = Object.keys(updatedService.activePricings).find((version) => version !== pricingVersion);
+  const pricingToArchive = pricingPath.split('/').pop()!.replace('.yaml', '');
 
   if (!pricingToArchive) {
     throw new Error('No pricing found to archive');
@@ -68,11 +68,11 @@ async function addArchivedPricingToService(organizationId: string, serviceName: 
 
   await serviceService.updatePricingAvailability(serviceName, pricingToArchive, "archived", {subscriptionPlan: fallbackPlan}, organizationId);
 
-  return pricingToArchive;
+  return returnContent ? pricingContent : pricingToArchive;
 }
 
-async function addPricingToService(organizationId?: string, serviceName?: string, returnContent: boolean = false): Promise<string> {
-  const pricingPath = await generatePricingFile(serviceName);
+async function addPricingToService(organizationId?: string, serviceName?: string, version?: string, returnContent: boolean = false): Promise<string> {
+  const pricingPath = await generatePricingFile(serviceName, version);
   const pricingContent = fs.readFileSync(pricingPath, 'utf-8');
   const serviceService = container.resolve('serviceService');
   await serviceService.addPricingToService(serviceName!, {path: pricingPath}, "file", organizationId!);
@@ -80,9 +80,9 @@ async function addPricingToService(organizationId?: string, serviceName?: string
   return returnContent ? pricingContent : pricingPath.split('/').pop()!.replace('.yaml', '');
 }
 
-async function deleteTestService(serviceId: string): Promise<void> {
+async function deleteTestService(serviceName: string, organizationId: string): Promise<void> {
   const serviceService = container.resolve('serviceService');
-  await serviceService.delete(serviceId);
+  await serviceService.disable(serviceName, organizationId);
 }
 
 async function getAllServices(organizationId: string, app?: any): Promise<TestService[]> {
