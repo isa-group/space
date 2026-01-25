@@ -27,6 +27,15 @@ const corsOptions: cors.CorsOptions = {
 const loadGlobalMiddlewares = (app: express.Application) => {
   app.use(express.json({limit: '2mb'}));
   app.use(express.urlencoded({limit: '2mb', extended: true}));
+  
+  // This replacer will convert Maps to plain objects in JSON responses
+  app.set('json replacer', (key: any, value: any) => {
+    if (value instanceof Map) {
+      return Object.fromEntries(value);
+    }
+    return value;
+  });
+  
   app.use(cors(corsOptions));
   app.options("*", cors(corsOptions)); // maneja todas las preflight
 
