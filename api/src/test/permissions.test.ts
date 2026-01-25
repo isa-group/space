@@ -1004,6 +1004,8 @@ describe('Permissions Test Suite', function () {
           .set('x-api-key', allApiKey.key);
 
         expect([200, 204, 404]).toContain(response.status);
+
+        testService.id = undefined;
       });
 
       it('Should return 403 with organization API key with MANAGEMENT scope', async function () {
@@ -1224,7 +1226,7 @@ describe('Permissions Test Suite', function () {
 
       describe('PUT /services/:serviceName/pricings/:pricingVersion', function () {
         it('Should allow update with organization API key with ALL scope', async function () {
-          const testPricingId = Object.keys(testService.activePricings!)[0];
+          const testPricingId = testService.activePricings.keys().next().value!;
           
           const response = await request(app)
             .put(`${baseUrl}/services/${testService.name}/pricings/${testPricingId}`)
@@ -1235,7 +1237,7 @@ describe('Permissions Test Suite', function () {
         });
 
         it('Should allow update with organization API key with MANAGEMENT scope', async function () {
-          const testPricingId = Object.keys(testService.activePricings!)[0];
+          const testPricingId = testService.activePricings.keys().next().value!;
           
           const response = await request(app)
             .put(`${baseUrl}/services/${testService.name}/pricings/${testPricingId}`)
@@ -1404,12 +1406,12 @@ describe('Permissions Test Suite', function () {
         expect([200, 404]).toContain(response.status);
       });
 
-      it('Should return 200 with USER user API key', async function () {
+      it('Should return 403 with USER user API key', async function () {
         const response = await request(app)
           .get(`${baseUrl}/contracts`)
           .set('x-api-key', regularUserApiKey);
 
-        expect([200, 404]).toContain(response.status);
+        expect(response.status).toBe(403);
       });
 
       it('Should return 200 with organization API key with ALL scope', async function () {
@@ -1444,22 +1446,22 @@ describe('Permissions Test Suite', function () {
     });
 
     describe('POST /contracts - Org Role: ALL, MANAGEMENT', function () {
-      it('Should allow creation with ADMIN user API key', async function () {
+      it('Should return 403 creation with ADMIN user API key', async function () {
         const response = await request(app)
           .post(`${baseUrl}/contracts`)
           .set('x-api-key', adminApiKey)
           .send({ userId: 'test-user' });
 
-        expect([201, 400, 422]).toContain(response.status);
+        expect(response.status).toBe(403);
       });
 
-      it('Should allow creation with USER user API key', async function () {
+      it('Should return 403 creation with USER user API key', async function () {
         const response = await request(app)
           .post(`${baseUrl}/contracts`)
           .set('x-api-key', regularUserApiKey)
           .send({ userId: 'test-user' });
 
-        expect([201, 400, 422]).toContain(response.status);
+        expect(response.status).toBe(403);
       });
 
       it('Should allow creation with organization API key with ALL scope', async function () {
