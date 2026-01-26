@@ -8,13 +8,10 @@ import { TestService } from '../../types/models/Service';
 import { TestPricing } from '../../types/models/Pricing';
 import { getTestAdminApiKey } from '../auth';
 import { createTestOrganization } from '../organization/organizationTestUtils';
-import ServiceMongoose from '../../../main/repositories/mongoose/models/ServiceMongoose';
-import PricingMongoose from '../../../main/repositories/mongoose/models/PricingMongoose';
 import { LeanService } from '../../../main/types/models/Service';
 import container from '../../../main/config/container';
 import { createTestUser } from '../users/userTestUtils';
 import { LeanUser } from '../../../main/types/models/User';
-import { getVersionFromPricing } from '../regex';
 
 function getRandomPricingFile(name?: string) {
   return generatePricingFile(name);
