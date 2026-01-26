@@ -179,9 +179,7 @@ class ContractRepository extends RepositoryBase {
   async prune(organizationId?: string): Promise<number> {
     const filter = organizationId ? { organizationId } : {};
     const result = await ContractMongoose.deleteMany(filter);
-    if (result.deletedCount === 0) {
-      throw new Error('No contracts found to delete');
-    }
+
     return result.deletedCount;
   }
 

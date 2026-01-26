@@ -666,6 +666,450 @@ describe('Permissions Test Suite', function () {
         });
       });
     });
+
+    describe('Organization-scoped Contract Routes', function () {
+      let testContractsOrganization: LeanOrganization;
+      let testContractsOrganizationWithoutMembers: LeanOrganization;
+      let testContractOwnerUser: any;
+      let testContractAdminUser: any;
+      let testContractMemberUser: any;
+      let testContractEvaluatorMemberUser: any;
+      let testContractUser: any;
+
+      beforeAll(async function () {
+        // Create users
+        testContractOwnerUser = await createTestUser('USER');
+        testContractAdminUser = await createTestUser('USER');
+        testContractMemberUser = await createTestUser('USER');
+        testContractEvaluatorMemberUser = await createTestUser('USER');
+        testContractUser = await createTestUser('USER');
+
+        // Create organizations
+        testContractsOrganization = await createTestOrganization(testContractOwnerUser.username);
+        testContractsOrganizationWithoutMembers = await createTestOrganization();
+
+        // Add members to organization
+        await addMemberToOrganization(testContractsOrganization.id!, {
+          username: testContractAdminUser.username,
+          role: 'ADMIN',
+        });
+
+        await addMemberToOrganization(testContractsOrganization.id!, {
+          username: testContractMemberUser.username,
+          role: 'MANAGER',
+        });
+
+        await addMemberToOrganization(testContractsOrganization.id!, {
+          username: testContractEvaluatorMemberUser.username,
+          role: 'EVALUATOR',
+        });
+      });
+
+      afterAll(async function () {
+        // Delete organizations
+        if (testContractsOrganization?.id) {
+          await deleteTestOrganization(testContractsOrganization.id!);
+        }
+        if (testContractsOrganizationWithoutMembers?.id) {
+          await deleteTestOrganization(testContractsOrganizationWithoutMembers.id!);
+        }
+
+        // Delete users
+        if (testContractOwnerUser?.username) {
+          await deleteTestUser(testContractOwnerUser.username);
+        }
+        if (testContractMemberUser?.username) {
+          await deleteTestUser(testContractMemberUser.username);
+        }
+        if (testContractEvaluatorMemberUser?.username) {
+          await deleteTestUser(testContractEvaluatorMemberUser.username);
+        }
+        if (testContractUser?.username) {
+          await deleteTestUser(testContractUser.username);
+        }
+      });
+
+      describe('GET /organizations/:organizationId/contracts', function () {
+        it('Should allow access with valid SPACE ADMIN API key', async function () {
+          const response = await request(app)
+            .get(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', adminApiKey);
+
+          expect([200, 404]).toContain(response.status);
+        });
+
+        it('Should allow access with valid OWNER API key', async function () {
+          const response = await request(app)
+            .get(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', testContractOwnerUser.apiKey);
+
+          expect([200, 404]).toContain(response.status);
+        });
+
+        it('Should allow access with valid MANAGER API key', async function () {
+          const response = await request(app)
+            .get(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', testContractMemberUser.apiKey);
+
+          expect([200, 404]).toContain(response.status);
+        });
+
+        it('Should allow access with valid EVALUATOR API key', async function () {
+          const response = await request(app)
+            .get(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', testContractEvaluatorMemberUser.apiKey);
+
+          expect([200, 404]).toContain(response.status);
+        });
+
+        it('Should return 401 without API key', async function () {
+          const response = await request(app).get(
+            `${baseUrl}/organizations/${testContractsOrganization.id}/contracts`
+          );
+
+          expect(response.status).toBe(401);
+        });
+
+        it('Should return 403 when not member of request organization', async function () {
+          const response = await request(app)
+            .get(`${baseUrl}/organizations/${testContractsOrganizationWithoutMembers.id}/contracts`)
+            .set('x-api-key', testContractOwnerUser.apiKey);
+
+          expect(response.status).toBe(403);
+        });
+
+        it('Should return 403 with organization API key', async function () {
+          const response = await request(app)
+            .get(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', orgApiKey.key);
+
+          expect(response.status).toBe(403);
+        });
+      });
+
+      describe('POST /organizations/:organizationId/contracts', function () {
+        it('Should allow creation with valid SPACE ADMIN API key', async function () {
+          const contractData = {
+            subscriptionPlan: 'BASEBOARD',
+            subscriptionAddOns: {},
+            subscriptionUser: testContractUser.username,
+          };
+
+          const response = await request(app)
+            .post(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', adminApiKey)
+            .send(contractData);
+
+          expect([201, 400, 422]).toContain(response.status);
+        });
+
+        it('Should allow creation with valid OWNER API key', async function () {
+          const contractData = {
+            subscriptionPlan: 'BASEBOARD',
+            subscriptionAddOns: {},
+            subscriptionUser: testContractUser.username,
+          };
+
+          const response = await request(app)
+            .post(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', testContractOwnerUser.apiKey)
+            .send(contractData);
+
+          expect([201, 400, 422]).toContain(response.status);
+        });
+
+        it('Should allow creation with valid MANAGER API key', async function () {
+          const contractData = {
+            subscriptionPlan: 'BASEBOARD',
+            subscriptionAddOns: {},
+            subscriptionUser: testContractUser.username,
+          };
+
+          const response = await request(app)
+            .post(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', testContractMemberUser.apiKey)
+            .send(contractData);
+
+          expect([201, 400, 422]).toContain(response.status);
+        });
+
+        it('Should allow creation with valid EVALUATOR API key', async function () {
+          const contractData = {
+            subscriptionPlan: 'BASEBOARD',
+            subscriptionAddOns: {},
+            subscriptionUser: testContractUser.username,
+          };
+
+          const response = await request(app)
+            .post(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', testContractEvaluatorMemberUser.apiKey)
+            .send(contractData);
+
+          expect([201, 400, 422]).toContain(response.status);
+        });
+
+        it('Should return 401 without API key', async function () {
+          const response = await request(app).post(
+            `${baseUrl}/organizations/${testContractsOrganization.id}/contracts`
+          );
+
+          expect(response.status).toBe(401);
+        });
+
+        it('Should return 403 with organization API key', async function () {
+          const contractData = {
+            subscriptionPlan: 'BASEBOARD',
+            subscriptionAddOns: {},
+            subscriptionUser: testContractUser.username,
+          };
+
+          const response = await request(app)
+            .post(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', orgApiKey.key)
+            .send(contractData);
+
+          expect(response.status).toBe(403);
+        });
+      });
+
+      describe('DELETE /organizations/:organizationId/contracts', function () {
+        it('Should allow deletion with valid SPACE ADMIN API key', async function () {
+          const response = await request(app)
+            .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', adminApiKey);
+
+          expect([200, 204, 404]).toContain(response.status);
+        });
+
+        it('Should allow deletion with valid OWNER API key', async function () {
+          const response = await request(app)
+            .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', testContractOwnerUser.apiKey);
+
+          expect([200, 204, 404]).toContain(response.status);
+        });
+        
+        it('Should allow deletion with valid ADMIN API key', async function () {
+          const response = await request(app)
+            .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', testContractAdminUser.apiKey);
+
+          expect([200, 204, 404]).toContain(response.status);
+        });
+
+        it('Should return 403  with MANAGER API key', async function () {
+          const response = await request(app)
+            .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', testContractMemberUser.apiKey);
+
+          expect(response.status).toBe(403);
+        });
+
+        it('Should return 403 with valid EVALUATOR API key', async function () {
+          const response = await request(app)
+            .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', testContractEvaluatorMemberUser.apiKey);
+
+          expect(response.status).toBe(403);
+        });
+
+        it('Should return 401 without API key', async function () {
+          const response = await request(app).delete(
+            `${baseUrl}/organizations/${testContractsOrganization.id}/contracts`
+          );
+
+          expect(response.status).toBe(401);
+        });
+
+        it('Should return 403 with organization API key', async function () {
+          const response = await request(app)
+            .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts`)
+            .set('x-api-key', orgApiKey.key);
+
+          expect(response.status).toBe(403);
+        });
+      });
+
+      describe('GET /organizations/:organizationId/contracts/:userId', function () {
+        it('Should allow access with valid SPACE ADMIN API key', async function () {
+          const response = await request(app)
+            .get(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', adminApiKey);
+
+          expect([200, 404]).toContain(response.status);
+        });
+
+        it('Should allow access with valid OWNER API key', async function () {
+          const response = await request(app)
+            .get(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', testContractOwnerUser.apiKey);
+
+          expect([200, 404]).toContain(response.status);
+        });
+
+        it('Should allow access with valid MANAGER API key', async function () {
+          const response = await request(app)
+            .get(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', testContractMemberUser.apiKey);
+
+          expect([200, 404]).toContain(response.status);
+        });
+
+        it('Should allow access with valid EVALUATOR API key', async function () {
+          const response = await request(app)
+            .get(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', testContractEvaluatorMemberUser.apiKey);
+
+          expect([200, 404]).toContain(response.status);
+        });
+
+        it('Should return 401 without API key', async function () {
+          const response = await request(app).get(
+            `${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`
+          );
+
+          expect(response.status).toBe(401);
+        });
+
+        it('Should return 403 with organization API key', async function () {
+          const response = await request(app)
+            .get(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', orgApiKey.key);
+
+          expect(response.status).toBe(403);
+        });
+      });
+
+      describe('PUT /organizations/:organizationId/contracts/:userId', function () {
+        it('Should allow updates with valid SPACE ADMIN API key', async function () {
+          const contractData = {
+            subscriptionPlan: 'BASEBOARD',
+            subscriptionAddOns: {},
+          };
+
+          const response = await request(app)
+            .put(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', adminApiKey)
+            .send(contractData);
+
+          expect([200, 400, 404, 422]).toContain(response.status);
+        });
+
+        it('Should allow updates with valid OWNER API key', async function () {
+          const contractData = {
+            subscriptionPlan: 'BASEBOARD',
+            subscriptionAddOns: {},
+          };
+
+          const response = await request(app)
+            .put(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', testContractOwnerUser.apiKey)
+            .send(contractData);
+
+          expect([200, 400, 404, 422]).toContain(response.status);
+        });
+
+        it('Should allow updates with valid MANAGER API key', async function () {
+          const contractData = {
+            subscriptionPlan: 'BASEBOARD',
+            subscriptionAddOns: {},
+          };
+
+          const response = await request(app)
+            .put(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', testContractMemberUser.apiKey)
+            .send(contractData);
+
+          expect([200, 400, 404, 422]).toContain(response.status);
+        });
+
+        it('Should allow updates with valid EVALUATOR API key', async function () {
+          const contractData = {
+            subscriptionPlan: 'BASEBOARD',
+            subscriptionAddOns: {},
+          };
+
+          const response = await request(app)
+            .put(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', testContractEvaluatorMemberUser.apiKey)
+            .send(contractData);
+
+          expect([200, 400, 404, 422]).toContain(response.status);
+        });
+
+        it('Should return 401 without API key', async function () {
+          const response = await request(app).put(
+            `${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`
+          );
+
+          expect(response.status).toBe(401);
+        });
+
+        it('Should return 403 with organization API key', async function () {
+          const contractData = {
+            subscriptionPlan: 'BASEBOARD',
+            subscriptionAddOns: {},
+          };
+
+          const response = await request(app)
+            .put(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', orgApiKey.key)
+            .send(contractData);
+
+          expect(response.status).toBe(403);
+        });
+      });
+
+      describe('DELETE /organizations/:organizationId/contracts/:userId', function () {
+        it('Should allow deletion with valid SPACE ADMIN API key', async function () {
+          const response = await request(app)
+            .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', adminApiKey);
+
+          expect([200, 204, 404]).toContain(response.status);
+        });
+
+        it('Should allow deletion with valid OWNER API key', async function () {
+          const response = await request(app)
+            .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', testContractOwnerUser.apiKey);
+
+          expect([200, 204, 404]).toContain(response.status);
+        });
+
+        it('Should allow deletion with valid MANAGER API key', async function () {
+          const response = await request(app)
+            .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', testContractMemberUser.apiKey);
+
+          expect([200, 204, 404]).toContain(response.status);
+        });
+
+        it('Should allow deletion with valid EVALUATOR API key', async function () {
+          const response = await request(app)
+            .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', testContractEvaluatorMemberUser.apiKey);
+
+          expect([200, 204, 404]).toContain(response.status);
+        });
+
+        it('Should return 401 without API key', async function () {
+          const response = await request(app).delete(
+            `${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`
+          );
+
+          expect(response.status).toBe(401);
+        });
+
+        it('Should return 403 with organization API key', async function () {
+          const response = await request(app)
+            .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
+            .set('x-api-key', orgApiKey.key);
+
+          expect(response.status).toBe(403);
+        });
+      });
+    });
   });
 
   describe('Service Routes (Organization API Keys)', function () {

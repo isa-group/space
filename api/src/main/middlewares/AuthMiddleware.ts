@@ -200,6 +200,13 @@ const memberRole = async (req: Request, res: Response, next: NextFunction) => {
       req.user!.orgRole = member.role as OrganizationUserRole;
     }
 
+    if (!req.user!.orgRole && req.user!.role !== 'ADMIN') {
+      return res.status(403).json({
+        error:
+          'This route requires user authentication. Either you did not provide an user API key or your are not a member of this organization',
+      });
+    }
+
     next();
   } else {
     next();
