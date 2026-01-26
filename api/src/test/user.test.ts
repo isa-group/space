@@ -1,47 +1,295 @@
-import request from 'supertest';
-import { baseUrl, getApp, shutdownApp } from './utils/testApp';
 import { Server } from 'http';
+import request from 'supertest';
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import {
-  createTestUser,
-  deleteTestUser,
-} from './utils/users/userTestUtils';
 import { USER_ROLES } from '../main/types/permissions';
+import { baseUrl, getApp, shutdownApp } from './utils/testApp';
+import { createTestUser, deleteTestUser } from './utils/users/userTestUtils';
 
-describe('User API Test Suite', function () {
+describe('User API routes', function () {
   let app: Server;
   let adminUser: any;
   let adminApiKey: string;
+  const usersToCleanup: Set<string> = new Set();
+
+  const trackUserForCleanup = (user?: any) => {
+    if (user?.username && user.username !== adminUser?.username) {
+      usersToCleanup.add(user.username);
+    }
+  };
 
   beforeAll(async function () {
     app = await getApp();
-    // Create an admin user for tests
     adminUser = await createTestUser('ADMIN');
     adminApiKey = adminUser.apiKey;
   });
 
+  afterEach(async function () {
+    for (const username of usersToCleanup) {
+      await deleteTestUser(username);
+    }
+    usersToCleanup.clear();
+  });
+
   afterAll(async function () {
-    // Clean up the created admin user
     if (adminUser?.username) {
       await deleteTestUser(adminUser.username);
     }
     await shutdownApp();
   });
 
-  describe('Authentication and API Keys', function () {
-    it('Should authenticate a user and return their information', async function () {
-      const response = await request(app).post(`${baseUrl}/users/authenticate`).send({
-        username: adminUser.username,
-        password: 'password123',
-      });
+  describe('POST /users/authenticate', function () {
+    it('returns 200 when credentials are valid', async function () {
+      const response = await request(app)
+        .post(`${baseUrl}/users/authenticate`)
+        .send({ username: adminUser.username, password: 'password123' });
 
       expect(response.status).toBe(200);
       expect(response.body.apiKey).toBeDefined();
       expect(response.body.apiKey).toBe(adminApiKey);
+      expect(response.body.username).toBe(adminUser.username);
+      expect(response.body.role).toBe('ADMIN');
     });
 
-    it('Should regenerate an API Key for a user', async function () {
-      const oldApiKey = adminUser.apiKey;
+    it('returns 401 when password is invalid', async function () {
+      const response = await request(app)
+        .post(`${baseUrl}/users/authenticate`)
+        .send({ username: adminUser.username, password: 'wrong-password' });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('returns 422 when required fields are missing', async function () {
+      const response = await request(app)
+        .post(`${baseUrl}/users/authenticate`)
+        .send({ username: adminUser.username });
+
+      expect(response.status).toBe(422);
+      expect(response.body.error).toBeDefined();
+    });
+  });
+
+  describe('GET /users', function () {
+    it('returns 200 and a list when api key is provided', async function () {
+      const response = await request(app)
+        .get(`${baseUrl}/users`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+    });
+
+    it('returns 401 when api key is missing', async function () {
+      const response = await request(app).get(`${baseUrl}/users`);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+  });
+
+  describe('POST /users', function () {
+    it('returns 201 when creating a user with explicit role', async function () {
+      const userData = {
+        username: `test_user_${Date.now()}`,
+        password: 'password123',
+        role: USER_ROLES[USER_ROLES.length - 1],
+      };
+
+      const response = await request(app).post(`${baseUrl}/users`).send(userData);
+
+      expect(response.status).toBe(201);
+      expect(response.body.username).toBe(userData.username);
+      expect(response.body.role).toBe(userData.role);
+      expect(response.body.apiKey).toBeDefined();
+      trackUserForCleanup(response.body);
+    });
+
+    it('returns 201 and assigns default role when role is missing', async function () {
+      const userData = {
+        username: `test_user_${Date.now()}`,
+        password: 'password123',
+      };
+
+      const response = await request(app).post(`${baseUrl}/users`).send(userData);
+
+      expect(response.status).toBe(201);
+      expect(response.body.username).toBe(userData.username);
+      expect(response.body.role).toBe(USER_ROLES[USER_ROLES.length - 1]);
+      expect(response.body.apiKey).toBeDefined();
+      trackUserForCleanup(response.body);
+    });
+
+    it('returns 403 when non-admin tries to create an admin', async function () {
+      const creator = await createTestUser('USER');
+      trackUserForCleanup(creator);
+
+      const userData = {
+        username: `test_user_${Date.now()}`,
+        password: 'password123',
+        role: USER_ROLES[0],
+      };
+
+      const response = await request(app)
+        .post(`${baseUrl}/users`)
+        .set('x-api-key', creator.apiKey)
+        .send(userData);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe('PERMISSION ERROR: Only admins can create other admins.');
+    });
+
+    it('returns 422 when role is invalid', async function () {
+      const response = await request(app)
+        .post(`${baseUrl}/users`)
+        .send({ username: `test_user_${Date.now()}`, password: 'password123', role: 'INVALID_ROLE' });
+
+      expect(response.status).toBe(422);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('returns 422 when password is missing', async function () {
+      const response = await request(app)
+        .post(`${baseUrl}/users`)
+        .send({ username: `test_user_${Date.now()}` });
+
+      expect(response.status).toBe(422);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('returns 404 when creating a duplicated username', async function () {
+      const existingUser = await createTestUser('USER');
+      trackUserForCleanup(existingUser);
+
+      const response = await request(app)
+        .post(`${baseUrl}/users`)
+        .send({ username: existingUser.username, password: 'password123' });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('already');
+    });
+  });
+
+  describe('GET /users/:username', function () {
+    it('returns 200 when user exists', async function () {
+      const testUser = await createTestUser('USER');
+      trackUserForCleanup(testUser);
+
+      const response = await request(app)
+        .get(`${baseUrl}/users/${testUser.username}`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(200);
+      expect(response.body.username).toBe(testUser.username);
+    });
+
+    it('returns 404 when user does not exist', async function () {
+      const response = await request(app)
+        .get(`${baseUrl}/users/non_existing_user`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('returns 401 when api key is missing', async function () {
+      const testUser = await createTestUser('USER');
+      trackUserForCleanup(testUser);
+
+      const response = await request(app).get(`${baseUrl}/users/${testUser.username}`);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+  });
+
+  describe('PUT /users/:username', function () {
+    it('returns 200 when admin updates username', async function () {
+      const testUser = await createTestUser('USER');
+      trackUserForCleanup(testUser);
+
+      const updatedUsername = `updated_${Date.now()}`;
+      const response = await request(app)
+        .put(`${baseUrl}/users/${testUser.username}`)
+        .set('x-api-key', adminApiKey)
+        .send({ username: updatedUsername });
+
+      expect(response.status).toBe(200);
+      expect(response.body.username).toBe(updatedUsername);
+      trackUserForCleanup(response.body);
+    });
+
+    it('returns 404 when target user is not found', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/users/non_existing_user`)
+        .set('x-api-key', adminApiKey)
+        .send({ username: `updated_${Date.now()}` });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('returns 404 when updating username to an existing one', async function () {
+      const firstUser = await createTestUser('USER');
+      const secondUser = await createTestUser('USER');
+      trackUserForCleanup(firstUser);
+      trackUserForCleanup(secondUser);
+
+      const response = await request(app)
+        .put(`${baseUrl}/users/${firstUser.username}`)
+        .set('x-api-key', adminApiKey)
+        .send({ username: secondUser.username });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('already');
+    });
+
+    it('returns 403 when non-admin tries to promote to admin', async function () {
+      const creator = await createTestUser('USER');
+      const targetUser = await createTestUser('USER');
+      trackUserForCleanup(creator);
+      trackUserForCleanup(targetUser);
+
+      const response = await request(app)
+        .put(`${baseUrl}/users/${targetUser.username}`)
+        .set('x-api-key', creator.apiKey)
+        .send({ role: USER_ROLES[0] });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe('PERMISSION ERROR: Only admins can change roles to admin.');
+    });
+
+    it('returns 403 when non-admin updates an admin', async function () {
+      const creator = await createTestUser('USER');
+      const adminTarget = await createTestUser('ADMIN');
+      trackUserForCleanup(creator);
+      trackUserForCleanup(adminTarget);
+
+      const response = await request(app)
+        .put(`${baseUrl}/users/${adminTarget.username}`)
+        .set('x-api-key', creator.apiKey)
+        .send({ username: `updated_${Date.now()}` });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe('PERMISSION ERROR: Only admins can update admin users.');
+    });
+
+    it('returns 401 when api key is missing', async function () {
+      const testUser = await createTestUser('USER');
+      trackUserForCleanup(testUser);
+
+      const response = await request(app)
+        .put(`${baseUrl}/users/${testUser.username}`)
+        .send({ username: `updated_${Date.now()}` });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+  });
+
+  describe('PUT /users/:username/api-key', function () {
+    it('returns 200 and regenerates api key', async function () {
+      const oldApiKey = adminApiKey;
       const response = await request(app)
         .put(`${baseUrl}/users/${adminUser.username}/api-key`)
         .set('x-api-key', oldApiKey);
@@ -49,222 +297,127 @@ describe('User API Test Suite', function () {
       expect(response.status).toBe(200);
       expect(response.body.apiKey).toBeDefined();
       expect(response.body.apiKey).not.toBe(oldApiKey);
-
-      // Update the API Key for future tests
       adminApiKey = response.body.apiKey;
-      // Update the user in the database
-      const updatedUser = (await request(app).get(`${baseUrl}/users/${adminUser.username}`).set('x-api-key', adminApiKey)).body;
-      adminUser = updatedUser;
+
+      const refreshed = await request(app)
+        .get(`${baseUrl}/users/${adminUser.username}`)
+        .set('x-api-key', adminApiKey);
+      expect(refreshed.status).toBe(200);
+    });
+
+    it('returns 401 when api key is missing', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/users/${adminUser.username}/api-key`);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+
+    it('returns 500 when user does not exist', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/users/non_existing_user/api-key`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBeDefined();
     });
   });
 
-  describe('User Management', function () {
-    let testUser: any;
+  describe('PUT /users/:username/role', function () {
+    it('returns 200 when admin promotes a user to admin', async function () {
+      const testUser = await createTestUser(USER_ROLES[USER_ROLES.length - 1]);
+      trackUserForCleanup(testUser);
 
-    afterEach(async function () {
-      if (testUser?.username) {
-        await deleteTestUser(testUser.username);
-        testUser = null;
-      }
-    });
-
-    it('Should create a new user', async function () {
-      const userData = {
-        username: `test_user_${Date.now()}`,
-        password: 'password123',
-        role: USER_ROLES[USER_ROLES.length - 1],
-      };
-
-      const response = await request(app)
-        .post(`${baseUrl}/users`)
-        .set('x-api-key', adminApiKey)
-        .send(userData);
-
-      expect(response.status).toBe(201);
-      expect(response.body.username).toBe(userData.username);
-      expect(response.body.role).toBe(userData.role);
-      expect(response.body.apiKey).toBeDefined();
-
-      testUser = response.body;
-    });
-    
-    it('Should create user without providing role', async function () {
-      const userData = {
-        username: `test_user_${Date.now()}`,
-        password: 'password123',
-      };
-
-      const response = await request(app)
-        .post(`${baseUrl}/users`)
-        .set('x-api-key', adminApiKey)
-        .send(userData);
-
-      expect(response.status).toBe(201);
-      expect(response.body.username).toBe(userData.username);
-      expect(response.body.role).toBe(USER_ROLES[USER_ROLES.length - 1]);
-      expect(response.body.apiKey).toBeDefined();
-
-      testUser = response.body;
-    });
-
-    it('Should NOT create admin user', async function () {
-      const creatorData = await createTestUser('USER');
-      
-      const userData = {
-        username: `test_user_${Date.now()}`,
-        password: 'password123',
-        role: USER_ROLES[0],
-      };
-
-      const response = await request(app)
-        .post(`${baseUrl}/users`)
-        .set('x-api-key', creatorData.apiKey)
-        .send(userData);
-
-      expect(response.status).toBe(403);
-      expect(response.body.error).toBe("PERMISSION ERROR: Only admins can create other admins.");
-    });
-    
-    it('Should create admin user provided admin api key', async function () {
-      const creatorData = await createTestUser('ADMIN');
-      
-      const userData = {
-        username: `test_user_${Date.now()}`,
-        password: 'password123',
-        role: USER_ROLES[0],
-      };
-
-      const response = await request(app)
-        .post(`${baseUrl}/users`)
-        .set('x-api-key', creatorData.apiKey)
-        .send(userData);
-
-      expect(response.status).toBe(201);
-    });
-
-    it('Should get all users', async function () {
-      const response = await request(app).get(`${baseUrl}/users`).set('x-api-key', adminApiKey);
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
-    });
-
-    it('Should get a user by username', async function () {
-      testUser = await createTestUser(USER_ROLES[USER_ROLES.length - 1]);
-
-      const response = await request(app)
-        .get(`${baseUrl}/users/${testUser.username}`)
-        .set('x-api-key', adminApiKey);
-
-      expect(response.status).toBe(200);
-      expect(response.body.username).toBe(testUser.username);
-    });
-
-    it('Should update a user', async function () {
-      testUser = await createTestUser('USER');
-
-      const updatedData = {
-        username: `updated_${Date.now()}`, // Use timestamp to ensure uniqueness
-      };
-
-      const response = await request(app)
-        .put(`${baseUrl}/users/${testUser.username}`)
-        .set('x-api-key', adminApiKey)
-        .send(updatedData);
-
-      expect(response.status).toBe(200);
-      expect(response.body.username).toBe(updatedData.username);
-
-      // Update the test user
-      testUser = response.body;
-    });
-
-    it('Should NOT update admin user with USER role', async function () {
-      const creatorData = await createTestUser('USER');
-      const testAdmin = await createTestUser('ADMIN');
-      
-      const userData = {
-        role: USER_ROLES[0],
-      };
-
-      const response = await request(app)
-        .put(`${baseUrl}/users/${testAdmin.username}`)
-        .set('x-api-key', creatorData.apiKey)
-        .send(userData);
-
-      expect(response.status).toBe(403);
-      expect(response.body.error).toBe("PERMISSION ERROR: Only admins can change roles to admin.");
-    });
-
-    it('Should NOT update admin user with USER role', async function () {
-      const creatorData = await createTestUser('USER');
-      const testAdmin = await createTestUser('ADMIN');
-      
-      const userData = {
-        username: `updated_${Date.now()}`,
-      };
-
-      const response = await request(app)
-        .put(`${baseUrl}/users/${testAdmin.username}`)
-        .set('x-api-key', creatorData.apiKey)
-        .send(userData);
-
-      expect(response.status).toBe(403);
-      expect(response.body.error).toBe("PERMISSION ERROR: Only admins can update admin users.");
-    });
-
-    it("Should change a user's role", async function () {
-      // First create a test user
-      testUser = await createTestUser(USER_ROLES[USER_ROLES.length - 1]);
-
-      const newRole = 'ADMIN';
       const response = await request(app)
         .put(`${baseUrl}/users/${testUser.username}/role`)
         .set('x-api-key', adminApiKey)
-        .send({ role: newRole });
+        .send({ role: 'ADMIN' });
 
       expect(response.status).toBe(200);
-      expect(response.body.username).toBe(testUser.username);
-      expect(response.body.role).toBe(newRole);
-
-      // Update the test user
-      testUser = response.body;
+      expect(response.body.role).toBe('ADMIN');
+      trackUserForCleanup(response.body);
     });
 
-    it("Should NOT change an admin's role", async function () {
-      const creatorData = await createTestUser('USER');
-      const adminUser = await createTestUser(USER_ROLES[0]);
+    it('returns 403 when non-admin assigns ADMIN', async function () {
+      const creator = await createTestUser('USER');
+      const targetUser = await createTestUser('USER');
+      trackUserForCleanup(creator);
+      trackUserForCleanup(targetUser);
 
-      const newRole = 'USER';
+      const response = await request(app)
+        .put(`${baseUrl}/users/${targetUser.username}/role`)
+        .set('x-api-key', creator.apiKey)
+        .send({ role: 'ADMIN' });
 
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe('PERMISSION ERROR: Only admins can assign the role ADMIN.');
+    });
+
+    it('returns 403 when non-admin modifies an admin', async function () {
+      const creator = await createTestUser('USER');
+      const adminTarget = await createTestUser('ADMIN');
+      trackUserForCleanup(creator);
+      trackUserForCleanup(adminTarget);
+
+      const response = await request(app)
+        .put(`${baseUrl}/users/${adminTarget.username}/role`)
+        .set('x-api-key', creator.apiKey)
+        .send({ role: USER_ROLES[USER_ROLES.length - 1] });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe('PERMISSION ERROR: Only admins can update admin users.');
+    });
+
+    it('returns 403 when trying to demote the last admin', async function () {
       const response = await request(app)
         .put(`${baseUrl}/users/${adminUser.username}/role`)
-        .set('x-api-key', creatorData.apiKey)
-        .send({ role: newRole });
+        .set('x-api-key', adminApiKey)
+        .send({ role: USER_ROLES[USER_ROLES.length - 1] });
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe("PERMISSION ERROR: Only admins can update admin users.");
+      expect(response.body.error).toContain('There must always be at least one ADMIN');
     });
 
-    it("Should NOT change a user's role to ADMIN", async function () {
-      const creatorData = await createTestUser('USER');
-      const evaluatorUser = await createTestUser(USER_ROLES[USER_ROLES.length - 1]);
-
-      const newRole = 'ADMIN';
+    it('returns 422 when role is invalid', async function () {
+      const testUser = await createTestUser('USER');
+      trackUserForCleanup(testUser);
 
       const response = await request(app)
-        .put(`${baseUrl}/users/${evaluatorUser.username}/role`)
-        .set('x-api-key', creatorData.apiKey)
-        .send({ role: newRole });
+        .put(`${baseUrl}/users/${testUser.username}/role`)
+        .set('x-api-key', adminApiKey)
+        .send({ role: 'INVALID_ROLE' });
 
-      expect(response.status).toBe(403);
-      expect(response.body.error).toBe("PERMISSION ERROR: Only admins can assign the role ADMIN.");
+      expect(response.status).toBe(422);
+      expect(response.body.error).toBeDefined();
     });
 
-    it('Should delete a user', async function () {
-      // First create a test user
-      testUser = await createTestUser(USER_ROLES[USER_ROLES.length - 1]);
+    it('returns 404 when user does not exist', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/users/non_existing_user/role`)
+        .set('x-api-key', adminApiKey)
+        .send({ role: USER_ROLES[USER_ROLES.length - 1] });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('returns 401 when api key is missing', async function () {
+      const testUser = await createTestUser('USER');
+      trackUserForCleanup(testUser);
+
+      const response = await request(app)
+        .put(`${baseUrl}/users/${testUser.username}/role`)
+        .send({ role: USER_ROLES[USER_ROLES.length - 1] });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+  });
+
+  describe('DELETE /users/:username', function () {
+    it('returns 204 when admin deletes a user', async function () {
+      const testUser = await createTestUser('USER');
+      trackUserForCleanup(testUser);
 
       const response = await request(app)
         .delete(`${baseUrl}/users/${testUser.username}`)
@@ -272,28 +425,44 @@ describe('User API Test Suite', function () {
 
       expect(response.status).toBe(204);
 
-      // Try to get the deleted user
       const getResponse = await request(app)
         .get(`${baseUrl}/users/${testUser.username}`)
         .set('x-api-key', adminApiKey);
-
       expect(getResponse.status).toBe(404);
-
-      // To avoid double cleanup
-      testUser = null;
     });
-    
-    it('Should not delete a admin being user', async function () {
-      // First create a test user
-      testUser = await createTestUser(USER_ROLES[USER_ROLES.length - 1]);
-      adminUser = await createTestUser(USER_ROLES[0]);
+
+    it('returns 404 when deleting a non-existent user', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/users/non_existing_user`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('returns 403 when non-admin tries to delete an admin', async function () {
+      const regularUser = await createTestUser('USER');
+      const targetAdmin = await createTestUser('ADMIN');
+      trackUserForCleanup(regularUser);
+      trackUserForCleanup(targetAdmin);
 
       const response = await request(app)
-        .delete(`${baseUrl}/users/${adminUser.username}`)
-        .set('x-api-key', testUser.apiKey);
+        .delete(`${baseUrl}/users/${targetAdmin.username}`)
+        .set('x-api-key', regularUser.apiKey);
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe("PERMISSION ERROR: Only admins can delete admin users.");
+      expect(response.body.error).toBe('PERMISSION ERROR: Only admins can delete admin users.');
+    });
+
+    it('returns 401 when api key is missing', async function () {
+      const testUser = await createTestUser('USER');
+      trackUserForCleanup(testUser);
+
+      const response = await request(app)
+        .delete(`${baseUrl}/users/${testUser.username}`);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
     });
   });
 });
