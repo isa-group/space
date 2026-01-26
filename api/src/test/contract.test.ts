@@ -15,7 +15,7 @@ import { LeanOrganization } from '../main/types/models/Organization';
 import { LeanService } from '../main/types/models/Service';
 import { LeanContract } from '../main/types/models/Contract';
 import { generateContract } from './utils/contracts/generators';
-import { createTestContract } from './utils/contracts/contracts';
+import { createTestContract } from './utils/contracts/contractTestUtils';
 import ContractMongoose from '../main/repositories/mongoose/models/ContractMongoose';
 
 describe('Contract API routes', function () {

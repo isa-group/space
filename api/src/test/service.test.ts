@@ -14,7 +14,7 @@ import {
 } from './utils/services/serviceTestUtils';
 import { retrievePricingFromPath } from 'pricing4ts/server';
 import { ExpectedPricingType, LeanUsageLimit } from '../main/types/models/Pricing';
-import { createTestContract } from './utils/contracts/contracts';
+import { createTestContract } from './utils/contracts/contractTestUtils';
 import { isSubscriptionValid } from '../main/controllers/validation/ContractValidation';
 import { createTestUser, deleteTestUser } from './utils/users/userTestUtils';
 import { LeanService } from '../main/types/models/Service';

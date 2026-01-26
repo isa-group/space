@@ -3,7 +3,7 @@ import express from 'express';
 import ContractController from '../controllers/ContractController';
 import * as ContractValidator from '../controllers/validation/ContractValidation';
 import { handleValidation } from '../middlewares/ValidationHandlingMiddleware';
-import { memberRole } from '../middlewares/AuthMiddleware';
+import { hasPermission, memberRole } from '../middlewares/AuthMiddleware';
 
 const loadFileRoutes = function (app: express.Application) {
   const contractController = new ContractController();
@@ -12,15 +12,15 @@ const loadFileRoutes = function (app: express.Application) {
 
   app
     .route(baseUrl + '/organizations/:organizationId/contracts')
-    .get(memberRole, contractController.index)
-    .post(memberRole, ContractValidator.create, handleValidation, contractController.create)
-    .delete(memberRole, contractController.prune);
+    .get(memberRole, hasPermission(['OWNER', 'ADMIN', 'MANAGER', 'EVALUATOR']), contractController.index)
+    .post(memberRole, hasPermission(['OWNER', 'ADMIN', 'MANAGER']), ContractValidator.create, handleValidation, contractController.create)
+    .delete(memberRole, hasPermission(['OWNER', 'ADMIN']), contractController.prune);
   
     app
     .route(baseUrl + '/organizations/:organizationId/contracts/:userId')
-    .get(memberRole, contractController.show)
-    .put(memberRole, ContractValidator.novate, handleValidation, contractController.novate)
-    .delete(memberRole, contractController.destroy);
+    .get(memberRole, hasPermission(['OWNER', 'ADMIN', 'MANAGER', 'EVALUATOR']), contractController.show)
+    .put(memberRole, hasPermission(['OWNER', 'ADMIN', 'MANAGER']), ContractValidator.novate, handleValidation, contractController.novate)
+    .delete(memberRole, hasPermission(['OWNER', 'ADMIN']), contractController.destroy);
   
     app
     .route(baseUrl + '/contracts')

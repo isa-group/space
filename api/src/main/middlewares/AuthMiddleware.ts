@@ -177,37 +177,44 @@ const memberRole = async (req: Request, res: Response, next: NextFunction) => {
   }
 
   if (req.authType === 'user') {
-    const organizationService = container.resolve('organizationService');
-    const organizationId = req.params.organizationId;
-    const organization = await organizationService.findById(organizationId);
+    try {
+      const organizationService = container.resolve('organizationService');
+      const organizationId = req.params.organizationId;
+      const organization = await organizationService.findById(organizationId);
 
-    if (!organization) {
+      if (!organization) {
+        return res.status(404).json({
+          error: 'Organization with ID ' + organizationId + ' not found',
+        });
+      }
+
+      if (organization.owner === req.user!.username) {
+        req.user!.orgRole = 'OWNER';
+        return next();
+      }
+      
+      const member = organization.members.find(
+        (member: OrganizationMember) => member.username === req.user!.username
+      );
+
+      if (member) {
+        req.user!.orgRole = member.role as OrganizationUserRole;
+      }
+
+      if (!req.user!.orgRole && req.user!.role !== 'ADMIN') {
+        return res.status(403).json({
+          error:
+            'This route requires user authentication. Either you did not provide an user API key or your are not a member of this organization',
+        });
+      }
+
+      next();
+    } catch (error: any) {
+      // Handle invalid organization ID or other errors
       return res.status(404).json({
-        error: 'Organization with ID ' + organizationId + ' not found',
+        error: error.message || 'Organization not found',
       });
     }
-
-    if (organization.owner === req.user!.username) {
-      req.user!.orgRole = 'OWNER';
-      return next();
-    }
-    
-    const member = organization.members.find(
-      (member: OrganizationMember) => member.username === req.user!.username
-    );
-
-    if (member) {
-      req.user!.orgRole = member.role as OrganizationUserRole;
-    }
-
-    if (!req.user!.orgRole && req.user!.role !== 'ADMIN') {
-      return res.status(403).json({
-        error:
-          'This route requires user authentication. Either you did not provide an user API key or your are not a member of this organization',
-      });
-    }
-
-    next();
   } else {
     next();
   }

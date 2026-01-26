@@ -9,14 +9,18 @@ class OrganizationRepository extends RepositoryBase {
   }
 
   async findById(organizationId: string): Promise<LeanOrganization | null> {
-    const organization = await OrganizationMongoose.findOne({ _id: organizationId })
-      .populate({
-        path: 'ownerDetails',
-        select: '-password',
-      })
-      .exec();
+    try {
+      const organization = await OrganizationMongoose.findOne({ _id: organizationId })
+        .populate({
+          path: 'ownerDetails',
+          select: '-password',
+        })
+        .exec();
 
-    return organization ? (organization.toObject() as unknown as LeanOrganization) : null;
+      return organization ? (organization.toObject() as unknown as LeanOrganization) : null;
+    } catch (error) {
+      throw new Error("INVALID DATA: Invalid organization ID");
+    }
   }
 
   async findByOwner(owner: string): Promise<LeanOrganization | null> {
