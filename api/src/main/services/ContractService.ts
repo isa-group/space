@@ -84,7 +84,7 @@ class ContractService {
 
     if (existingContract) {
       throw new Error(
-        `Invalid request: Contract for user ${contractData.userContact.userId} already exists`
+        `CONFLICT: Contract for user ${contractData.userContact.userId} already exists`
       );
     }
 
@@ -431,7 +431,7 @@ class ContractService {
   }
 
   async prune(organizationId?: string, reqUser?: LeanUser): Promise<number> {
-    if (reqUser && reqUser.role !== 'ADMIN' && reqUser.orgRole !== 'ADMIN') {
+    if (reqUser && reqUser.role !== 'ADMIN' && !["OWNER", "ADMIN"].includes(reqUser.orgRole ?? "")) {
       throw new Error('PERMISSION ERROR: Only ADMIN users can prune organization contracts');
     }
     

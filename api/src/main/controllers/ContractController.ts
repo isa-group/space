@@ -84,6 +84,8 @@ class ContractController {
         res.status(400).send({ error: err.message });
       } else if (err.message.toLowerCase().includes('permission error')) {
         res.status(403).send({ error: err.message });
+      } else if (err.message.toLowerCase().includes('conflict:')) {
+        res.status(409).send({ error: err.message });
       } else {
       res.status(500).send({ error: err.message });
       }
@@ -162,13 +164,15 @@ class ContractController {
   async prune(req: any, res: any) {
     try {
 
-      const organizationId = req.org.id ?? req.params.organizationId;
+      const organizationId = req.org?.id ?? req.params.organizationId;
 
       const result: number = await this.contractService.prune(organizationId, req.user);
       res.status(204).json({ message: `Deleted ${result} contracts successfully` });
     } catch (err: any) {
       if (err.message.toLowerCase().includes('not found')) {
         res.status(404).send({ error: err.message });
+      } else if (err.message.toLowerCase().includes('permission error')) {
+        res.status(403).send({ error: err.message });
       } else {
         res.status(500).send({ error: err.message });
       }

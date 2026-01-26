@@ -3,6 +3,7 @@ import express from 'express';
 import ContractController from '../controllers/ContractController';
 import * as ContractValidator from '../controllers/validation/ContractValidation';
 import { handleValidation } from '../middlewares/ValidationHandlingMiddleware';
+import { memberRole } from '../middlewares/AuthMiddleware';
 
 const loadFileRoutes = function (app: express.Application) {
   const contractController = new ContractController();
@@ -11,9 +12,15 @@ const loadFileRoutes = function (app: express.Application) {
 
   app
     .route(baseUrl + '/organizations/:organizationId/contracts')
-    .get(contractController.index)
-    .post(ContractValidator.create, handleValidation, contractController.create)
-    .delete(contractController.prune);
+    .get(memberRole, contractController.index)
+    .post(memberRole, ContractValidator.create, handleValidation, contractController.create)
+    .delete(memberRole, contractController.prune);
+  
+    app
+    .route(baseUrl + '/organizations/:organizationId/contracts/:userId')
+    .get(memberRole, contractController.show)
+    .put(memberRole, ContractValidator.novate, handleValidation, contractController.novate)
+    .delete(memberRole, contractController.destroy);
   
     app
     .route(baseUrl + '/contracts')

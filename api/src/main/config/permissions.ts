@@ -72,6 +72,23 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   },
 
   // ============================================
+  // Contract Management Routes (Organization-scoped)
+  // User API Keys can access via /organizations/:organizationId/contracts/**
+  // ============================================
+  {
+    path: '/organizations/*/contracts',
+    methods: ['GET', 'POST', 'DELETE'],
+    allowedUserRoles: ['ADMIN', 'USER'],
+    allowedOrgRoles: [],
+  },
+  {
+    path: '/organizations/*/contracts/*',
+    methods: ['GET', 'PUT', 'PATCH', 'DELETE'],
+    allowedUserRoles: ['ADMIN', 'USER'],
+    allowedOrgRoles: [],
+  },
+
+  // ============================================
   // Organization Management Routes (User API Keys ONLY)
   // ============================================
   {
@@ -156,12 +173,6 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   // Contract Routes
   // ============================================
   {
-    path: '/organizations/*/contracts',
-    methods: ['GET', 'POST', 'DELETE'],
-    allowedUserRoles: ['ADMIN', 'USER'],
-    allowedOrgRoles: [],
-  },
-  {
     path: '/contracts',
     methods: ['GET'],
     allowedUserRoles: ['ADMIN'],
@@ -170,25 +181,25 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   {
     path: '/contracts',
     methods: ['POST'],
-    allowedUserRoles: [],
+    allowedUserRoles: ['ADMIN'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
   {
     path: '/contracts',
-    methods: ['POST'],
-    allowedUserRoles: ['ADMIN', 'USER'],
-    allowedOrgRoles: ['ALL', 'MANAGEMENT'],
-  },
-  {
-    path: '/contracts/*',
-    methods: ['GET', 'PUT', 'PATCH'],
-    allowedUserRoles: ['ADMIN', 'USER'],
-    allowedOrgRoles: ['ALL', 'MANAGEMENT'],
-  },
-  {
-    path: '/contracts/*',
     methods: ['DELETE'],
-    allowedUserRoles: ['ADMIN', 'USER'],
+    allowedUserRoles: ['ADMIN'],
+    allowedOrgRoles: ['ALL'],
+  },
+  {
+    path: '/contracts/**',
+    methods: ['GET', 'PUT', 'PATCH'],
+    allowedUserRoles: ['ADMIN'],
+    allowedOrgRoles: ['ALL', 'MANAGEMENT'],
+  },
+  {
+    path: '/contracts/**',
+    methods: ['DELETE'],
+    allowedUserRoles: ['ADMIN'],
     allowedOrgRoles: ['ALL'],
   },
 
