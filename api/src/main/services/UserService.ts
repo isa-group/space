@@ -22,7 +22,7 @@ class UserService {
   async findByApiKey(apiKey: string) {
     const user = await this.userRepository.findByApiKey(apiKey);
     if (!user) {
-      throw new Error('Invalid API Key');
+      throw new Error('INVALID DATA: Invalid API Key');
     }
     return user;
   }
@@ -31,7 +31,7 @@ class UserService {
     
     const existingUser = await this.userRepository.findByUsername(userData.username);
     if (existingUser) {
-      throw new Error('There is already a user with the username that you are trying to set');
+      throw new Error('INVALID DATA: There is already a user with the username that you are trying to set');
     }
     
     // Stablish a default role if not provided
@@ -54,7 +54,11 @@ class UserService {
     
     const user = await this.userRepository.findByUsername(username);
     if (!user) {
-      throw new Error('INVALID DATA:User not found');
+      throw new Error('INVALID DATA: User not found');
+    }
+
+    if (user.role === 'ADMIN' && creatorData && creatorData.role !== 'ADMIN') {
+      throw new Error('PERMISSION ERROR: Only admins can update admin users.');
     }
 
     // Validación: no permitir degradar al último admin
@@ -62,14 +66,14 @@ class UserService {
       const allUsers = await this.userRepository.findAll();
       const adminCount = allUsers.filter(u => u.role === 'ADMIN' && u.username !== username).length;
       if (adminCount < 1) {
-        throw new Error('There must always be at least one ADMIN user in the system.');
+        throw new Error('PERMISSION ERROR: There must always be at least one ADMIN user in the system.');
       }
     }
 
     if (userData.username){
       const existingUser = await this.userRepository.findByUsername(userData.username);
       if (existingUser) {
-        throw new Error('There is already a user with the username that you are trying to set');
+        throw new Error('INVALID DATA: There is already a user with the username that you are trying to set');
       }
     }
 
@@ -91,7 +95,7 @@ class UserService {
   async changeRole(username: string, role: UserRole, creatorData: LeanUser) {
     
     if (creatorData.role !== 'ADMIN' && role === 'ADMIN') {
-      throw new Error('Not enough permissions: Only admins can assign the role ADMIN.');
+      throw new Error('PERMISSION ERROR: Only admins can assign the role ADMIN.');
     }
     
     const user = await this.userRepository.findByUsername(username);
@@ -100,7 +104,7 @@ class UserService {
     }
 
     if (creatorData.role !== 'ADMIN' && user.role === 'ADMIN') {
-      throw new Error('Not enough permissions: Only admins can update admin users.');
+      throw new Error('PERMISSION ERROR: Only admins can update admin users.');
     }
 
     // Validación: no permitir degradar al último admin
@@ -108,7 +112,7 @@ class UserService {
       const allUsers = await this.userRepository.findAll();
       const adminCount = allUsers.filter(u => u.role === 'ADMIN' && u.username !== username).length;
       if (adminCount < 1) {
-        throw new Error('There must always be at least one ADMIN user in the system.');
+        throw new Error('PERMISSION ERROR: There must always be at least one ADMIN user in the system.');
       }
     }
 
@@ -119,7 +123,7 @@ class UserService {
     // Find user by username
     const user = await this.userRepository.authenticate(username, password);
     if (!user) {
-      throw new Error('Invalid credentials');
+      throw new Error('INVALID DATA: Invalid credentials');
     }
 
     return user;
@@ -145,7 +149,7 @@ class UserService {
       const allUsers = await this.userRepository.findAll();
       const adminCount = allUsers.filter(u => u.role === 'ADMIN' && u.username !== username).length;
       if (adminCount < 1) {
-        throw new Error('There must always be at least one ADMIN user in the system.');
+        throw new Error('PERMISSION ERROR: There must always be at least one ADMIN user in the system.');
       }
     }
     const result = await this.userRepository.destroy(username);

@@ -180,7 +180,7 @@ describe('User API Test Suite', function () {
       testUser = response.body;
     });
 
-    it('Should NOT update user to admin', async function () {
+    it('Should NOT update admin user with USER role', async function () {
       const creatorData = await createTestUser('USER');
       const testAdmin = await createTestUser('ADMIN');
       
@@ -194,10 +194,10 @@ describe('User API Test Suite', function () {
         .send(userData);
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe("Not enough permissions: Only admins can change roles to admin.");
+      expect(response.body.error).toBe("PERMISSION ERROR: Only admins can change roles to admin.");
     });
 
-    it('Should NOT update user to admin', async function () {
+    it('Should NOT update admin user with USER role', async function () {
       const creatorData = await createTestUser('USER');
       const testAdmin = await createTestUser('ADMIN');
       
@@ -211,7 +211,7 @@ describe('User API Test Suite', function () {
         .send(userData);
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe("Not enough permissions: Only admins can update admin users.");
+      expect(response.body.error).toBe("PERMISSION ERROR: Only admins can update admin users.");
     });
 
     it("Should change a user's role", async function () {
@@ -244,7 +244,7 @@ describe('User API Test Suite', function () {
         .send({ role: newRole });
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe("Not enough permissions: Only admins can update admin users.");
+      expect(response.body.error).toBe("PERMISSION ERROR: Only admins can update admin users.");
     });
 
     it("Should NOT change a user's role to ADMIN", async function () {
@@ -259,7 +259,7 @@ describe('User API Test Suite', function () {
         .send({ role: newRole });
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe("Not enough permissions: Only admins can assign the role ADMIN.");
+      expect(response.body.error).toBe("PERMISSION ERROR: Only admins can assign the role ADMIN.");
     });
 
     it('Should delete a user', async function () {
@@ -293,6 +293,7 @@ describe('User API Test Suite', function () {
         .set('x-api-key', testUser.apiKey);
 
       expect(response.status).toBe(403);
+      expect(response.body.error).toBe("PERMISSION ERROR: Only admins can delete admin users.");
     });
   });
 });
