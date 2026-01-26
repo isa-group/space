@@ -45,7 +45,7 @@ class FeatureEvaluationService {
     this.cacheService = container.resolve('cacheService');
   }
 
-  async index(queryParams: FeatureIndexQueryParams): Promise<LeanFeature[]> {
+  async index(queryParams: FeatureIndexQueryParams, organizationId: string): Promise<LeanFeature[]> {
     const {
       featureName,
       serviceName,
@@ -59,7 +59,7 @@ class FeatureEvaluationService {
     } = queryParams || {};
 
     // Step 1: Generate an object that clasifies pricing details by version and service (i.e. Record<string, Record<string, LeanPricing>>)
-    const pricings = await this._getPricingsToReturn(show);
+    const pricings = await this._getPricingsToReturn(show, organizationId);
 
     // Step 2: Parse pricings to a list of features
     const features: LeanFeature[] = this._parsePricingsToFeatures(
@@ -298,12 +298,13 @@ class FeatureEvaluationService {
   }
 
   async _getPricingsToReturn(
-    show: 'active' | 'archived' | 'all'
+    show: 'active' | 'archived' | 'all',
+    organizationId: string
   ): Promise<Record<string, Record<string, LeanPricing>>> {
     const pricingsToReturn: Record<string, Record<string, LeanPricing>> = {};
 
   // Step 1: Return all services (only fields required to build pricings map)
-  const services = await this.serviceRepository.findAllNoQueries(undefined, false, { name: 1, activePricings: 1, archivedPricings: 1 });
+  const services = await this.serviceRepository.findAllNoQueries(organizationId, false, { name: 1, activePricings: 1, archivedPricings: 1 });
 
     if (!services) {
       return {};
@@ -318,36 +319,32 @@ class FeatureEvaluationService {
       let pricingsWithUrlToCheck: string[] = [];
 
       if (show === 'active' || show === 'all') {
-        pricingsWithIdToCheck = pricingsWithIdToCheck.concat(
-          Object.entries(service.activePricings!)
-            .filter(([_, pricing]) => pricing.id)
-            .map(([version, _]) => version)
-        );
-        pricingsWithUrlToCheck = pricingsWithUrlToCheck.concat(
-          Object.entries(service.activePricings!)
-            .filter(([_, pricing]) => pricing.url)
-            .map(([version, _]) => version)
-        );
+        for (const [version, pricing] of service.activePricings) {
+          if (pricing.id) {
+            pricingsWithIdToCheck.push(version);
+          }
+          if (pricing.url) {
+            pricingsWithUrlToCheck.push(version);
+          }
+        }
       }
 
       if ((show === 'archived' || show === 'all') && service.archivedPricings) {
-        pricingsWithIdToCheck = pricingsWithIdToCheck.concat(
-          Object.entries(service.archivedPricings)
-            .filter(([_, pricing]) => pricing.id)
-            .map(([version, _]) => version)
-        );
-        pricingsWithUrlToCheck = pricingsWithUrlToCheck.concat(
-          Object.entries(service.archivedPricings)
-            .filter(([_, pricing]) => pricing.url)
-            .map(([version, _]) => version)
-        );
+        for (const [version, pricing] of service.archivedPricings) {
+          if (pricing.id) {
+            pricingsWithIdToCheck.push(version);
+          }
+          if (pricing.url) {
+            pricingsWithUrlToCheck.push(version);
+          }
+        }
       }
 
       // Step 3: For each group (id and url) parse the versions to actual ExpectedPricingType objects
       let pricingsWithId = await this.serviceRepository.findPricingsByServiceName(
         serviceName,
         pricingsWithIdToCheck,
-        undefined
+        organizationId
       );
       pricingsWithId ??= [];
 
@@ -358,7 +355,7 @@ class FeatureEvaluationService {
       // Fetch all remote pricings for this service in parallel with limited concurrency
       const urlVersions = pricingsWithUrlToCheck.map((version) => ({
         version,
-        url: (service.activePricings![version] ?? service.archivedPricings![version]).url,
+        url: (service.activePricings.get(version) ?? service.archivedPricings!.get(version))!.url,
       }));
 
       const concurrency = 8;
@@ -440,7 +437,8 @@ class FeatureEvaluationService {
     if (usageLevelsToRenew.length > 0) {
       contract = await this.contractService._resetRenewableUsageLevels(
         contract,
-        usageLevelsToRenew
+        usageLevelsToRenew,
+        reqOrg.id
       );
     }
 

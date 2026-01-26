@@ -16,9 +16,15 @@ class FeatureEvaluationController {
 
   async index(req: any, res: any) {
     try {
+      const organizationId = req.org?.id;
+
+      if (!organizationId) {
+        throw new Error('PERMISSION ERROR: This endpoint can only be invoqued with organization authentication');
+      }
+
       const queryParams: FeatureIndexQueryParams = this._transformIndexQueryParams(req.query);
 
-      const features = await this.featureEvaluationService.index(queryParams);
+      const features = await this.featureEvaluationService.index(queryParams, organizationId);
       res.json(features);
     } catch (err: any) {
       res.status(500).send({ error: err.message });
