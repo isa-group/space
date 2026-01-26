@@ -1,14 +1,14 @@
 import request from 'supertest';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Server } from 'http';
-import { getApp, shutdownApp, baseUrl } from './utils/testApp';
-import { createTestUser, deleteTestUser } from './utils/users/userTestUtils';
-import { createTestOrganization, deleteTestOrganization, addMemberToOrganization, addApiKeyToOrganization } from './utils/organization/organizationTestUtils';
-import { addPricingToService, createTestService, deleteTestService, getRandomPricingFile } from './utils/services/serviceTestUtils';
-import { LeanUser } from '../main/types/models/User';
-import { LeanOrganization } from '../main/types/models/Organization';
-import { LeanService } from '../main/types/models/Service';
-import { generateOrganizationApiKey } from '../main/utils/users/helpers';
+import { getApp, shutdownApp, baseUrl } from '../utils/testApp';
+import { createTestUser, deleteTestUser } from '../utils/users/userTestUtils';
+import { createTestOrganization, deleteTestOrganization, addMemberToOrganization, addApiKeyToOrganization } from '../utils/organization/organizationTestUtils';
+import { addPricingToService, createTestService, deleteTestService, getRandomPricingFile } from '../utils/services/serviceTestUtils';
+import { LeanUser } from '../../main/types/models/User';
+import { LeanOrganization } from '../../main/types/models/Organization';
+import { LeanService } from '../../main/types/models/Service';
+import { generateOrganizationApiKey } from '../../main/utils/users/helpers';
 
 describe('Authentication Middleware Test Suite', function () {
   let app: Server;
