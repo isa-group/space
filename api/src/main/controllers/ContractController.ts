@@ -72,10 +72,18 @@ class ContractController {
       const contractData: ContractToCreate = req.body;
       const authOrganizationId = req.org?.id ?? req.params.organizationId;
       
-      if (!contractData.organizationId || contractData.organizationId !== authOrganizationId) {
-        res.status(403).send({ error: 'PERMISSION ERROR: Organization ID mismatch' });
-        return;
+      if (req.user?.role !== 'ADMIN') {
+        if (!contractData.organizationId || contractData.organizationId !== authOrganizationId) {
+          res.status(403).send({ error: 'PERMISSION ERROR: Organization ID mismatch' });
+          return;
+        }
+      }else{
+        if (!contractData.organizationId) {
+          res.status(400).send({ error: 'INVALID DATA: organizationId is required in the contract' });
+          return;
+        }
       }
+
 
       const contract = await this.contractService.create(contractData);
       res.status(201).json(contract);

@@ -213,9 +213,9 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
     allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
   },
   {
-    path: '/features/**',
+    path: '/features',
     methods: ['GET'],
-    allowedUserRoles: ['ADMIN', 'USER'],
+    allowedUserRoles: [],
     allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
   },
   {

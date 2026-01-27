@@ -13,6 +13,7 @@ import { LeanOrganization, LeanApiKey } from '../main/types/models/Organization'
 import { generateOrganizationApiKey } from '../main/utils/users/helpers';
 import { LeanService } from '../main/types/models/Service';
 import { createTestService, deleteTestService } from './utils/services/serviceTestUtils';
+import { generateContract } from './utils/contracts/generators';
 
 describe('Permissions Test Suite', function () {
   let app: Server;
@@ -544,12 +545,12 @@ describe('Permissions Test Suite', function () {
           expect(response.status).toBe(401);
         });
 
-        it('Should return 401 when not member of request organization', async function () {
+        it('Should return 403 when not member of request organization', async function () {
           const response = await request(app)
             .get(`${baseUrl}/organizations/${testServicesOrganizationWithoutMembers.id}/services`)
             .set('x-api-key', testOwnerUser.apiKey);
 
-          expect(response.status).toBe(401);
+          expect(response.status).toBe(403);
         });
 
         it('Should return 403 with organization API key', async function () {
@@ -833,7 +834,7 @@ describe('Permissions Test Suite', function () {
           expect([201, 400, 422]).toContain(response.status);
         });
 
-        it('Should allow creation with valid EVALUATOR API key', async function () {
+        it('Should return 403 with valid EVALUATOR API key', async function () {
           const contractData = {
             subscriptionPlan: 'BASEBOARD',
             subscriptionAddOns: {},
@@ -845,7 +846,7 @@ describe('Permissions Test Suite', function () {
             .set('x-api-key', testContractEvaluatorMemberUser.apiKey)
             .send(contractData);
 
-          expect([201, 400, 422]).toContain(response.status);
+          expect(response.status).toBe(403);
         });
 
         it('Should return 401 without API key', async function () {
@@ -1023,7 +1024,7 @@ describe('Permissions Test Suite', function () {
           expect([200, 400, 404, 422]).toContain(response.status);
         });
 
-        it('Should allow updates with valid EVALUATOR API key', async function () {
+        it('Should return 403 with EVALUATOR API key', async function () {
           const contractData = {
             subscriptionPlan: 'BASEBOARD',
             subscriptionAddOns: {},
@@ -1034,7 +1035,7 @@ describe('Permissions Test Suite', function () {
             .set('x-api-key', testContractEvaluatorMemberUser.apiKey)
             .send(contractData);
 
-          expect([200, 400, 404, 422]).toContain(response.status);
+          expect(response.status).toBe(403);
         });
 
         it('Should return 401 without API key', async function () {
@@ -1077,20 +1078,20 @@ describe('Permissions Test Suite', function () {
           expect([200, 204, 404]).toContain(response.status);
         });
 
-        it('Should allow deletion with valid MANAGER API key', async function () {
+        it('Should return 403 with MANAGER API key', async function () {
           const response = await request(app)
             .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
             .set('x-api-key', testContractMemberUser.apiKey);
 
-          expect([200, 204, 404]).toContain(response.status);
+          expect(response.status).toBe(403);
         });
 
-        it('Should allow deletion with valid EVALUATOR API key', async function () {
+        it('Should return 403 with EVALUATOR API key', async function () {
           const response = await request(app)
             .delete(`${baseUrl}/organizations/${testContractsOrganization.id}/contracts/${testContractUser.username}`)
             .set('x-api-key', testContractEvaluatorMemberUser.apiKey);
 
-          expect([200, 204, 404]).toContain(response.status);
+          expect(response.status).toBe(403);
         });
 
         it('Should return 401 without API key', async function () {
@@ -1890,13 +1891,24 @@ describe('Permissions Test Suite', function () {
     });
 
     describe('POST /contracts - Org Role: ALL, MANAGEMENT', function () {
-      it('Should return 403 creation with ADMIN user API key', async function () {
+      it('Should return 201 creation with ADMIN user API key', async function () {
+        const ownerUser = await createTestUser('USER');
+        const testOrg = await createTestOrganization(ownerUser.username);
+        const testService = await createTestService(testOrg.id!)
+        
+        const contractData = await generateContract(
+                { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+                testOrg.id!,
+                undefined,
+                app
+              );
+        
         const response = await request(app)
           .post(`${baseUrl}/contracts`)
           .set('x-api-key', adminApiKey)
-          .send({ userId: 'test-user' });
+          .send(contractData);
 
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(201);
       });
 
       it('Should return 403 creation with USER user API key', async function () {
@@ -1951,12 +1963,12 @@ describe('Permissions Test Suite', function () {
         expect([200, 404]).toContain(response.status);
       });
 
-      it('Should return 200 with USER user API key', async function () {
+      it('Should return 403 with USER user API key', async function () {
         const response = await request(app)
           .get(`${baseUrl}/contracts/test-user`)
           .set('x-api-key', regularUserApiKey);
 
-        expect([200, 404]).toContain(response.status);
+        expect(response.status).toBe(403);
       });
 
       it('Should return 200 with organization API key with ALL scope', async function () {
@@ -2000,13 +2012,13 @@ describe('Permissions Test Suite', function () {
         expect([200, 400, 404, 422]).toContain(response.status);
       });
 
-      it('Should allow update with USER user API key', async function () {
+      it('Should return 403 with USER user API key', async function () {
         const response = await request(app)
           .put(`${baseUrl}/contracts/test-user`)
           .set('x-api-key', regularUserApiKey)
           .send({ serviceName: 'test' });
 
-        expect([200, 400, 404, 422]).toContain(response.status);
+        expect(response.status).toBe(403);
       });
 
       it('Should allow update with organization API key with ALL scope', async function () {
@@ -2052,12 +2064,12 @@ describe('Permissions Test Suite', function () {
         expect([200, 204, 404]).toContain(response.status);
       });
 
-      it('Should allow deletion with USER user API key', async function () {
+      it('Should return 403 with USER user API key', async function () {
         const response = await request(app)
           .delete(`${baseUrl}/contracts/test-user`)
           .set('x-api-key', regularUserApiKey);
 
-        expect([200, 204, 404]).toContain(response.status);
+        expect(response.status).toBe(403);
       });
 
       it('Should allow deletion with organization API key with ALL scope', async function () {
@@ -2129,20 +2141,20 @@ describe('Permissions Test Suite', function () {
     });
 
     describe('GET /features - User Role: ADMIN, USER | Org Role: ALL, MANAGEMENT, EVALUATION', function () {
-      it('Should return 200 with ADMIN user API key', async function () {
+      it('Should return 403 with ADMIN user API key', async function () {
         const response = await request(app)
           .get(`${baseUrl}/features`)
           .set('x-api-key', adminApiKey);
 
-        expect([200, 404]).toContain(response.status);
+        expect(response.status).toBe(403);
       });
 
-      it('Should return 200 with USER user API key', async function () {
+      it('Should return 403 with USER user API key', async function () {
         const response = await request(app)
           .get(`${baseUrl}/features`)
           .set('x-api-key', regularUserApiKey);
 
-        expect([200, 404]).toContain(response.status);
+        expect(response.status).toBe(403);
       });
 
       it('Should return 200 with organization API key with ALL scope', async function () {

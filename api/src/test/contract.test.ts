@@ -169,6 +169,25 @@ describe('Contract API routes', function () {
       expect(response.status).toBe(409);
       expect(response.body.error).toBeDefined();
     });
+    
+    it('returns 403 when trying to create a contract for a different organization', async function () {
+      const otherOrg = await createTestOrganization(ownerUser.username);
+      
+      const contractData = await generateContract(
+        { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        otherOrg.id!,
+        undefined,
+        app
+      );
+
+      const response = await request(app)
+        .post(`${baseUrl}/contracts`)
+        .set('x-api-key', testOrgApiKey)
+        .send(contractData);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBeDefined();
+    });
 
     it('returns 400 when creating a contract with non-existent service', async function () {
       const contractData = await generateContract(
