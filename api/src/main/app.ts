@@ -79,7 +79,7 @@ const initializeDatabase = async (seedDatabaseFlag: boolean = true) => {
     switch (process.env.DATABASE_TECHNOLOGY ?? 'mongoDB') {
       case 'mongoDB':
         connection = await initMongoose();
-        if (['development', 'testing'].includes(process.env.ENVIRONMENT ?? '')) {
+        if (['development'].includes(process.env.ENVIRONMENT ?? '')) {
           if (seedDatabaseFlag) {
             await seedDatabase();
           }
