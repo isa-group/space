@@ -174,14 +174,14 @@ class OrganizationController {
   async removeMember(req: any, res: any) {
     try {
       const organizationId = req.params.organizationId;
-      const { username } = req.body;
+      const username = req.params.username;
 
       if (!organizationId) {
-        return res.status(400).send({ error: 'organizationId query parameter is required' });
+        return res.status(400).send({ error: 'organizationId parameter is required' });
       }
 
       if (!username) {
-        return res.status(400).send({ error: 'username field is required' });
+        return res.status(400).send({ error: 'username parameter is required' });
       }
 
       await this.organizationService.removeMember(organizationId, username, req.user);
