@@ -743,6 +743,19 @@ class ServiceService {
     const result = await this.serviceRepository.prune(organizationId);
     return result;
   }
+  
+  async destroy(serviceName: string, organizationId: string) {
+    const service = await this.serviceRepository.findByName(serviceName, organizationId);
+
+    if (!service) {
+      throw new Error(`INVALID DATA: Service ${serviceName} not found`);
+    }
+
+    await this._removeServiceFromContracts(serviceName, organizationId);
+
+    const result = await this.serviceRepository.destroy(serviceName, organizationId);
+    return result;
+  }
 
   async disable(serviceName: string, organizationId: string) {
     const cacheKey = `service.${organizationId}.${serviceName}`;
@@ -944,7 +957,7 @@ class ServiceService {
   }
 
   async _removeServiceFromContracts(serviceName: string, organizationId: string): Promise<boolean> {
-    const contracts: LeanContract[] = await this.contractRepository.findByFilters({});
+    const contracts: LeanContract[] = await this.contractRepository.findByFilters({organizationId});
     const novatedContracts: LeanContract[] = [];
     const contractsToDisable: LeanContract[] = [];
 
@@ -1010,7 +1023,7 @@ class ServiceService {
     const resultNovations = await this.contractRepository.bulkUpdate(novatedContracts);
     const resultDisables = await this.contractRepository.bulkUpdate(contractsToDisable, true);
 
-    return resultNovations && resultDisables;
+    return resultNovations > 0 && resultDisables > 0;
   }
 }
 

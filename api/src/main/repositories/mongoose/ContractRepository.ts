@@ -1,6 +1,6 @@
 import RepositoryBase from '../RepositoryBase';
 import ContractMongoose from './models/ContractMongoose';
-import { ContractQueryFilters, ContractToCreate, LeanContract } from '../../types/models/Contract';
+import { ContractToCreate, LeanContract } from '../../types/models/Contract';
 import { toPlainObject } from '../../utils/mongoose';
 
 class ContractRepository extends RepositoryBase {
@@ -149,9 +149,9 @@ class ContractRepository extends RepositoryBase {
     return contract ? toPlainObject<LeanContract>(contract.toJSON()) : null;
   }
 
-  async bulkUpdate(contracts: LeanContract[], disable = false): Promise<boolean> {
+  async bulkUpdate(contracts: LeanContract[], disable = false): Promise<number> {
     if (contracts.length === 0) {
-      return true;
+      return 0;
     }
 
     const bulkOps = contracts.map(contract => ({
@@ -169,11 +169,7 @@ class ContractRepository extends RepositoryBase {
 
     const result = await ContractMongoose.bulkWrite(bulkOps);
 
-    if (result.modifiedCount === 0 && result.upsertedCount === 0) {
-      throw new Error('No contracts were updated or inserted');
-    }
-
-    return true;
+    return result.modifiedCount;
   }
 
   async prune(organizationId?: string): Promise<number> {
@@ -188,6 +184,11 @@ class ContractRepository extends RepositoryBase {
     if (result.deletedCount === 0) {
       throw new Error(`Contract with userId ${userId} not found`);
     }
+  }
+
+  async bulkDestroy(userIds: string[]): Promise<number> {
+    const result = await ContractMongoose.deleteMany({ 'userContact.userId': { $in: userIds } });
+    return result.deletedCount || 0;
   }
 }
 
