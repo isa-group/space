@@ -8,16 +8,16 @@ import {
   OrganizationMember,
 } from '../types/models/Organization';
 import { generateOrganizationApiKey } from '../utils/users/helpers';
-import UserService from './UserService';
+import UserRepository from '../repositories/mongoose/UserRepository';
 import { validateOrganizationData } from './validation/OrganizationServiceValidations';
 
 class OrganizationService {
   private organizationRepository: OrganizationRepository;
-  private userService: UserService;
+  private userRepository: UserRepository;
 
   constructor() {
     this.organizationRepository = container.resolve('organizationRepository');
-    this.userService = container.resolve('userService');
+    this.userRepository = container.resolve('userRepository');
   }
 
   async findAll(filters: OrganizationFilter): Promise<LeanOrganization[]> {
@@ -30,7 +30,7 @@ class OrganizationService {
     return organization;
   }
 
-  async findByOwner(owner: string): Promise<LeanOrganization | null> {
+  async findByOwner(owner: string): Promise<LeanOrganization[]> {
     const organization = await this.organizationRepository.findByOwner(owner);
     return organization;
   }
@@ -59,10 +59,10 @@ class OrganizationService {
 
   async create(organizationData: any, reqUser: any): Promise<LeanOrganization> {
     validateOrganizationData(organizationData);
-    const proposedOwner = await this.userService.findByUsername(organizationData.owner);
+    const proposedOwner = await this.userRepository.findByUsername(organizationData.owner);
 
     if (!proposedOwner) {
-      throw new Error(`User with username ${organizationData.owner} does not exist.`);
+      throw new Error(`INVALID DATA: User with username ${organizationData.owner} does not exist.`);
     }
 
     if (proposedOwner.username !== reqUser.username && reqUser.role !== 'ADMIN') {
@@ -190,10 +190,10 @@ class OrganizationService {
     }
 
     // 3. External dependency check (User existence)
-    const userToAssign = await this.userService.findByUsername(organizationMember.username);
+    const userToAssign = await this.userRepository.findByUsername(organizationMember.username);
 
     if (!userToAssign) {
-      throw new Error(`User with username ${organizationMember.username} does not exist.`);
+      throw new Error(`INVALID DATA: User with username ${organizationMember.username} does not exist.`);
     }
 
     // 4. Persistence
@@ -204,7 +204,7 @@ class OrganizationService {
     const organization = await this.organizationRepository.findById(organizationId);
 
     if (!organization) {
-      throw new Error(`Organization with ID ${organizationId} does not exist.`);
+      throw new Error(`INVALID DATA: Organization with ID ${organizationId} does not exist.`);
     }
 
     if (
@@ -235,7 +235,7 @@ class OrganizationService {
         );
       }
 
-      const proposedOwner = await this.userService.findByUsername(updateData.owner);
+      const proposedOwner = await this.userRepository.findByUsername(updateData.owner);
       if (!proposedOwner) {
         throw new Error(`INVALID DATA: User with username ${updateData.owner} does not exist.`);
       }

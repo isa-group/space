@@ -23,10 +23,10 @@ class OrganizationRepository extends RepositoryBase {
     }
   }
 
-  async findByOwner(owner: string): Promise<LeanOrganization | null> {
-    const organization = await OrganizationMongoose.findOne({ owner }).exec();
+  async findByOwner(owner: string): Promise<LeanOrganization[]> {
+    const organizations = await OrganizationMongoose.find({ owner }).exec();
 
-    return organization ? (organization.toObject() as unknown as LeanOrganization) : null;
+    return organizations.map(org => org.toObject() as unknown as LeanOrganization);
   }
 
   async findByApiKey(apiKey: string): Promise<LeanOrganization | null> {

@@ -48,11 +48,11 @@ class UserRepository extends RepositoryBase {
     return toPlainObject<LeanUser>(user.toObject());
   }
 
-  async create(userData: any) {
+  async create(userData: any): Promise<LeanUser> {
     const user = await new UserMongoose(userData).save();
     const userObject = await this.findByUsername(user.username);
 
-    return userObject;
+    return userObject!;
   }
 
   async update(username: string, userData: any) {

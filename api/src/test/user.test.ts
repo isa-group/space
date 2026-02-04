@@ -4,11 +4,14 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { USER_ROLES } from '../main/types/permissions';
 import { baseUrl, getApp, shutdownApp } from './utils/testApp';
 import { createTestUser, deleteTestUser } from './utils/users/userTestUtils';
+import OrganizationService from '../main/services/OrganizationService';
+import container from '../main/config/container';
 
 describe('User API routes', function () {
   let app: Server;
   let adminUser: any;
   let adminApiKey: string;
+  let organizationService: OrganizationService;
   const usersToCleanup: Set<string> = new Set();
 
   const trackUserForCleanup = (user?: any) => {
@@ -21,6 +24,7 @@ describe('User API routes', function () {
     app = await getApp();
     adminUser = await createTestUser('ADMIN');
     adminApiKey = adminUser.apiKey;
+    organizationService = container.resolve('organizationService');
   });
 
   afterEach(async function () {
@@ -103,6 +107,32 @@ describe('User API routes', function () {
       expect(response.body.role).toBe(userData.role);
       expect(response.body.apiKey).toBeDefined();
       trackUserForCleanup(response.body);
+
+      const organizations = await organizationService.findByOwner(userData.username);
+
+      expect(organizations.length).toBe(1);
+      expect(organizations[0].name).toBe(`${userData.username}'s Organization`);
+    });
+    
+    it('returns 201 when ADMIN tries to create ADMIN', async function () {
+      const userData = {
+        username: `test_user_${Date.now()}`,
+        password: 'password123',
+        role: USER_ROLES[0],
+      };
+
+      const response = await request(app).post(`${baseUrl}/users`).set('x-api-key', adminApiKey).send(userData);
+
+      expect(response.status).toBe(201);
+      expect(response.body.username).toBe(userData.username);
+      expect(response.body.role).toBe(userData.role);
+      expect(response.body.apiKey).toBeDefined();
+      trackUserForCleanup(response.body);
+
+      const organizations = await organizationService.findByOwner(userData.username);
+
+      expect(organizations.length).toBe(1);
+      expect(organizations[0].name).toBe(`${userData.username}'s Organization`);
     });
 
     it('returns 201 and assigns default role when role is missing', async function () {
@@ -118,6 +148,11 @@ describe('User API routes', function () {
       expect(response.body.role).toBe(USER_ROLES[USER_ROLES.length - 1]);
       expect(response.body.apiKey).toBeDefined();
       trackUserForCleanup(response.body);
+
+      const organizations = await organizationService.findByOwner(userData.username);
+
+      expect(organizations.length).toBe(1);
+      expect(organizations[0].name).toBe(`${userData.username}'s Organization`);
     });
 
     it('returns 403 when non-admin tries to create an admin', async function () {

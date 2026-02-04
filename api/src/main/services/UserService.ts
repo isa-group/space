@@ -3,12 +3,15 @@ import UserRepository from '../repositories/mongoose/UserRepository';
 import { LeanUser } from '../types/models/User';
 import { UserRole, USER_ROLES } from '../types/permissions';
 import { hashPassword } from '../utils/users/helpers';
+import OrganizationService from './OrganizationService';
 
 class UserService {
   private userRepository: UserRepository;
+  private organizationService: OrganizationService;
 
   constructor() {
     this.userRepository = container.resolve('userRepository');
+    this.organizationService = container.resolve('organizationService');
   }
 
   async findByUsername(username: string) {
@@ -43,7 +46,14 @@ class UserService {
       throw new Error('PERMISSION ERROR: Only admins can create other admins.');
     }
 
-    return this.userRepository.create(userData);
+    const createdUser: LeanUser = await this.userRepository.create(userData);
+
+    await this.organizationService.create(
+      { name: `${createdUser.username}'s Organization`, owner: createdUser.username },
+      createdUser
+    );
+    
+    return createdUser;
   }
 
   async update(username: string, userData: any, creatorData: LeanUser) {

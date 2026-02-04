@@ -445,9 +445,9 @@ describe('Organization API Test Suite', function () {
       const response = await request(app)
         .post(`${baseUrl}/organizations/${testOrganization.id}/members`)
         .set('x-api-key', adminApiKey)
-        .send({ username: `nonexistent_user_${Date.now()}`, role: 'EVALUATOR' })
-        .expect(400);
+        .send({ username: `nonexistent_user_${Date.now()}`, role: 'EVALUATOR' });
 
+      expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
     });
 
