@@ -35,6 +35,11 @@ const loadFileRoutes = function (app: express.Application) {
       handleValidation,
       isOrgOwner,
       organizationController.update
+    ).delete(
+      OrganizationValidation.getById,
+      handleValidation,
+      isOrgOwner,
+      organizationController.delete
     );
 
     app

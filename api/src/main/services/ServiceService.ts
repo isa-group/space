@@ -35,7 +35,7 @@ class ServiceService {
     this.cacheService = container.resolve('cacheService');
   }
 
-  async index(queryParams: ServiceQueryFilters, organizationId: string) {
+  async index(queryParams: ServiceQueryFilters, organizationId?: string) {
     const services = await this.serviceRepository.findAll(organizationId, queryParams);
 
     for (const service of services) {
@@ -97,7 +97,7 @@ class ServiceService {
     for (let i = 0; i < versionsToRetrieveRemotely.length; i += concurrency) {
       const batch = versionsToRetrieveRemotely.slice(i, i + concurrency);
       const batchResults = await Promise.all(
-        batch.map(async (version) => {
+        batch.map(async version => {
           const url = pricingsToReturn.get(version)?.url;
           // Try cache first
           let pricing = await this.cacheService.get(`pricing.url.${url}`);
@@ -138,11 +138,10 @@ class ServiceService {
   }
 
   async showPricing(serviceName: string, pricingVersion: string, organizationId: string) {
-
     const cacheKey = `service.${organizationId}.${serviceName}`;
     let service = await this.cacheService.get(cacheKey);
 
-    if (!service){
+    if (!service) {
       service = await this.serviceRepository.findByName(serviceName, organizationId);
     }
 
@@ -166,17 +165,15 @@ class ServiceService {
     }
 
     if (pricingLocator.id) {
-
       let pricing = await this.cacheService.get(`pricing.id.${pricingLocator.id}`);
 
-      if (!pricing){
+      if (!pricing) {
         pricing = await this.pricingRepository.findById(pricingLocator.id);
         await this.cacheService.set(`pricing.id.${pricingLocator.id}`, pricing, 3600, true);
       }
 
       return pricing;
     } else {
-
       let pricing = await this.cacheService.get(`pricing.url.${pricingLocator.url}`);
 
       if (!pricing) {
@@ -190,8 +187,7 @@ class ServiceService {
 
   async create(receivedPricing: any, pricingType: 'file' | 'url', organizationId: string) {
     try {
-      
-      await this.cacheService.del("features.*");
+      await this.cacheService.del('features.*');
 
       if (pricingType === 'file') {
         return await this._createFromFile(receivedPricing, organizationId, undefined);
@@ -210,10 +206,10 @@ class ServiceService {
     organizationId: string
   ) {
     try {
-      await this.cacheService.del("features.*");
+      await this.cacheService.del('features.*');
       const cacheKey = `service.${organizationId}.${serviceName}`;
       await this.cacheService.del(cacheKey);
-      
+
       if (pricingType === 'file') {
         return await this._createFromFile(receivedPricing, organizationId, serviceName);
       } else {
@@ -253,7 +249,7 @@ class ServiceService {
       }
     }
 
-    const pricingData: ExpectedPricingType & { _serviceName: string, _organizationId: string } = {
+    const pricingData: ExpectedPricingType & { _serviceName: string; _organizationId: string } = {
       _serviceName: uploadedPricing.saasName,
       _organizationId: organizationId,
       ...parsePricingToSpacePricingObject(uploadedPricing),
@@ -264,7 +260,7 @@ class ServiceService {
     if (validationErrors.length > 0) {
       throw new Error(`Validation errors: ${validationErrors.join(', ')}`);
     }
-    
+
     // Step 2:
     // - If the service does not exist (enabled), creates it
     // - If an enabled service exists, updates it with the new pricing
@@ -273,8 +269,16 @@ class ServiceService {
     //   entries into archivedPricings (renaming collisions by appending timestamp)
     if (!service) {
       // Check if an enabled service exists
-      const existingEnabled = await this.serviceRepository.findByName(uploadedPricing.saasName, organizationId, false);
-      const existingDisabled = await this.serviceRepository.findByName(uploadedPricing.saasName, organizationId, true);
+      const existingEnabled = await this.serviceRepository.findByName(
+        uploadedPricing.saasName,
+        organizationId,
+        false
+      );
+      const existingDisabled = await this.serviceRepository.findByName(
+        uploadedPricing.saasName,
+        organizationId,
+        true
+      );
 
       if (existingEnabled) {
         throw new Error(`Invalid request: Service ${uploadedPricing.saasName} already exists`);
@@ -282,7 +286,7 @@ class ServiceService {
 
       // Step 3: Create the service as it does not exist and add the pricing
       const savedPricing = await this.pricingRepository.create(pricingData);
-  
+
       if (!savedPricing) {
         throw new Error(`Pricing ${uploadedPricing.version} not saved`);
       }
@@ -319,14 +323,21 @@ class ServiceService {
         const updateData: any = {
           disabled: false,
           activePricings: new Map([
-            [formattedPricingVersion, {
-              id: savedPricing.id,
-            }],
+            [
+              formattedPricingVersion,
+              {
+                id: savedPricing.id,
+              },
+            ],
           ]),
           archivedPricings: newArchived,
         };
 
-        const updated = await this.serviceRepository.update(existingDisabled.name, updateData, organizationId);
+        const updated = await this.serviceRepository.update(
+          existingDisabled.name,
+          updateData,
+          organizationId
+        );
         if (!updated) {
           throw new Error(`Service ${uploadedPricing.saasName} not updated`);
         }
@@ -338,16 +349,21 @@ class ServiceService {
           disabled: false,
           organizationId: organizationId,
           activePricings: new Map([
-            [formattedPricingVersion, {
-              id: savedPricing.id,
-            }],
+            [
+              formattedPricingVersion,
+              {
+                id: savedPricing.id,
+              },
+            ],
           ]),
         };
 
         try {
           service = await this.serviceRepository.create(serviceData);
         } catch (err) {
-          throw new Error(`Service ${uploadedPricing.saasName} not saved: ${(err as Error).message}`);
+          throw new Error(
+            `Service ${uploadedPricing.saasName} not saved: ${(err as Error).message}`
+          );
         }
       }
     } else {
@@ -360,18 +376,20 @@ class ServiceService {
       }
 
       // If pricing exists in archived, rename archived entry to free the key
-      const archivedExists = service.archivedPricings && service.archivedPricings.get(formattedPricingVersion);
+      const archivedExists =
+        service.archivedPricings && service.archivedPricings.get(formattedPricingVersion);
       const updatePayload: any = {};
 
       if (archivedExists) {
         const newKey = `${formattedPricingVersion}_${Date.now()}`;
-        updatePayload[`archivedPricings.${newKey}`] = service.archivedPricings!.get(formattedPricingVersion);
+        updatePayload[`archivedPricings.${newKey}`] =
+          service.archivedPricings!.get(formattedPricingVersion);
         updatePayload[`archivedPricings.${formattedPricingVersion}`] = undefined;
       }
 
       // Step 3: Create the service as it does not exist and add the pricing
       const savedPricing = await this.pricingRepository.create(pricingData);
-  
+
       if (!savedPricing) {
         throw new Error(`Pricing ${uploadedPricing.version} not saved`);
       }
@@ -404,9 +422,12 @@ class ServiceService {
 
         updatePayload.disabled = false;
         updatePayload.activePricings = new Map([
-          [formattedPricingVersion, {
-            id: savedPricing.id,
-          }],
+          [
+            formattedPricingVersion,
+            {
+              id: savedPricing.id,
+            },
+          ],
         ]);
         updatePayload.archivedPricings = newArchived;
       } else {
@@ -416,7 +437,11 @@ class ServiceService {
         };
       }
 
-      const updatedService = await this.serviceRepository.update(service.name, updatePayload, organizationId);
+      const updatedService = await this.serviceRepository.update(
+        service.name,
+        updatePayload,
+        organizationId
+      );
 
       service = updatedService;
     }
@@ -455,8 +480,16 @@ class ServiceService {
 
     if (!serviceName) {
       // Create a new service or re-enable a disabled one
-      const existingEnabled = await this.serviceRepository.findByName(uploadedPricing.saasName, organizationId, false);
-      const existingDisabled = await this.serviceRepository.findByName(uploadedPricing.saasName, organizationId, true);
+      const existingEnabled = await this.serviceRepository.findByName(
+        uploadedPricing.saasName,
+        organizationId,
+        false
+      );
+      const existingDisabled = await this.serviceRepository.findByName(
+        uploadedPricing.saasName,
+        organizationId,
+        true
+      );
 
       if (existingEnabled) {
         throw new Error(`Invalid request: Service ${uploadedPricing.saasName} already exists`);
@@ -498,7 +531,11 @@ class ServiceService {
           archivedPricings: newArchived,
         };
 
-        const updated = await this.serviceRepository.update(existingDisabled.name, updateData, organizationId);
+        const updated = await this.serviceRepository.update(
+          existingDisabled.name,
+          updateData,
+          organizationId
+        );
         if (!updated) {
           throw new Error(`Service ${uploadedPricing.saasName} not updated`);
         }
@@ -518,10 +555,10 @@ class ServiceService {
       };
 
       const service = await this.serviceRepository.create(serviceData);
-      
+
       // Emit pricing creation event
       this.eventService.emitPricingCreatedMessage(service.name, uploadedPricing.version);
-      
+
       return service;
     } else {
       if (uploadedPricing.saasName !== serviceName) {
@@ -547,7 +584,8 @@ class ServiceService {
       // If exists in archived, rename archived entry first
       if (service.archivedPricings && service.archivedPricings.has(formattedPricingVersion)) {
         const newKey = `${formattedPricingVersion}_${Date.now()}`;
-        updatePayload[`archivedPricings.${newKey}`] = service.archivedPricings.get(formattedPricingVersion);
+        updatePayload[`archivedPricings.${newKey}`] =
+          service.archivedPricings.get(formattedPricingVersion);
         updatePayload[`archivedPricings.${formattedPricingVersion}`] = undefined;
       }
 
@@ -591,23 +629,28 @@ class ServiceService {
         };
       }
 
-      const updatedService = await this.serviceRepository.update(service.name, updatePayload, organizationId);
+      const updatedService = await this.serviceRepository.update(
+        service.name,
+        updatePayload,
+        organizationId
+      );
 
       if (!updatedService) {
-        throw new Error(`Service ${serviceName} not updated with pricing ${uploadedPricing.version}`);
+        throw new Error(
+          `Service ${serviceName} not updated with pricing ${uploadedPricing.version}`
+        );
       }
 
       resetEscapeVersionInService(updatedService);
-      
+
       // Emit pricing creation event
       this.eventService.emitPricingCreatedMessage(service.name, uploadedPricing.version);
-      
+
       return updatedService;
     }
   }
 
   async update(serviceName: string, newServiceData: any, organizationId: string) {
-
     const cacheKey = `service.${organizationId}.${serviceName}`;
     let service = await this.cacheService.get(cacheKey);
 
@@ -621,7 +664,11 @@ class ServiceService {
 
     // TODO: Change name in affected contracts and pricings
 
-    const updatedService = await this.serviceRepository.update(service.name, newServiceData, organizationId);
+    const updatedService = await this.serviceRepository.update(
+      service.name,
+      newServiceData,
+      organizationId
+    );
 
     if (newServiceData.name && newServiceData.name !== service.name) {
       // If the service name has changed, we need to update the cache key
@@ -647,7 +694,6 @@ class ServiceService {
     fallBackSubscription: FallBackSubscription,
     organizationId: string
   ) {
-
     const cacheKey = `service.${organizationId}.${serviceName}`;
     let service = await this.cacheService.get(cacheKey);
 
@@ -696,19 +742,27 @@ class ServiceService {
     let updatedService;
 
     if (newAvailability === 'active') {
-      updatedService = await this.serviceRepository.update(service.name, {
-        [`activePricings.${formattedPricingVersion}`]: pricingLocator,
-        [`archivedPricings.${formattedPricingVersion}`]: undefined,
-      }, organizationId);
+      updatedService = await this.serviceRepository.update(
+        service.name,
+        {
+          [`activePricings.${formattedPricingVersion}`]: pricingLocator,
+          [`archivedPricings.${formattedPricingVersion}`]: undefined,
+        },
+        organizationId
+      );
 
       // Emitir evento de cambio de pricing (activación)
       this.eventService.emitPricingActivedMessage(service.name, pricingVersion);
       await this.cacheService.set(cacheKey, updatedService, 3600, true);
     } else {
-      updatedService = await this.serviceRepository.update(service.name, {
-        [`activePricings.${formattedPricingVersion}`]: undefined,
-        [`archivedPricings.${formattedPricingVersion}`]: pricingLocator,
-      }, organizationId);
+      updatedService = await this.serviceRepository.update(
+        service.name,
+        {
+          [`activePricings.${formattedPricingVersion}`]: undefined,
+          [`archivedPricings.${formattedPricingVersion}`]: pricingLocator,
+        },
+        organizationId
+      );
 
       // Emitir evento de cambio de pricing (archivado)
       this.eventService.emitPricingArchivedMessage(service.name, pricingVersion);
@@ -740,20 +794,52 @@ class ServiceService {
   }
 
   async prune(organizationId?: string) {
+    if (organizationId) {
+      const organizationServices: LeanService[] = await this.index({}, organizationId);
+      const organizationServiceNames: string[] = organizationServices.map(s => s.name) as string[];
+
+      for (const serviceName of organizationServiceNames) {
+        const cacheKey = `service.${organizationId}.${serviceName}`;
+        await this.cacheService.del(cacheKey);
+        const contractNovationResult = await this._removeServiceFromContracts(
+          serviceName,
+          organizationId
+        );
+
+        if (!contractNovationResult) {
+          throw new Error(`Failed to remove service ${serviceName} from contracts`);
+        }
+      }
+    }
+
     const result = await this.serviceRepository.prune(organizationId);
     return result;
   }
-  
+
   async destroy(serviceName: string, organizationId: string) {
-    const service = await this.serviceRepository.findByName(serviceName, organizationId);
+    const cacheKey = `service.${organizationId}.${serviceName}`;
+    let service = await this.cacheService.get(cacheKey);
+
+    if (!service) {
+      service = await this.serviceRepository.findByName(serviceName, organizationId);
+    }
 
     if (!service) {
       throw new Error(`INVALID DATA: Service ${serviceName} not found`);
     }
 
-    await this._removeServiceFromContracts(serviceName, organizationId);
+    const contractNovationResult = await this._removeServiceFromContracts(
+      service.name,
+      organizationId
+    );
+
+    if (!contractNovationResult) {
+      throw new Error(`Failed to remove service ${serviceName} from contracts`);
+    }
 
     const result = await this.serviceRepository.destroy(serviceName, organizationId);
+    this.cacheService.del(cacheKey);
+
     return result;
   }
 
@@ -766,17 +852,20 @@ class ServiceService {
     }
 
     if (!service) {
-      throw new Error(`Service ${serviceName} not found`);
+      throw new Error(`INVALID DATA: Service ${serviceName} not found`);
     }
 
-    const contractNovationResult = await this._removeServiceFromContracts(service.name, organizationId);
+    const contractNovationResult = await this._removeServiceFromContracts(
+      service.name,
+      organizationId
+    );
 
     if (!contractNovationResult) {
       throw new Error(`Failed to remove service ${serviceName} from contracts`);
     }
 
     const result = await this.serviceRepository.disable(service.name, organizationId);
-  
+
     this.eventService.emitServiceDisabledMessage(service.name);
     this.cacheService.del(cacheKey);
 
@@ -784,7 +873,6 @@ class ServiceService {
   }
 
   async destroyPricing(serviceName: string, pricingVersion: string, organizationId: string) {
-
     const cacheKey = `service.${organizationId}.${serviceName}`;
     let service = await this.cacheService.get(cacheKey);
 
@@ -818,10 +906,14 @@ class ServiceService {
       this.cacheService.del(`pricing.url.${pricingLocator.url}`);
     }
 
-    const result = await this.serviceRepository.update(service.name, {
-      [`activePricings.${formattedPricingVersion}`]: undefined,
-      [`archivedPricings.${formattedPricingVersion}`]: undefined,
-    }, organizationId);
+    const result = await this.serviceRepository.update(
+      service.name,
+      {
+        [`activePricings.${formattedPricingVersion}`]: undefined,
+        [`archivedPricings.${formattedPricingVersion}`]: undefined,
+      },
+      organizationId
+    );
     await this.cacheService.set(`service.${serviceName}`, result, 3600, true);
 
     return result;
@@ -899,7 +991,10 @@ class ServiceService {
     }
   }
 
-  async _getLatestActivePricing(serviceName: string, organizationId: string): Promise<LeanPricing | null> {
+  async _getLatestActivePricing(
+    serviceName: string,
+    organizationId: string
+  ): Promise<LeanPricing | null> {
     const pricings = await this.indexPricings(serviceName, 'active', organizationId);
 
     const sortedPricings = pricings.sort((a, b) => {
@@ -957,7 +1052,9 @@ class ServiceService {
   }
 
   async _removeServiceFromContracts(serviceName: string, organizationId: string): Promise<boolean> {
-    const contracts: LeanContract[] = await this.contractRepository.findByFilters({organizationId});
+    const contracts: LeanContract[] = await this.contractRepository.findByFilters({
+      organizationId,
+    });
     const novatedContracts: LeanContract[] = [];
     const contractsToDisable: LeanContract[] = [];
 

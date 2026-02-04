@@ -1,15 +1,6 @@
 import mongoose from 'mongoose';
-import container from '../config/container';
-import CacheService from '../services/CacheService';
 
 class RepositoryBase {
-
-  readonly cacheService: CacheService;
-
-  constructor() {
-    this.cacheService = container.resolve('cacheService');
-  }
-
   async findById (id: string, ...args: any[]): Promise<any> {
     throw new Error('Not Implemented Exception');
   }

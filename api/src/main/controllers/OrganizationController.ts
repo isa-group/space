@@ -14,6 +14,7 @@ class OrganizationController {
     this.addApiKey = this.addApiKey.bind(this);
     this.removeApiKey = this.removeApiKey.bind(this);
     this.removeMember = this.removeMember.bind(this);
+    this.delete = this.delete.bind(this);
   }
 
   async getAllOrganizations(req: any, res: any) {
@@ -191,6 +192,21 @@ class OrganizationController {
       }
       if (err.message.includes('not found')) {
         return res.status(400).send({ error: err.message });
+      }
+      res.status(500).send({ error: err.message });
+    }
+  }
+
+  async delete(req: any, res: any) {
+    try {
+      const organizationId = req.params.organizationId;
+
+      await this.organizationService.destroy(organizationId, req.user);
+
+      res.status(204).json({ message: 'Organization deleted successfully' });
+    } catch (err: any) {
+      if (err.message.includes('PERMISSION ERROR')) {
+        return res.status(403).send({ error: err.message });
       }
       res.status(500).send({ error: err.message });
     }

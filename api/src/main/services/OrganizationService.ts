@@ -10,14 +10,17 @@ import {
 import { generateOrganizationApiKey } from '../utils/users/helpers';
 import UserRepository from '../repositories/mongoose/UserRepository';
 import { validateOrganizationData } from './validation/OrganizationServiceValidations';
+import ServiceService from './ServiceService';
 
 class OrganizationService {
   private organizationRepository: OrganizationRepository;
   private userRepository: UserRepository;
+  private serviceService: ServiceService;
 
   constructor() {
     this.organizationRepository = container.resolve('organizationRepository');
     this.userRepository = container.resolve('userRepository');
+    this.serviceService = container.resolve('serviceService');
   }
 
   async findAll(filters: OrganizationFilter): Promise<LeanOrganization[]> {
@@ -344,6 +347,26 @@ class OrganizationService {
 
     // 3. Execute the atomic removal operation in the database
     await this.organizationRepository.removeMember(organizationId, username);
+  }
+
+  async destroy(organizationId: string, reqUser: any): Promise<void> {
+    const organization = await this.organizationRepository.findById(organizationId);
+    
+    if (!organization) {
+      throw new Error(`INVALID DATA: Organization with ID ${organizationId} does not exist.`);
+    }
+
+    if (
+      organization.owner !== reqUser.username &&
+      reqUser.role !== 'ADMIN'
+    ) {
+      throw new Error(
+        'PERMISSION ERROR: Only SPACE admins or organization owners can delete organizations.'
+      );
+    }
+
+    await this.serviceService.prune(organizationId);
+    await this.organizationRepository.delete(organizationId);
   }
 }
 

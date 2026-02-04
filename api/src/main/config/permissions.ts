@@ -105,7 +105,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   {
     path: '/services',
     methods: ['GET'],
-    allowedUserRoles: [],
+    allowedUserRoles: ['ADMIN'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
   },
   {

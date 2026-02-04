@@ -28,7 +28,7 @@ class ServiceController {
       const queryParams = this._transformIndexQueryParams(req.query);
       const organizationId = req.org ? req.org.id : req.params.organizationId;
 
-      if (!organizationId){
+      if (!organizationId && req.user && req.user.role !== "ADMIN"){
         return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
       }
 

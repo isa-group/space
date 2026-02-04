@@ -700,6 +700,156 @@ describe('Organization API Test Suite', function () {
     });
   });
 
+  describe('DELETE /organizations/:organizationId', function () {
+    let testOrganization: LeanOrganization;
+    let spaceAdmin: any;
+    let ownerUser: any;
+    let adminUser: any;
+    let managerUser: any;
+    let evaluatorUser: any;
+    let regularUserNoPermission: any;
+
+    beforeEach(async function () {
+      spaceAdmin = await createTestUser('ADMIN');
+      ownerUser = await createTestUser('USER');
+      testOrganization = await createTestOrganization(ownerUser.username);
+      adminUser = await createTestUser('USER');
+      managerUser = await createTestUser('USER');
+      evaluatorUser = await createTestUser('USER');
+      regularUserNoPermission = await createTestUser('USER');
+
+      // Add owner to organization
+      await addMemberToOrganization(testOrganization.id!, {username: adminUser.username, role: 'ADMIN'});
+      await addMemberToOrganization(testOrganization.id!, {username: managerUser.username, role: 'MANAGER'});
+      await addMemberToOrganization(testOrganization.id!, {username: evaluatorUser.username, role: 'EVALUATOR'});
+    });
+
+    afterEach(async function () {
+      if (testOrganization?.id) {
+        await deleteTestOrganization(testOrganization.id);
+      }
+
+      if (ownerUser?.username) {
+        await deleteTestUser(ownerUser.username);
+      }
+
+      if (spaceAdmin?.username) {
+        await deleteTestUser(spaceAdmin.username);
+      }
+
+      if (adminUser?.username) {
+        await deleteTestUser(adminUser.username);
+      }
+      if (managerUser?.username) {
+        await deleteTestUser(managerUser.username);
+      }
+      if (evaluatorUser?.username) {
+        await deleteTestUser(evaluatorUser.username);
+      }
+      if (regularUserNoPermission?.username) {
+        await deleteTestUser(regularUserNoPermission.username);
+      }
+    });
+
+    it('Should return 204 and remove organization with services', async function () {
+      const responseDelete = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}`)
+        .set('x-api-key', spaceAdmin.apiKey);
+      
+      expect(responseDelete.status).toBe(204);
+      
+      const responseServices = await request(app)
+        .get(`${baseUrl}/services/`)
+        .set('x-api-key', spaceAdmin.apiKey);
+      
+      expect(responseServices.status).toBe(200);
+      expect(responseServices.body.every((service: any) => service.organizationId !== testOrganization.id)).toBe(true);
+      
+      const organizationFindResponse = await request(app)
+        .get(`${baseUrl}/organizations/${testOrganization.id}`)
+        .set('x-api-key', spaceAdmin.apiKey);
+      
+      expect(organizationFindResponse.status).toBe(404);
+    });
+    
+    it('Should return 200 and remove member from organization with OWNER request', async function () {
+      const responseDelete = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}`)
+        .set('x-api-key', ownerUser.apiKey);
+      
+      expect(responseDelete.status).toBe(204);
+      
+      const responseServices = await request(app)
+        .get(`${baseUrl}/services/`)
+        .set('x-api-key', spaceAdmin.apiKey);
+      
+      expect(responseServices.status).toBe(200);
+      expect(responseServices.body.every((service: any) => service.organizationId !== testOrganization.id)).toBe(true);
+      
+      const organizationFindResponse = await request(app)
+        .get(`${baseUrl}/organizations/${testOrganization.id}`)
+        .set('x-api-key', spaceAdmin.apiKey);
+      
+      expect(organizationFindResponse.status).toBe(404);
+    });
+    
+    it('Should return 403 with org ADMIN request', async function () {
+      const responseDelete = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}`)
+        .set('x-api-key', adminUser.apiKey);
+      
+      expect(responseDelete.status).toBe(403);
+      expect(responseDelete.body.error).toBeDefined();
+    });
+
+    it('Should return 403 with org MANAGER request', async function () {
+      const responseDelete = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}`)
+        .set('x-api-key', managerUser.apiKey);
+      
+      expect(responseDelete.status).toBe(403);
+      expect(responseDelete.body.error).toBeDefined();
+    });
+    
+    it('Should return 403 with org EVALUATOR request', async function () {
+      const responseDelete = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}`)
+        .set('x-api-key', evaluatorUser.apiKey);
+      
+      expect(responseDelete.status).toBe(403);
+      expect(responseDelete.body.error).toBeDefined();
+    });
+
+    it('Should return 403 when user without org role tries to remove member', async function () {
+      const responseDelete = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}`)
+        .set('x-api-key', regularUserNoPermission.apiKey);
+      
+      expect(responseDelete.status).toBe(403);
+      expect(responseDelete.body.error).toBeDefined();
+    });
+
+    it('Should return 404 when organization does not exist', async function () {
+      const fakeId = '000000000000000000000000';
+      
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${fakeId}`)
+        .set('x-api-key', spaceAdmin.apiKey)
+        .expect(404);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 422 with invalid organization ID format', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/invalid-id`)
+        .set('x-api-key', spaceAdmin.apiKey)
+        .expect(422);
+
+      expect(response.body.error).toBeDefined();
+    });
+  });
+
   describe('DELETE /organizations/members', function () {
     let testOrganization: LeanOrganization;
     let ownerUser: any;
