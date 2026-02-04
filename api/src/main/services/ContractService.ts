@@ -9,13 +9,21 @@ import {
 import ContractRepository from '../repositories/mongoose/ContractRepository';
 import { validateContractQueryFilters } from './validation/ContractServiceValidation';
 import ServiceService from './ServiceService';
-import { LeanPricing } from '../types/models/Pricing';
+import { LeanPricing, LeanUsageLimit } from '../types/models/Pricing';
 import { addDays, isAfter } from 'date-fns';
 import { isSubscriptionValid } from '../controllers/validation/ContractValidation';
 import { performNovation } from '../utils/contracts/novation';
 import CacheService from './CacheService';
-import { addPeriodToDate, convertKeysToLowercase, escapeVersion, resetEscapeVersion } from '../utils/helpers';
-import { generateUsageLevels, resetEscapeContractedServiceVersions } from '../utils/contracts/helpers';
+import {
+  addPeriodToDate,
+  convertKeysToLowercase,
+  escapeVersion,
+  resetEscapeVersion,
+} from '../utils/helpers';
+import {
+  generateUsageLevels,
+  resetEscapeContractedServiceVersions,
+} from '../utils/contracts/helpers';
 import { query } from 'express';
 import { LeanUser } from '../types/models/User';
 
@@ -44,14 +52,15 @@ class ContractService {
     const contracts: LeanContract[] = await this.contractRepository.findByFilters(queryParams);
 
     for (const contract of contracts) {
-      contract.contractedServices = resetEscapeContractedServiceVersions(contract.contractedServices);
+      contract.contractedServices = resetEscapeContractedServiceVersions(
+        contract.contractedServices
+      );
     }
 
     return contracts;
   }
 
   async show(userId: string): Promise<LeanContract> {
-
     let contract = await this.cacheService.get(`contracts.${userId}`);
 
     if (!contract) {
@@ -88,8 +97,13 @@ class ContractService {
       );
     }
 
-    const servicesKeys = Object.keys(contractData.contractedServices || {}).map((key) => key.toLowerCase());
-    const services = await this.serviceService.indexByNames(servicesKeys, contractData.organizationId);
+    const servicesKeys = Object.keys(contractData.contractedServices || {}).map(key =>
+      key.toLowerCase()
+    );
+    const services = await this.serviceService.indexByNames(
+      servicesKeys,
+      contractData.organizationId
+    );
 
     if (!services || services.length === 0) {
       throw new Error(`Invalid contract: Services not found: ${servicesKeys.join(', ')}`);
@@ -97,16 +111,14 @@ class ContractService {
 
     if (services && servicesKeys.length !== services.length) {
       const missingServices = servicesKeys.filter(
-        (key) => !services.some((service) => service.name.toLowerCase() === key.toLowerCase())
+        key => !services.some(service => service.name.toLowerCase() === key.toLowerCase())
       );
       throw new Error(`Invalid contract: Services not found: ${missingServices.join(', ')}`);
     }
 
     for (const serviceName in contractData.contractedServices) {
       const pricingVersion = escapeVersion(contractData.contractedServices[serviceName]);
-      const service = services.find(
-        (s) => s.name.toLowerCase() === serviceName.toLowerCase()
-      );
+      const service = services.find(s => s.name.toLowerCase() === serviceName.toLowerCase());
 
       if (!service) {
         throw new Error(`Invalid contract: Services not found: ${serviceName}`);
@@ -120,7 +132,7 @@ class ContractService {
 
       contractData.contractedServices[serviceName] = escapeVersion(pricingVersion); // Ensure the version is stored correctly
     }
-    
+
     const startDate = new Date();
     const renewalDays = contractData.billingPeriod?.renewalDays ?? 30; // Default to 30 days if not provided
     const endDate = addDays(new Date(startDate), renewalDays);
@@ -138,23 +150,30 @@ class ContractService {
         autoRenew: contractData.billingPeriod?.autoRenew ?? false,
         renewalDays: renewalDays,
       },
-      usageLevels: (await this._createUsageLevels(contractData.contractedServices, contractData.organizationId)) || {},
+      usageLevels:
+        (await this._createUsageLevels(
+          contractData.contractedServices,
+          contractData.organizationId
+        )) || {},
       history: [],
     };
     try {
-      await isSubscriptionValid({
-        contractedServices: contractData.contractedServices,
-        subscriptionPlans: contractData.subscriptionPlans,
-        subscriptionAddOns: contractData.subscriptionAddOns,
-      }, contractData.organizationId);
+      await isSubscriptionValid(
+        {
+          contractedServices: contractData.contractedServices,
+          subscriptionPlans: contractData.subscriptionPlans,
+          subscriptionAddOns: contractData.subscriptionAddOns,
+        },
+        contractData.organizationId
+      );
     } catch (error) {
       throw new Error(`Invalid subscription: ${error}`);
     }
 
     const contract = await this.contractRepository.create(contractDataToCreate);
-    
+
     contract.contractedServices = resetEscapeContractedServiceVersions(contract.contractedServices);
-    
+
     await this.cacheService.set(`contracts.${contract.userContact.userId}`, contract, 3600, true); // Cache for 1 hour
 
     return contract;
@@ -176,15 +195,15 @@ class ContractService {
     const newContract = performNovation(contract, newSubscription);
 
     const result = await this.contractRepository.update(userId, newContract);
-    
+
     if (!result) {
       throw new Error(`Failed to update contract for userId ${userId}`);
     }
-    
+
     result.contractedServices = resetEscapeContractedServiceVersions(result.contractedServices);
-    
+
     await this.cacheService.set(`contracts.${userId}`, result, 3600, true); // Cache for 1 hour
-    await this.cacheService.del(`features.${userId}.*`)
+    await this.cacheService.del(`features.${userId}.*`);
 
     return result;
   }
@@ -219,9 +238,9 @@ class ContractService {
     }
 
     result.contractedServices = resetEscapeContractedServiceVersions(result.contractedServices);
-    
+
     await this.cacheService.set(`contracts.${userId}`, result, 3600, true); // Cache for 1 hour
-    await this.cacheService.del(`features.${userId}.*`)
+    await this.cacheService.del(`features.${userId}.*`);
 
     return result;
   }
@@ -252,9 +271,9 @@ class ContractService {
     }
 
     result.contractedServices = resetEscapeContractedServiceVersions(result.contractedServices);
-    
+
     await this.cacheService.set(`contracts.${userId}`, result, 3600, true); // Cache for 1 hour
-    await this.cacheService.del(`features.${userId}.*`)
+    await this.cacheService.del(`features.${userId}.*`);
 
     return result;
   }
@@ -289,9 +308,9 @@ class ContractService {
     }
 
     result.contractedServices = resetEscapeContractedServiceVersions(result.contractedServices);
-    
+
     await this.cacheService.set(`contracts.${userId}`, result, 3600, true); // Cache for 1 hour
-    await this.cacheService.del(`features.${userId}.*`)
+    await this.cacheService.del(`features.${userId}.*`);
 
     return result;
   }
@@ -312,7 +331,11 @@ class ContractService {
     }
 
     if (queryParams.usageLimit) {
-      await this._resetUsageLimitUsageLevels(contract, queryParams.usageLimit, contract.organizationId);
+      await this._resetUsageLimitUsageLevels(
+        contract,
+        queryParams.usageLimit,
+        contract.organizationId
+      );
     } else if (queryParams.reset) {
       await this._resetUsageLevels(contract, queryParams.renewableOnly, contract.organizationId);
     } else if (usageLevelsIncrements) {
@@ -334,11 +357,13 @@ class ContractService {
       throw new Error(`Failed to update contract for userId ${userId}`);
     }
 
-    updatedContract.contractedServices = resetEscapeContractedServiceVersions(updatedContract.contractedServices);
+    updatedContract.contractedServices = resetEscapeContractedServiceVersions(
+      updatedContract.contractedServices
+    );
 
     await this.cacheService.set(`contracts.${userId}`, updatedContract, 3600, true); // Cache for 1 hour
-    await this.cacheService.del(`features.${userId}.*`)
-    
+    await this.cacheService.del(`features.${userId}.*`);
+
     return updatedContract;
   }
 
@@ -376,7 +401,6 @@ class ContractService {
       }
 
       await this.cacheService.set(`contracts.${userId}`, updatedContract, 3600, true); // Cache for 1 hour
-
     } else {
       throw new Error(`Usage level ${usageLimit} not found in contract for userId ${userId}`);
     }
@@ -384,7 +408,7 @@ class ContractService {
 
   async _revertExpectedConsumption(
     userId: string,
-    usageLimitId: string,
+    featureId: string,
     latest: boolean = false
   ): Promise<void> {
     let contract = await this.cacheService.get(`contracts.${userId}`);
@@ -397,44 +421,60 @@ class ContractService {
       throw new Error(`Contract with userId ${userId} not found`);
     }
 
-    const serviceName: string = usageLimitId.split('.')[0];
-    const usageLimit: string = usageLimitId.split('.')[1];
+    const serviceName: string = featureId.split('-')[0].toLowerCase();
+    const featureName: string = featureId.split('-')[1];
 
-    if (contract.usageLevels[serviceName][usageLimit]) {
-      const previousCachedValue = await this._getCachedUsageLevel(
-        userId,
-        serviceName,
-        usageLimit,
-        latest
-      );
+    const pricing: LeanPricing = await this.serviceService.showPricing(
+      serviceName,
+      contract.contractedServices[serviceName],
+      contract.organizationId
+    );
 
-      if (!previousCachedValue) {
+    const affectedUsageLimits = Object.values(pricing.usageLimits || {})
+      .filter((usageLimit: LeanUsageLimit) => usageLimit.linkedFeatures?.includes(featureName))
+      .map(ul => ul.name!);
+
+    for (const usageLimitName of affectedUsageLimits) {
+      if (contract.usageLevels[serviceName][usageLimitName]) {
+        const previousCachedValue = await this._getCachedUsageLevel(
+          userId,
+          serviceName,
+          usageLimitName,
+          latest
+        );
+
+        if (previousCachedValue === null || previousCachedValue === undefined) {
+          console.log(
+            `WARNING: No previous cached value found for limit: ${serviceName}-${usageLimitName}. Unable to perform revert operation.`
+          );
+        }else{
+          contract.usageLevels[serviceName][usageLimitName].consumed = previousCachedValue;
+        }
+      } else {
         throw new Error(
-          `No previous cached value found for user ${contract.userContact.username}, serviceName ${serviceName}, usageLimit ${usageLimit}. This may be caused because the usage level update that you are trying to revert was made more that 2 minutes ago.`
+          `Usage level ${serviceName}-${usageLimitName} not found in contract for user ${contract.userContact.username}`
         );
       }
-
-      contract.usageLevels[serviceName][usageLimit].consumed += previousCachedValue;
-
-      const updatedContract = await this.contractRepository.update(userId, contract);
-
-      if (!updatedContract) {
-        throw new Error(`Failed to update contract for userId ${userId}`);
-      }
-
-      await this.cacheService.set(`contracts.${userId}`, updatedContract, 3600, true); // Cache for 1 hour
-    } else {
-      throw new Error(
-        `Usage level ${usageLimit} not found in contract for user ${contract.userContact.username}`
-      );
     }
+
+    const updatedContract = await this.contractRepository.update(userId, contract);
+
+    if (!updatedContract) {
+      throw new Error(`Failed to update contract for userId ${userId}`);
+    }
+
+    await this.cacheService.set(`contracts.${userId}`, updatedContract, 3600, true); // Cache for 1 hour
   }
 
   async prune(organizationId?: string, reqUser?: LeanUser): Promise<number> {
-    if (reqUser && reqUser.role !== 'ADMIN' && !["OWNER", "ADMIN"].includes(reqUser.orgRole ?? "")) {
+    if (
+      reqUser &&
+      reqUser.role !== 'ADMIN' &&
+      !['OWNER', 'ADMIN'].includes(reqUser.orgRole ?? '')
+    ) {
       throw new Error('PERMISSION ERROR: Only ADMIN users can prune organization contracts');
     }
-    
+
     const result: number = await this.contractRepository.prune(organizationId);
 
     return result;
@@ -463,7 +503,7 @@ class ContractService {
     latest: boolean = false
   ): Promise<number | null> {
     let cachedValues: string[] = await this.cacheService.match(
-      `*.usageLevels.${userId}.${serviceName}.${usageLimit}`
+      `*.usagelevels.${userId}.${serviceName}.${usageLimit}`
     );
     cachedValues = cachedValues.sort((a, b) => {
       const aTimestamp = parseInt(a.split('.')[0]);
@@ -493,12 +533,12 @@ class ContractService {
         organizationId
       );
 
-      const serviceUsageLevels: Record<string, UsageLevel> | undefined = generateUsageLevels(pricing);
+      const serviceUsageLevels: Record<string, UsageLevel> | undefined =
+        generateUsageLevels(pricing);
 
       if (serviceUsageLevels) {
         usageLevels[serviceName] = serviceUsageLevels;
       }
-
     }
     return usageLevels;
   }
@@ -513,7 +553,11 @@ class ContractService {
     return serviceNames;
   }
 
-  async _resetUsageLimitUsageLevels(contract: LeanContract, usageLimit: string, organizationId: string): Promise<void> {
+  async _resetUsageLimitUsageLevels(
+    contract: LeanContract,
+    usageLimit: string,
+    organizationId: string
+  ): Promise<void> {
     const serviceNames: string[] = this._discoverUsageLimitServices(contract, usageLimit);
 
     if (serviceNames.length === 0) {
@@ -551,7 +595,11 @@ class ContractService {
     );
   }
 
-  async _resetUsageLevels(contract: LeanContract, renewableOnly: boolean, organizationId: string): Promise<void> {
+  async _resetUsageLevels(
+    contract: LeanContract,
+    renewableOnly: boolean,
+    organizationId: string
+  ): Promise<void> {
     for (const serviceName in contract.usageLevels) {
       for (const usageLimit in contract.usageLevels[serviceName]) {
         if (renewableOnly && !contract.usageLevels[serviceName][usageLimit].resetTimeStamp) {
@@ -565,18 +613,22 @@ class ContractService {
     }
   }
 
-  async _resetRenewableUsageLevels(contract: LeanContract, usageLimitsToRenew: string[], organizationId: string): Promise<LeanContract> {
-    
+  async _resetRenewableUsageLevels(
+    contract: LeanContract,
+    usageLimitsToRenew: string[],
+    organizationId: string
+  ): Promise<LeanContract> {
     if (usageLimitsToRenew.length === 0) {
       return contract;
     }
-    
+
     const contractToUpdate = { ...contract };
 
     for (const usageLimitId of usageLimitsToRenew) {
       const serviceName: string = usageLimitId.split('-')[0];
       const usageLimitName: string = usageLimitId.split('-')[1];
-      let currentResetTimeStamp = contractToUpdate.usageLevels[serviceName][usageLimitName].resetTimeStamp;
+      let currentResetTimeStamp =
+        contractToUpdate.usageLevels[serviceName][usageLimitName].resetTimeStamp;
 
       if (currentResetTimeStamp && isAfter(new Date(), currentResetTimeStamp)) {
         const pricing: LeanPricing = await this.serviceService.showPricing(
@@ -592,8 +644,11 @@ class ContractService {
       }
     }
 
-    const updatedContract = await this.contractRepository.update(contract.userContact.userId, contractToUpdate);
-    
+    const updatedContract = await this.contractRepository.update(
+      contract.userContact.userId,
+      contractToUpdate
+    );
+
     if (!updatedContract) {
       throw new Error(`Failed to update contract for userId ${contract.userContact.userId}`);
     }

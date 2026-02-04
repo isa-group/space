@@ -72,8 +72,14 @@ class CacheService {
       throw new Error('Redis client not initialized');
     }
 
-    const allKeys = await this.redisClient.keys(keyLocationPattern);
-    return allKeys;
+    const normalizedPattern = keyLocationPattern.toLowerCase().replace(/\*\*/g, '*');
+    const keys: string[] = [];
+
+    for await (const key of this.redisClient.scanIterator({ MATCH: normalizedPattern })) {
+      keys.push(key as string);
+    }
+
+    return keys;
   }
 
   async del(key: string) {

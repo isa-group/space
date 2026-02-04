@@ -394,7 +394,7 @@ function _validateAddOnQuantity(
 ): void {
   const quantity = selectedAddOns[addOnName];
   const minQuantity = pricing.addOns![addOnName].subscriptionConstraints?.minQuantity ?? 1;
-  const maxQuantity = pricing.addOns![addOnName].subscriptionConstraints?.maxQuantity ?? 1;
+  const maxQuantity = pricing.addOns![addOnName].subscriptionConstraints?.maxQuantity ?? Infinity;
   const quantityStep = pricing.addOns![addOnName].subscriptionConstraints?.quantityStep ?? 1;
 
   const isValidQuantity =
