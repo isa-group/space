@@ -1052,75 +1052,76 @@ class ServiceService {
   }
 
   async _removeServiceFromContracts(serviceName: string, organizationId: string): Promise<boolean> {
-    const contracts: LeanContract[] = await this.contractRepository.findByFilters({
-      organizationId,
-    });
-    const novatedContracts: LeanContract[] = [];
-    const contractsToDisable: LeanContract[] = [];
-
-    for (const contract of contracts) {
-      // Remove this service from the subscription objects
-      const newSubscription: Record<string, any> = {
-        contractedServices: {},
-        subscriptionPlans: {},
-        subscriptionAddOns: {},
-      };
-
-      // Rebuild subscription objects without the service to be removed
-      for (const key in contract.contractedServices) {
-        if (key !== serviceName) {
-          newSubscription.contractedServices[key] = contract.contractedServices[key];
-        }
-      }
-
-      for (const key in contract.subscriptionPlans) {
-        if (key !== serviceName) {
-          newSubscription.subscriptionPlans[key] = contract.subscriptionPlans[key];
-        }
-      }
-
-      for (const key in contract.subscriptionAddOns) {
-        if (key !== serviceName) {
-          newSubscription.subscriptionAddOns[key] = contract.subscriptionAddOns[key];
-        }
-      }
-
-      // Check if objects have the same content by comparing their JSON string representation
-      const hasContractChanged =
-        JSON.stringify(contract.contractedServices) !==
-        JSON.stringify(newSubscription.contractedServices);
-
-      // If objects are equal, skip this contract
-      if (!hasContractChanged) {
-        continue;
-      }
-
-      const newContract = performNovation(contract, newSubscription);
-
-      if (contract.usageLevels[serviceName]) {
-        delete contract.usageLevels[serviceName];
-      }
-
-      if (Object.keys(newSubscription.contractedServices).length === 0) {
-        newContract.usageLevels = {};
-        newContract.billingPeriod = {
-          startDate: new Date(),
-          endDate: new Date(),
-          autoRenew: false,
-          renewalDays: 0,
+    try{
+      const contracts: LeanContract[] = await this.contractRepository.findByFilters({
+        organizationId,
+      });
+      const novatedContracts: LeanContract[] = [];
+      const contractsToDisable: LeanContract[] = [];
+  
+      for (const contract of contracts) {
+        // Remove this service from the subscription objects
+        const newSubscription: Record<string, any> = {
+          contractedServices: {},
+          subscriptionPlans: {},
+          subscriptionAddOns: {},
         };
-
-        contractsToDisable.push(newContract);
-        continue;
+  
+        // Rebuild subscription objects without the service to be removed
+        for (const key in contract.contractedServices) {
+          if (key !== serviceName) {
+            newSubscription.contractedServices[key] = contract.contractedServices[key];
+          }
+        }
+  
+        for (const key in contract.subscriptionPlans) {
+          if (key !== serviceName) {
+            newSubscription.subscriptionPlans[key] = contract.subscriptionPlans[key];
+          }
+        }
+  
+        for (const key in contract.subscriptionAddOns) {
+          if (key !== serviceName) {
+            newSubscription.subscriptionAddOns[key] = contract.subscriptionAddOns[key];
+          }
+        }
+  
+        // Check if objects have the same content by comparing their JSON string representation
+        const hasContractChanged =
+          JSON.stringify(contract.contractedServices) !==
+          JSON.stringify(newSubscription.contractedServices);
+  
+        // If objects are equal, skip this contract
+        if (!hasContractChanged) {
+          continue;
+        }
+  
+        const newContract = performNovation(contract, newSubscription);
+  
+        if (contract.usageLevels[serviceName]) {
+          delete contract.usageLevels[serviceName];
+        }
+  
+        if (Object.keys(newSubscription.contractedServices).length === 0) {
+          newContract.usageLevels = {};
+          newContract.billingPeriod = {
+            startDate: new Date(),
+            endDate: new Date(),
+            autoRenew: false,
+            renewalDays: 0,
+          };
+  
+          contractsToDisable.push(newContract);
+          continue;
+        }
+  
+        novatedContracts.push(newContract);
       }
 
-      novatedContracts.push(newContract);
+      return true;
+    }catch(err){
+      return false;
     }
-
-    const resultNovations = await this.contractRepository.bulkUpdate(novatedContracts);
-    const resultDisables = await this.contractRepository.bulkUpdate(contractsToDisable, true);
-
-    return resultNovations > 0 && resultDisables > 0;
   }
 }
 

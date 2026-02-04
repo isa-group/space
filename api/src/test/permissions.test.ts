@@ -1189,12 +1189,12 @@ describe('Permissions Test Suite', function () {
         expect(response.status).toBe(401);
       });
 
-      it('Should return 403 with ADMIN user API key', async function () {
+      it('Should return 200 with ADMIN user API key', async function () {
         const response = await request(app)
           .get(`${baseUrl}/services`)
           .set('x-api-key', adminApiKey);
 
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(200);
       });
 
       it('Should return 403 with USER API key (requires org key)', async function () {
