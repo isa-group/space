@@ -162,6 +162,9 @@ class UserService {
         throw new Error('PERMISSION ERROR: There must always be at least one ADMIN user in the system.');
       }
     }
+    // Remove user from organizations and reassign/delete owned orgs when needed
+    await this.organizationService.removeUserFromOrganizations(username, { allowDeleteDefault: true, actingUser: reqUser });
+
     const result = await this.userRepository.destroy(username);
     if (!result) {
       throw new Error('INVALID DATA: User not found');

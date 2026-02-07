@@ -6,6 +6,7 @@ import { baseUrl, getApp, shutdownApp } from './utils/testApp';
 import { createTestUser, deleteTestUser } from './utils/users/userTestUtils';
 import OrganizationService from '../main/services/OrganizationService';
 import container from '../main/config/container';
+import { addMemberToOrganization, createTestOrganization, deleteTestOrganization } from './utils/organization/organizationTestUtils';
 
 describe('User API routes', function () {
   let app: Server;
@@ -13,10 +14,16 @@ describe('User API routes', function () {
   let adminApiKey: string;
   let organizationService: OrganizationService;
   const usersToCleanup: Set<string> = new Set();
+  const orgToCleanup: Set<string> = new Set();
 
   const trackUserForCleanup = (user?: any) => {
     if (user?.username && user.username !== adminUser?.username) {
       usersToCleanup.add(user.username);
+    }
+  };
+  const trackOrganizationForCleanup = (organization?: any) => {
+    if (organization?.id) {
+      orgToCleanup.add(organization.id);
     }
   };
 
@@ -31,7 +38,12 @@ describe('User API routes', function () {
     for (const username of usersToCleanup) {
       await deleteTestUser(username);
     }
+    
+    for (const id of orgToCleanup) {
+      await deleteTestOrganization(id);
+    }
     usersToCleanup.clear();
+    orgToCleanup.clear();
   });
 
   afterAll(async function () {
@@ -464,6 +476,126 @@ describe('User API routes', function () {
         .get(`${baseUrl}/users/${testUser.username}`)
         .set('x-api-key', adminApiKey);
       expect(getResponse.status).toBe(404);
+    });
+    
+    it('returns 204 when deleting a user and remove organization', async function () {
+      const testUser = await createTestUser('USER');
+      const testOrg = await createTestOrganization(testUser.username);
+      
+      trackUserForCleanup(testUser);
+      trackOrganizationForCleanup(testOrg);
+
+      await request(app)
+        .delete(`${baseUrl}/users/${testUser.username}`)
+        .set('x-api-key', adminApiKey).expect(204);
+      
+      const response = await request(app)
+        .get(`${baseUrl}/organizations/${testOrg.id}`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(404);
+    });
+    
+    it('returns 204 when deleting a user and transfer organization ownership to ADMIN', async function () {
+      const testUser = await createTestUser('USER');
+      const testUserAdmin = await createTestUser('USER');
+      const testUserManager = await createTestUser('USER');
+      const testOrg = await createTestOrganization(testUser.username);
+      await addMemberToOrganization(testOrg.id!, { username: testUserAdmin.username, role: 'ADMIN' });
+      await addMemberToOrganization(testOrg.id!, { username: testUserManager.username, role: 'MANAGER' });
+      
+      trackUserForCleanup(testUser);
+      trackUserForCleanup(testUserAdmin);
+      trackUserForCleanup(testUserManager);
+      trackOrganizationForCleanup(testOrg);
+
+      await request(app)
+        .delete(`${baseUrl}/users/${testUser.username}`)
+        .set('x-api-key', adminApiKey).expect(204);
+      
+      const response = await request(app)
+        .get(`${baseUrl}/organizations/${testOrg.id}`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(200);
+      expect(response.body.owner).toBe(testUserAdmin.username);
+    });
+    
+    it('returns 204 when deleting a user and transfer organization ownership to MANAGER', async function () {
+      const testUser = await createTestUser('USER');
+      const testUserManager = await createTestUser('USER');
+      const testUserEvaluator = await createTestUser('USER');
+      const testOrg = await createTestOrganization(testUser.username);
+      await addMemberToOrganization(testOrg.id!, { username: testUserManager.username, role: 'MANAGER' });
+      await addMemberToOrganization(testOrg.id!, { username: testUserEvaluator.username, role: 'EVALUATOR' });
+      
+      trackUserForCleanup(testUser);
+      trackUserForCleanup(testUserManager);
+      trackUserForCleanup(testUserEvaluator);
+      trackOrganizationForCleanup(testOrg);
+
+      await request(app)
+        .delete(`${baseUrl}/users/${testUser.username}`)
+        .set('x-api-key', adminApiKey).expect(204);
+      
+      const response = await request(app)
+        .get(`${baseUrl}/organizations/${testOrg.id}`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(200);
+      expect(response.body.owner).toBe(testUserManager.username);
+    });
+    
+    it('returns 204 when deleting a user and transfer organization ownership to EVALUATOR', async function () {
+      const testUser = await createTestUser('USER');
+      const testUserEvaluator = await createTestUser('USER');
+      const testOrg = await createTestOrganization(testUser.username);
+      await addMemberToOrganization(testOrg.id!, { username: testUserEvaluator.username, role: 'EVALUATOR' });
+      
+      trackUserForCleanup(testUser);
+      trackUserForCleanup(testUserEvaluator);
+      trackOrganizationForCleanup(testOrg);
+
+      await request(app)
+        .delete(`${baseUrl}/users/${testUser.username}`)
+        .set('x-api-key', adminApiKey).expect(204);
+      
+      const response = await request(app)
+        .get(`${baseUrl}/organizations/${testOrg.id}`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(200);
+      expect(response.body.owner).toBe(testUserEvaluator.username);
+    });
+    
+    it('returns 204 when deleting a user, removing organization and transfer organization ownership to EVALUATOR', async function () {
+      const testUser = await createTestUser('USER');
+      const testUserAdmin = await createTestUser('USER');
+      const testOrg1 = await createTestOrganization(testUser.username);
+      const testOrg2 = await createTestOrganization(testUser.username);
+      await addMemberToOrganization(testOrg2.id!, { username: testUserAdmin.username, role: 'ADMIN' });
+      
+      trackUserForCleanup(testUser);
+      trackUserForCleanup(testUserAdmin);
+      trackOrganizationForCleanup(testOrg1);
+      trackOrganizationForCleanup(testOrg2);
+
+      await request(app)
+        .delete(`${baseUrl}/users/${testUser.username}`)
+        .set('x-api-key', adminApiKey).expect(204);
+      
+      const responseOrg1 = await request(app)
+        .get(`${baseUrl}/organizations/${testOrg1.id}`)
+        .set('x-api-key', adminApiKey);
+
+      expect(responseOrg1.status).toBe(404);
+
+      const responseOrg2 = await request(app)
+        .get(`${baseUrl}/organizations/${testOrg2.id}`)
+        .set('x-api-key', adminApiKey);
+
+      expect(responseOrg2.status).toBe(200);
+      expect(responseOrg2.body.owner).toBe(testUserAdmin.username);
     });
 
     it('returns 404 when deleting a non-existent user', async function () {

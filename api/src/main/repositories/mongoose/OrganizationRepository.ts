@@ -26,6 +26,20 @@ class OrganizationRepository extends RepositoryBase {
   async findByOwner(owner: string): Promise<LeanOrganization[]> {
     const organizations = await OrganizationMongoose.find({ owner }).exec();
 
+    return organizations.map(org => {
+      const obj = org.toObject() as any;
+      return Object.assign({ id: org._id.toString() }, obj) as LeanOrganization;
+    });
+  }
+
+  async findByUser(username: string): Promise<LeanOrganization[]> {
+    const organizations = await OrganizationMongoose.find({
+      $or: [
+        { owner: username },
+        { 'members.username': username }
+      ]
+    }).exec();
+
     return organizations.map(org => org.toObject() as unknown as LeanOrganization);
   }
 

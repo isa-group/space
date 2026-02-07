@@ -395,6 +395,74 @@ class OrganizationService {
     await this.serviceService.prune(organizationId);
     await this.organizationRepository.delete(organizationId);
   }
+
+  /**
+   * Force delete an organization (bypass default protection). Used when owner is being deleted.
+   */
+  async forceDelete(organizationId: string): Promise<void> {
+    await this.serviceService.prune(organizationId);
+    await this.organizationRepository.delete(organizationId);
+  }
+
+  /**
+   * Remove a user from all organizations.
+   * - Removes user from members lists
+   * - For organizations owned by the user: transfer ownership to next ADMIN, MANAGER, EVALUATOR (in that order)
+   *   or delete the organization if no candidates. When `allowDeleteDefault` is true, default orgs can be deleted.
+   */
+  async removeUserFromOrganizations(username: string, options?: { allowDeleteDefault?: boolean, actingUser?: any }): Promise<void> {
+    const allowDeleteDefault = options?.allowDeleteDefault || false;
+
+    // Get organizations where the user is owner or member
+    const allOrgs = await this.organizationRepository.findByUser(username);
+
+    for (const org of allOrgs) {
+      const orgId = (org as any).id as string | undefined;
+
+      // If user is a member, remove them
+      const isMember = (org.members || []).some(m => m.username === username);
+      if (isMember && orgId) {
+        try {
+          await this.organizationRepository.removeMember(orgId, username);
+        } catch (err) {
+          // ignore if not present or race
+        }
+      }
+
+      // If user is owner, handle transfer or deletion
+      if (org.owner === username) {
+        const members = org.members || [];
+        // Candidates exclude owner
+        const candidates = members.filter((m: any) => m.username !== username);
+
+        let newOwner: string | undefined;
+        if (candidates.length > 0) {
+          const adminCandidate = candidates.find((m: any) => m.role === 'ADMIN');
+          const managerCandidate = candidates.find((m: any) => m.role === 'MANAGER');
+          const evaluatorCandidate = candidates.find((m: any) => m.role === 'EVALUATOR');
+
+          newOwner = (adminCandidate || managerCandidate || evaluatorCandidate)?.username;
+        }
+
+        if (newOwner && orgId) {
+          // change owner and ensure the old owner is removed from members
+          await this.organizationRepository.changeOwner(orgId, newOwner);
+          try {
+            await this.organizationRepository.removeMember(orgId, username);
+          } catch (err) {
+            // ignore
+          }
+        } else if (orgId) {
+          // No candidates: delete org. Allow deletion of default when explicitly permitted.
+          if (org.default && !allowDeleteDefault) {
+            // If default deletion is not allowed, skip transfer/delete — leave org owned by deleted user (edge case)
+            continue;
+          }
+          await this.forceDelete(orgId);
+        }
+      }
+    }
+  }
 }
 
 export default OrganizationService;
