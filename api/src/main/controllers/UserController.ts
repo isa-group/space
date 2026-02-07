@@ -87,7 +87,7 @@ class UserController {
 
   async regenerateApiKey(req: any, res: any) {
     try {
-      const newApiKey = await this.userService.regenerateApiKey(req.params.username);
+      const newApiKey = await this.userService.regenerateApiKey(req.params.username, req.user);
       res.json({ apiKey: newApiKey });
     } catch (err: any) {
       if (

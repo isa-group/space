@@ -94,8 +94,13 @@ class UserService {
     return await this.userRepository.update(username, userData);
   }
 
-  async regenerateApiKey(username: string): Promise<string> {
+  async regenerateApiKey(username: string, reqUser: LeanUser): Promise<string> {
     const newApiKey = await this.userRepository.regenerateApiKey(username);
+    
+    if (reqUser.username !== username && reqUser.role !== 'ADMIN') {
+      throw new Error('PERMISSION ERROR: Only admins can regenerate API keys for other users.');
+    }
+    
     if (!newApiKey) {
       throw new Error('API Key could not be regenerated');
     }
@@ -106,6 +111,10 @@ class UserService {
     
     if (creatorData.role !== 'ADMIN' && role === 'ADMIN') {
       throw new Error('PERMISSION ERROR: Only admins can assign the role ADMIN.');
+    }
+
+    if (creatorData.role === 'USER' && creatorData.username !== username){
+      throw new Error('PERMISSION ERROR: Only admins can change roles for other users.');
     }
     
     const user = await this.userRepository.findByUsername(username);

@@ -359,13 +359,27 @@ describe('User API routes', function () {
       expect(response.status).toBe(401);
       expect(response.body.error).toContain('API Key');
     });
+    
+    it('returns 403 when USER tries to regenerate API Key for another user', async function () {
+      
+      const testUser = await createTestUser('USER');
+      const sandboxUser = await createTestUser('USER');
 
-    it('returns 500 when user does not exist', async function () {
+      
+      const response = await request(app)
+        .put(`${baseUrl}/users/${sandboxUser.username}/api-key`)
+        .set('x-api-key', testUser.apiKey);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('returns 404 when user does not exist', async function () {
       const response = await request(app)
         .put(`${baseUrl}/users/non_existing_user/api-key`)
         .set('x-api-key', adminApiKey);
 
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(404);
       expect(response.body.error).toBeDefined();
     });
   });
