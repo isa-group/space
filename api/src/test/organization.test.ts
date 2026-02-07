@@ -1061,7 +1061,7 @@ describe('Organization API Test Suite', function () {
     });
   });
 
-  describe('DELETE /organizations/members/:username', function () {
+  describe('DELETE /organizations/:organizationId/members/:username', function () {
     let testOrganization: LeanOrganization;
     let ownerUser: any;
     let adminUser: any;
