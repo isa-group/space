@@ -6,9 +6,9 @@ class OrganizationController {
 
   constructor() {
     this.organizationService = container.resolve('organizationService');
-    this.getAllOrganizations = this.getAllOrganizations.bind(this);
-    this.getOrganizationById = this.getOrganizationById.bind(this);
-    this.createOrganization = this.createOrganization.bind(this);
+    this.getAll = this.getAll.bind(this);
+    this.getById = this.getById.bind(this);
+    this.create = this.create.bind(this);
     this.addMember = this.addMember.bind(this);
     this.update = this.update.bind(this);
     this.addApiKey = this.addApiKey.bind(this);
@@ -17,7 +17,7 @@ class OrganizationController {
     this.delete = this.delete.bind(this);
   }
 
-  async getAllOrganizations(req: any, res: any) {
+  async getAll(req: any, res: any) {
     try {
       // Allows non-admin users to only see their own organizations
       if (req.user.role !== 'ADMIN') {
@@ -35,7 +35,7 @@ class OrganizationController {
     }
   }
 
-  async getOrganizationById(req: any, res: any) {
+  async getById(req: any, res: any) {
     try {
       const organizationId = req.params.organizationId;
       const organization = await this.organizationService.findById(organizationId);
@@ -53,7 +53,7 @@ class OrganizationController {
     }
   }
 
-  async createOrganization(req: any, res: any) {
+  async create(req: any, res: any) {
     try {
       const organizationData = req.body;
       const organization = await this.organizationService.create(organizationData, req.user);
@@ -64,6 +64,9 @@ class OrganizationController {
       }
       if (err.message.includes('does not exist') || err.message.includes('not found')) {
         return res.status(400).send({ error: err.message });
+      }
+      if (err.message.includes('CONFLICT')) {
+        return res.status(409).send({ error: err.message });
       }
       res.status(500).send({ error: err.message });
     }
@@ -115,6 +118,9 @@ class OrganizationController {
       }
       if (err.message.includes('INVALID DATA') || err.message.includes('does not exist')) {
         return res.status(400).send({ error: err.message });
+      }
+      if (err.message.includes('CONFLICT')) {
+        return res.status(409).send({ error: err.message });
       }
       res.status(500).send({ error: err.message });
     }
@@ -207,6 +213,9 @@ class OrganizationController {
     } catch (err: any) {
       if (err.message.includes('PERMISSION ERROR')) {
         return res.status(403).send({ error: err.message });
+      }
+      if (err.message.includes('CONFLICT')) {
+        return res.status(409).send({ error: err.message });
       }
       res.status(500).send({ error: err.message });
     }

@@ -12,6 +12,7 @@ const organizationSchema = new Schema(
       ref: 'User',
       required: true
     },
+    default: { type: Boolean, default: false },
     apiKeys: { type: [OrganizationApiKey], default: [] },
     members: {
       type: [OrganizationUser],

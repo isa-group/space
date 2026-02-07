@@ -72,7 +72,15 @@ class OrganizationService {
       throw new Error('Only admins can create organizations for other users.');
     }
 
-    organizationData = {
+    if (organizationData.default) {
+      const proposedOwnerDefaultOrg = await this.organizationRepository.findAll({ owner: proposedOwner.username, default: true });
+  
+      if (proposedOwnerDefaultOrg.length > 0) {
+        throw new Error(`CONFLICT: The proposed owner ${proposedOwner.username} already has a default organization.`);
+      }
+    }
+
+    const organizationPayload: any = {
       name: organizationData.name,
       owner: organizationData.owner,
       apiKeys: [
@@ -82,9 +90,10 @@ class OrganizationService {
         },
       ],
       members: [],
+      default: organizationData.default || false,
     };
 
-    const organization = await this.organizationRepository.create(organizationData);
+    const organization = await this.organizationRepository.create(organizationPayload);
     return organization;
   }
 
@@ -246,6 +255,20 @@ class OrganizationService {
       organization.owner = updateData.owner;
     }
 
+    if (updateData.default !== undefined) {
+      if (typeof updateData.default !== 'boolean') {
+        throw new Error('INVALID DATA: Invalid organization default flag.');
+      }
+
+      const proposedOwnerDefaultOrg = await this.organizationRepository.findAll({ owner: organization.owner, default: true });
+  
+      if (proposedOwnerDefaultOrg.length > 0) {
+        throw new Error(`CONFLICT: The proposed owner ${organization.owner} already has a default organization.`);
+      }
+
+      organization.default = updateData.default;
+    }
+
     await this.organizationRepository.update(organizationId, updateData);
   }
 
@@ -354,6 +377,10 @@ class OrganizationService {
     
     if (!organization) {
       throw new Error(`INVALID DATA: Organization with ID ${organizationId} does not exist.`);
+    }
+
+    if (organization.default) {
+      throw new Error('CONFLICT: The default organization for a user cannot be deleted.');
     }
 
     if (

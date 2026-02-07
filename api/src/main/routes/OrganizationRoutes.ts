@@ -13,11 +13,11 @@ const loadFileRoutes = function (app: express.Application) {
   // Public route for authentication (does not require API Key)
   app
     .route(`${baseUrl}/organizations/`)
-    .get(organizationController.getAllOrganizations)
+    .get(organizationController.getAll)
     .post(
       OrganizationValidation.create,
       handleValidation,
-      organizationController.createOrganization
+      organizationController.create
     );
 
   app
@@ -25,7 +25,7 @@ const loadFileRoutes = function (app: express.Application) {
     .get(
       OrganizationValidation.getById,
       handleValidation,
-      organizationController.getOrganizationById
+      organizationController.getById
     )
     .put(OrganizationValidation.update, handleValidation, isOrgOwner, organizationController.update)
     .delete(
