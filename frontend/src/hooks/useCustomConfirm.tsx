@@ -3,10 +3,10 @@ import CustomConfirm from '../components/CustomConfirm';
 
 export type CustomConfirmType = 'info' | 'warning' | 'danger';
 
-export function useCustomConfirm(): [
-  (msg: string, type?: CustomConfirmType) => Promise<boolean>,
-  JSX.Element | null
-] {
+export function useCustomConfirm(): {
+  showConfirm: (msg: string, type?: CustomConfirmType) => Promise<boolean>,
+  confirmElement: JSX.Element | null
+} {
   const [confirm, setConfirm] = useState<
     { message: string; type: CustomConfirmType; resolve: (result: boolean) => void } | null
   >(null);
@@ -41,5 +41,5 @@ export function useCustomConfirm(): [
       />
     );
 
-  return [showConfirm, confirmElement];
+  return {showConfirm, confirmElement};
 }

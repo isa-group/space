@@ -115,3 +115,19 @@ export async function createUser(apiKey: string, user: { username: string; passw
       );
     });
 }
+
+export async function registerUser(user: { username: string; password: string }) {
+  return axios
+    .post('/users', { ...user, role: 'USER' }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: DEFAULT_TIMEOUT,
+    })
+    .then(response => response.data)
+    .catch(error => {
+      throw new Error(
+        'Failed to register user. ' + (error.response?.data?.error || error.message)
+      );
+    });
+}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { addPricingVersion } from '@/api/services/servicesApi';
 import useAuth from '@/hooks/useAuth';
+import { useOrganization } from '@/hooks/useOrganization';
 import type { Service } from '@/types/Services';
 import FileOrUrlInput from './FileOrUrlInput';
 
@@ -18,12 +19,18 @@ export default function AddVersionModal({ open, onClose, serviceName }: AddVersi
   // drag/drop state moved to FileOrUrlInput
 
   const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
 
   // file validation is handled inside FileOrUrlInput; only state updates are used here
 
   // drag/drop handled by FileOrUrlInput
 
   const handleUpload = () => {
+    if (!currentOrganization?.id) {
+      setError('No organization selected.');
+      return;
+    }
+
     if (!file && !url) {
       setError('Please select a .yml/.yaml file or provide a valid URL.');
       return;
@@ -41,7 +48,7 @@ export default function AddVersionModal({ open, onClose, serviceName }: AddVersi
     setError('');
     const payload: File | string = file ?? url;
 
-    addPricingVersion(user.apiKey, serviceName, payload)
+    addPricingVersion(user.apiKey, currentOrganization.id, serviceName, payload)
       .then((service: Service) => {
         setFile(null);
         setUrl('');

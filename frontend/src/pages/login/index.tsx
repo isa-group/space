@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router';
 import SpaceCard from '../../components/space-card';
 import LightBackground from '../../layouts/background';
 import loginImage from '../../static/images/login-image.webp';
@@ -12,6 +13,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
 
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,6 +87,15 @@ export default function LoginPage() {
           >
             Log In
           </motion.button>
+          <div className="text-center mt-4">
+            <button
+              type="button"
+              onClick={() => navigate('/register')}
+              className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-sm font-medium transition-colors"
+            >
+              Don't have an account? Register here
+            </button>
+          </div>
         </motion.form>
       </SpaceCard>
     </LightBackground>

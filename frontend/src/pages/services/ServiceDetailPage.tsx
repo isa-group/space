@@ -6,6 +6,7 @@ import {
   getPricingsFromService,
 } from '@/api/services/servicesApi';
 import useAuth from '@/hooks/useAuth';
+import { useOrganization } from '@/hooks/useOrganization';
 import { motion } from 'framer-motion';
 import DragDropPricings from '../../components/drag-and-drop-pricings';
 import type { Pricing, Service } from '@/types/Services';
@@ -17,6 +18,7 @@ import { useCustomConfirm } from '@/hooks/useCustomConfirm';
 export default function ServiceDetailPage() {
   const { name } = useParams<{ name: string }>();
   const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
   const [activePricings, setActivePricings] = useState<Pricing[]>([]);
   const [archivedPricings, setArchivedPricings] = useState<Pricing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,11 +32,12 @@ export default function ServiceDetailPage() {
   const router = useNavigate();
 
   useEffect(() => {
+    if (!currentOrganization?.id) return;
     let mounted = true;
     setLoading(true);
     Promise.all([
-      getPricingsFromService(user.apiKey, name!, 'active'),
-      getPricingsFromService(user.apiKey, name!, 'archived'),
+      getPricingsFromService(user.apiKey, currentOrganization.id, name!, 'active'),
+      getPricingsFromService(user.apiKey, currentOrganization.id, name!, 'archived'),
     ]).then(([active, archived]) => {
       if (mounted) {
         setActivePricings(active);
@@ -45,7 +48,7 @@ export default function ServiceDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [name, user.apiKey]);
+  }, [name, user.apiKey, currentOrganization?.id]);
 
   function handleMove(pricing: Pricing, to: 'active' | 'archived' | 'deleted') {
     if (to === 'deleted') {
@@ -62,8 +65,8 @@ export default function ServiceDetailPage() {
   }
 
   function confirmArchive() {
-    if (!confirm) return;
-    changePricingAvailability(user.apiKey, name!, confirm.pricing.version, confirm.to)
+    if (!confirm || !currentOrganization?.id) return;
+    changePricingAvailability(user.apiKey, currentOrganization.id, name!, confirm.pricing.version, confirm.to)
       .then(() => {
         if (confirm.to === 'archived') {
           setActivePricings(activePricings.filter(p => p.version !== confirm.pricing.version));
@@ -81,10 +84,10 @@ export default function ServiceDetailPage() {
   }
 
   async function handleAddVersionClose(service?: Service) {
-    if (service) {
+    if (service && currentOrganization?.id) {
       const [serviceActivePricings, serviceArchivedPricings] = await Promise.all([
-        getPricingsFromService(user.apiKey, service.name, 'active'),
-        getPricingsFromService(user.apiKey, service.name, 'archived'),
+        getPricingsFromService(user.apiKey, currentOrganization.id, service.name, 'active'),
+        getPricingsFromService(user.apiKey, currentOrganization.id, service.name, 'archived'),
       ]);
 
       // Actualizar las listas de precios después de agregar una nueva versión
@@ -97,12 +100,13 @@ export default function ServiceDetailPage() {
 
   // Handler para el menú de opciones
   function handleDisableService() {
+    if (!currentOrganization?.id) return;
     showConfirm(
       `Are you sure you want to disable service ${name}? This action is potentially destructive. It will remove this service from all contracts. Any contract that includes only this service will be deactivated.`,
       'danger'
     ).then(confirmed => {
-      if (confirmed) {
-        disableService(user.apiKey, name!)
+      if (confirmed && currentOrganization?.id) {
+        disableService(user.apiKey, currentOrganization.id, name!)
           .then(async isDisabled => {
             if (!isDisabled) {
               await showAlert(`Service ${name} could not be disabled. Please try again later.`);

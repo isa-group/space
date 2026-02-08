@@ -1,11 +1,13 @@
 import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router";
 import MainPage from "../pages/main";
 import LoggedLayout from "@/layouts/logged-view";
-import UsersPage from "@/pages/users";
+import MembersPage from "@/pages/members";
+import ApiKeysPage from "@/pages/api-keys";
 import ServicesPage from "@/pages/services";
 import ServiceDetailPage from "@/pages/services/ServiceDetailPage";
 import SettingsPage from "@/pages/settings";
 import ContractsDashboard from "@/pages/contracts/ContractsDashboard";
+import RegisterPage from "@/pages/register";
 import useAuth from "@/hooks/useAuth";
 import type { ReactNode } from "react";
 
@@ -23,8 +25,10 @@ export function SpaceRouter() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<MainPage/>}/>
-  <Route path="/contracts/dashboard" element={<RequireAuth><LoggedLayout><ContractsDashboard/></LoggedLayout></RequireAuth>} />
-        <Route path="/users" element={<RequireAuth><LoggedLayout><UsersPage/></LoggedLayout></RequireAuth>}/>
+        <Route path="/register" element={<RegisterPage/>}/>
+        <Route path="/contracts/dashboard" element={<RequireAuth><LoggedLayout><ContractsDashboard/></LoggedLayout></RequireAuth>} />
+        <Route path="/members" element={<RequireAuth><LoggedLayout><MembersPage/></LoggedLayout></RequireAuth>}/>
+        <Route path="/api-keys" element={<RequireAuth><LoggedLayout><ApiKeysPage/></LoggedLayout></RequireAuth>}/>
         <Route path="/services" element={<RequireAuth><LoggedLayout><ServicesPage/></LoggedLayout></RequireAuth>}/>
         <Route path="/services/:name" element={<RequireAuth><LoggedLayout><ServiceDetailPage/></LoggedLayout></RequireAuth>}/>
         <Route path="/settings" element={<RequireAuth><LoggedLayout><SettingsPage/></LoggedLayout></RequireAuth>}/>

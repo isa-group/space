@@ -1,5 +1,6 @@
 // React import not required with the new JSX transform
 import useAuth from '@/hooks/useAuth';
+import { useOrganization } from '@/hooks/useOrganization';
 import useContracts from '@/hooks/useContracts';
 import { useEffect, useState, useMemo } from 'react';
 import { getServices, getPricingsFromService } from '@/api/services/servicesApi';
@@ -11,6 +12,7 @@ import ContractsTable from '@/components/contracts/ContractsTable';
 
 export default function ContractsDashboard() {
   const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
   const apiKey = user?.apiKey ?? '';
   const {
     contracts,
@@ -22,7 +24,7 @@ export default function ContractsDashboard() {
     total,
     serviceFilter,
     setServiceFilter,
-  } = useContracts(apiKey);
+  } = useContracts(apiKey, currentOrganization?.id);
 
   const [availableServices, setAvailableServices] = useState<string[]>([]);
   const [selectedService, setSelectedService] = useState<string | undefined>(serviceFilter);
@@ -30,8 +32,8 @@ export default function ContractsDashboard() {
   const [selectedVersion, setSelectedVersion] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    if (!apiKey) return;
-    getServices(apiKey).then(list => {
+    if (!apiKey || !currentOrganization) return;
+    getServices(apiKey, currentOrganization.id).then(list => {
       const names = (list || []).map((s: any) => s.name).filter(Boolean);
       setAvailableServices(names);
       // auto-select the first service by default (do not provide an "All services" option)
@@ -41,21 +43,21 @@ export default function ContractsDashboard() {
         setSelectedService(undefined);
       }
     }).catch(() => setAvailableServices([]));
-  }, [apiKey]);
+  }, [apiKey, currentOrganization]);
 
   useEffect(() => {
     // when selectedService changes, fetch its pricing versions
-    if (!apiKey || !selectedService) {
+    if (!apiKey || !currentOrganization || !selectedService) {
       setAvailableVersions([]);
       setSelectedVersion(undefined);
       return;
     }
-    getPricingsFromService(apiKey, selectedService, 'active')
+    getPricingsFromService(apiKey, currentOrganization.id, selectedService, 'active')
       .then(pricings => {
         setAvailableVersions(pricings.map(p => p.version));
       })
       .catch(() => setAvailableVersions([]));
-  }, [apiKey, selectedService]);
+  }, [apiKey, currentOrganization, selectedService]);
 
   // keep hook filter in sync with selectedService
   useEffect(() => {

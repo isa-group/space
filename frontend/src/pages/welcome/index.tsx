@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FiLayers, FiFileText, FiServer } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import useAuth from '../../hooks/useAuth';
+import { useOrganization } from '@/hooks/useOrganization';
 import {
   getContractsCount,
   getServicesCount,
@@ -14,6 +15,7 @@ import LineChartCard from '@/components/LineChartCard';
 
 export default function WelcomePage() {
   const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
   const [stats, setStats] = useState({
     contracts: undefined as number | undefined,
     services: undefined as number | undefined,
@@ -24,12 +26,14 @@ export default function WelcomePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!currentOrganization?.id) return;
+    
     let mounted = true;
     setLoading(true);
     Promise.all([
-      getContractsCount(user.apiKey),
-      getServicesCount(user.apiKey),
-      getActivePricingsCount(user.apiKey),
+      getContractsCount(user.apiKey, currentOrganization.id),
+      getServicesCount(user.apiKey, currentOrganization.id),
+      getActivePricingsCount(user.apiKey, currentOrganization.id),
       getApiCallsStats(user.apiKey),
       getEvaluationsStats(user.apiKey),
     ]).then(([contracts, services, pricings, apiCalls, evaluations]) => {
@@ -41,7 +45,7 @@ export default function WelcomePage() {
     return () => {
       mounted = false;
     };
-  }, [user.apiKey]);
+  }, [user.apiKey, currentOrganization?.id]);
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 py-10 px-2">

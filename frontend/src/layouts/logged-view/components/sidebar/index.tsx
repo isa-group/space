@@ -1,19 +1,22 @@
 import { motion } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router';
 import useAuth from '@/hooks/useAuth';
-import { FiHome, FiUsers, FiServer, FiSettings, FiChevronRight } from 'react-icons/fi';
+import { FiHome, FiUsers, FiServer, FiSettings, FiChevronRight, FiKey } from 'react-icons/fi';
 import { AiOutlineDashboard } from 'react-icons/ai';
+import OrganizationSelector from '@/components/OrganizationSelector';
 
 const tabs = [
   { label: 'Overview', path: '/', icon: <FiHome size={22} /> },
   { label: 'Contracts Dashboard', path: '/contracts/dashboard', icon: <AiOutlineDashboard size={22}/> },
-  { label: 'Access Control', path: '/users', icon: <FiUsers size={22} /> },
+  { label: 'Members', path: '/members', icon: <FiUsers size={22} /> },
+  { label: 'API Keys', path: '/api-keys', icon: <FiKey size={22} /> },
   { label: 'Services Management', path: '/services', icon: <FiServer size={22} /> },
   { label: 'Settings', path: '/settings', icon: <FiSettings size={22} /> },
 ];
 
 function getSelectedTab(pathname: string) {
-  if (pathname.startsWith('/users')) return '/users';
+  if (pathname.startsWith('/members')) return '/members';
+  if (pathname.startsWith('/api-keys')) return '/api-keys';
   if (pathname.startsWith('/services')) return '/services';
   if (pathname.startsWith('/settings')) return '/settings';
   if (pathname.startsWith('/contracts/dashboard')) return '/contracts/dashboard';
@@ -65,7 +68,10 @@ export default function Sidebar({
         </div>
         {!collapsed && <div className="w-full border-b border-gray-200 my-4" />}
       </div>
-      <nav className="flex-1 flex flex-col gap-2 mt-8">
+      
+      <OrganizationSelector collapsed={collapsed} />
+      
+      <nav className="flex-1 flex flex-col gap-2 mt-4">
         {tabs.map(tab => (
           <button
             key={tab.path}
