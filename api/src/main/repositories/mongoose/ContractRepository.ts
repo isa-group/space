@@ -149,6 +149,62 @@ class ContractRepository extends RepositoryBase {
     return contract ? toPlainObject<LeanContract>(contract.toJSON()) : null;
   }
 
+  async changeServiceName(oldServiceName: string, newServiceName: string, organizationId: string): Promise<number> {
+    const oldServiceKey = oldServiceName.toLowerCase();
+    const newServiceKey = newServiceName.toLowerCase();
+
+    const result = await ContractMongoose.updateMany(
+      {
+        organizationId,
+        [`contractedServices.${oldServiceKey}`]: { $exists: true }
+      },
+      [
+        {
+          $set: {
+            contractedServices: {
+              $arrayToObject: {
+                $map: {
+                  input: { $objectToArray: '$contractedServices' },
+                  as: 'item',
+                  in: {
+                    k: { $cond: [{ $eq: ['$$item.k', oldServiceKey] }, newServiceKey, '$$item.k'] },
+                    v: '$$item.v'
+                  }
+                }
+              }
+            },
+            subscriptionPlans: {
+              $arrayToObject: {
+                $map: {
+                  input: { $objectToArray: '$subscriptionPlans' },
+                  as: 'item',
+                  in: {
+                    k: { $cond: [{ $eq: ['$$item.k', oldServiceKey] }, newServiceKey, '$$item.k'] },
+                    v: '$$item.v'
+                  }
+                }
+              }
+            },
+            subscriptionAddOns: {
+              $arrayToObject: {
+                $map: {
+                  input: { $objectToArray: '$subscriptionAddOns' },
+                  as: 'item',
+                  in: {
+                    k: { $cond: [{ $eq: ['$$item.k', oldServiceKey] }, newServiceKey, '$$item.k'] },
+                    v: '$$item.v'
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    );
+
+    return result.modifiedCount;
+  }
+
   async bulkUpdate(contracts: LeanContract[], disable = false): Promise<number> {
     if (contracts.length === 0) {
       return 0;

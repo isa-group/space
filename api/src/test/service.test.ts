@@ -11,10 +11,14 @@ import {
   deleteTestService,
   getRandomPricingFile,
   getService,
+  createMultipleTestServices,
+  getPricingFromService,
 } from './utils/services/serviceTestUtils';
 import { retrievePricingFromPath } from 'pricing4ts/server';
 import { ExpectedPricingType, LeanUsageLimit } from '../main/types/models/Pricing';
-import { createTestContract } from './utils/contracts/contractTestUtils';
+import { createTestContract, deleteTestContract, getAllContracts, getContractByUserId } from './utils/contracts/contractTestUtils';
+import { generateContract } from './utils/contracts/generators';
+import { LeanContract } from '../main/types/models/Contract';
 import { isSubscriptionValid } from '../main/controllers/validation/ContractValidation';
 import { createTestUser, deleteTestUser } from './utils/users/userTestUtils';
 import { LeanService } from '../main/types/models/Service';
@@ -167,51 +171,392 @@ describe('Services API Test Suite', function () {
   });
 
   describe('PUT /services/{serviceName}', function () {
+    let contractsToCleanup: Set<string> = new Set();
+
     afterEach(async function () {
+      // Reset service name if it was changed
       await request(app)
         .put(`${baseUrl}/services/${testService.name.toLowerCase()}`)
         .set('x-api-key', testApiKey)
-        .send({ name: testService });
+        .send({ name: testService.name })
+        .catch(() => {}); // Ignore errors if service was deleted
+
+      // Cleanup contracts
+      for (const userId of contractsToCleanup) {
+        await deleteTestContract(userId, app);
+      }
+      contractsToCleanup.clear();
     });
 
-    it('Should return 200 and the updated service', async function () {
-      const newName = 'new name for service';
+    // ======== POSITIVE TESTS ========
+
+    it('Should return 200 and change service name without contracts', async function () {
+      const newName = 'updated-service-name-' + Date.now();
 
       const serviceBeforeUpdate = await getService(testOrganization.id!, testService.name, app);
       expect(serviceBeforeUpdate.name.toLowerCase()).toBe(testService.name.toLowerCase());
+
       const responseUpdate = await request(app)
         .put(`${baseUrl}/services/${testService.name.toLowerCase()}`)
         .set('x-api-key', testApiKey)
         .send({ name: newName });
+
       expect(responseUpdate.status).toEqual(200);
       expect(responseUpdate.body).toBeDefined();
       expect(responseUpdate.body.name).toEqual(newName);
+      expect(responseUpdate.body.organizationId).toEqual(testOrganization.id);
 
-      await request(app)
-        .put(`${baseUrl}/services/${responseUpdate.body.name.toLowerCase()}`)
-        .set('x-api-key', testApiKey)
-        .send({ name: testService.name });
+      // Verify service was renamed
+      const serviceAfterUpdate = await getService(testOrganization.id!, newName, app);
+      expect(serviceAfterUpdate.name).toEqual(newName);
 
-      const serviceAfterUpdate = await getService(testOrganization.id!, testService.name, app);
-      expect(serviceAfterUpdate.name.toLowerCase()).toBe(testService.name.toLowerCase());
+      // Update testService reference for cleanup
+      testService.name = newName;
     });
-    
-    it('Should return 200 and change service organization', async function () {
-      const newOrganization =  await createTestOrganization(ownerUser.username);
+
+    it('Should return 200 and update service name in existing contracts', async function () {
+      const newServiceName = 'renamed-service-' + Date.now();
+      
+      // Create a contract that uses this service
+      const contractData = await generateContract(
+        { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        testOrganization.id!,
+        undefined,
+        app
+      );
+      const createResponse = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send(contractData);
+
+      expect(createResponse.status).toEqual(201);
+      const contractBefore = createResponse.body as LeanContract;
+      contractsToCleanup.add(contractBefore.userContact.userId);
+      
+      // Verify contract has the service
+      expect(contractBefore.contractedServices).toHaveProperty(testService.name.toLowerCase());
+
+      // Update service name
+      const updateResponse = await request(app)
+        .put(`${baseUrl}/services/${testService.name.toLowerCase()}`)
+        .set('x-api-key', testApiKey)
+        .send({ name: newServiceName });
+
+      expect(updateResponse.status).toEqual(200);
+      expect(updateResponse.body.name).toEqual(newServiceName);
+
+      // Verify contract was updated with new service name
+      const contractAfter = await getContractByUserId(contractBefore.userContact.userId, app);
+      expect(contractAfter.contractedServices).toHaveProperty(newServiceName.toLowerCase());
+      expect(contractAfter.contractedServices).not.toHaveProperty(testService.name.toLowerCase());
+      expect(contractAfter.subscriptionPlans).toHaveProperty(newServiceName.toLowerCase());
+      expect(contractAfter.subscriptionPlans).not.toHaveProperty(testService.name.toLowerCase());
+
+      // Update testService reference for cleanup
+      testService.name = newServiceName;
+    });
+
+    it('Should return 200 and change service organization (no contracts)', async function () {
+      const newOrganization = await createTestOrganization(ownerUser.username);
+      const newOrgApiKey = generateOrganizationApiKey();
+      await addApiKeyToOrganization(newOrganization.id!, { key: newOrgApiKey, scope: 'ALL' });
 
       const serviceBeforeUpdate = await getService(testOrganization.id!, testService.name, app);
-      expect(serviceBeforeUpdate.name.toLowerCase()).toBe(testService.name.toLowerCase());
+      expect(serviceBeforeUpdate.organizationId).toEqual(testOrganization.id);
+
       const responseUpdate = await request(app)
         .put(`${baseUrl}/services/${testService.name.toLowerCase()}`)
         .set('x-api-key', testApiKey)
         .send({ organizationId: newOrganization.id });
-      
-        expect(responseUpdate.status).toEqual(200);
-      expect(responseUpdate.body).toBeDefined();
+
+      expect(responseUpdate.status).toEqual(200);
       expect(responseUpdate.body.organizationId).toEqual(newOrganization.id);
+
+      // Verify service is now in new organization
+      const serviceAfterUpdate = await getService(newOrganization.id!, testService.name, app);
+      expect(serviceAfterUpdate.organizationId).toEqual(newOrganization.id);
+
+      // Update reference
+      testOrganization = newOrganization;
+      testApiKey = newOrgApiKey;
+
+      await deleteTestOrganization(newOrganization.id!);
+    });
+
+    it('Should return 200 and move contract with single service to new organization', async function () {
+      const newOrganization = await createTestOrganization(ownerUser.username);
+      const newOrgApiKey = generateOrganizationApiKey();
+      await addApiKeyToOrganization(newOrganization.id!, { key: newOrgApiKey, scope: 'ALL' });
+
+      // Create contract with ONLY this service
+      const contractData = await generateContract(
+        { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        testOrganization.id!,
+        undefined,
+        app
+      );
+      const createResponse = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send(contractData);
+
+      expect(createResponse.status).toEqual(201);
+      const contractBefore = createResponse.body as LeanContract;
+      contractsToCleanup.add(contractBefore.userContact.userId);
+      expect(Object.keys(contractBefore.contractedServices).length).toEqual(1);
+      expect(contractBefore.organizationId).toEqual(testOrganization.id);
+
+      // Move service to new organization
+      const updateResponse = await request(app)
+        .put(`${baseUrl}/services/${testService.name.toLowerCase()}`)
+        .set('x-api-key', testApiKey)
+        .send({ organizationId: newOrganization.id });
+
+      expect(updateResponse.status).toEqual(200);
+      expect(updateResponse.body.organizationId).toEqual(newOrganization.id);
+
+      // Verify contract was moved to new organization
+      const contractAfter = await getContractByUserId(contractBefore.userContact.userId, app);
+      expect(contractAfter.organizationId).toEqual(newOrganization.id);
+      expect(contractAfter.contractedServices).toHaveProperty(testService.name.toLowerCase());
+
+      // Update references
+      testOrganization = newOrganization;
+      testApiKey = newOrgApiKey;
+
+      await deleteTestOrganization(newOrganization.id!);
+    });
+
+    it('Should return 200 and remove service from multi-service contract', async function () {
+      // Create additional service in same organization
+      const additionalService = await createTestService(testOrganization.id);
+
+      // Create contract with MULTIPLE services
+      const contractData = await generateContract(
+        {
+          [testService.name.toLowerCase()]: testService.activePricings.keys().next().value!,
+          [additionalService.name.toLowerCase()]: additionalService.activePricings.keys().next().value!,
+        },
+        testOrganization.id!,
+        undefined,
+        app
+      );
+      const createResponse = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send(contractData);
+
+      expect(createResponse.status).toEqual(201);
+      const contractBefore = createResponse.body as LeanContract;
+      contractsToCleanup.add(contractBefore.userContact.userId);
+      expect(Object.keys(contractBefore.contractedServices).length).toEqual(2);
+      expect(contractBefore.organizationId).toEqual(testOrganization.id);
+      const orgBefore = contractBefore.organizationId;
+
+      // Move service to new organization
+      const newOrganization = await createTestOrganization(ownerUser.username);
+      const updateResponse = await request(app)
+        .put(`${baseUrl}/services/${testService.name.toLowerCase()}`)
+        .set('x-api-key', testApiKey)
+        .send({ organizationId: newOrganization.id });
+
+      expect(updateResponse.status).toEqual(200);
+      expect(updateResponse.body.organizationId).toEqual(newOrganization.id);
+
+      // Verify contract STILL in original organization but service was removed
+      const contractAfter = await getContractByUserId(contractBefore.userContact.userId, app);
+      expect(contractAfter.organizationId).toEqual(orgBefore);
+      expect(contractAfter.contractedServices).not.toHaveProperty(testService.name.toLowerCase());
+      expect(contractAfter.contractedServices).toHaveProperty(additionalService.name.toLowerCase());
+      expect(Object.keys(contractAfter.contractedServices).length).toEqual(1);
+
+      // Cleanup
+      await deleteTestService(additionalService.name, testOrganization.id!);
+      await deleteTestOrganization(newOrganization.id!);
+      
+      testService.id = undefined; // Mark original service as potentially deleted for afterEach cleanup
+    });
+
+    it('Should return 200 and ignore invalid fields like activePricings', async function () {
+      const serviceBeforeUpdate = await getService(testOrganization.id!, testService.name, app);
+      expect(serviceBeforeUpdate.activePricings).toBeDefined();
+
+      const responseUpdate = await request(app)
+        .put(`${baseUrl}/services/${testService.name.toLowerCase()}`)
+        .set('x-api-key', testApiKey)
+        .send({ activePricings: null, description: 'should be ignored' });
+
+      expect(responseUpdate.status).toEqual(200);
+      expect(responseUpdate.body.activePricings).toEqual(serviceBeforeUpdate.activePricings);
+    });
+
+    it('Should return 200 and update both name and organization simultaneously', async function () {
+      const newName = 'service-with-new-org-' + Date.now();
+      const newOrganization = await createTestOrganization(ownerUser.username);
+      const newOrgApiKey = generateOrganizationApiKey();
+      await addApiKeyToOrganization(newOrganization.id!, { key: newOrgApiKey, scope: 'ALL' });
+
+      const responseUpdate = await request(app)
+        .put(`${baseUrl}/services/${testService.name.toLowerCase()}`)
+        .set('x-api-key', testApiKey)
+        .send({ name: newName, organizationId: newOrganization.id });
+
+      expect(responseUpdate.status).toEqual(200);
+      expect(responseUpdate.body.name).toEqual(newName);
+      expect(responseUpdate.body.organizationId).toEqual(newOrganization.id);
+
+      // Update references
+      testService.name = newName;
+      testOrganization = newOrganization;
+      testApiKey = newOrgApiKey;
+
+      await deleteTestOrganization(newOrganization.id!);
+    });
+
+    it('Should return 200 and update contracts when name and organization change', async function () {
+      const newName = 'service-contract-move-' + Date.now();
+      const newOrganization = await createTestOrganization(ownerUser.username);
+      const newOrgApiKey = generateOrganizationApiKey();
+      await addApiKeyToOrganization(newOrganization.id!, { key: newOrgApiKey, scope: 'ALL' });
+
+      const additionalService = await createTestService(testOrganization.id);
+
+      // Contract with only this service
+      const singleContractData = await generateContract(
+        { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        testOrganization.id!,
+        undefined,
+        app
+      );
+      const singleContractResponse = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send(singleContractData);
+
+      expect(singleContractResponse.status).toEqual(201);
+      const singleContractBefore = singleContractResponse.body as LeanContract;
+      contractsToCleanup.add(singleContractBefore.userContact.userId);
+
+      // Contract with multiple services
+      const multiContractData = await generateContract(
+        {
+          [testService.name.toLowerCase()]: testService.activePricings.keys().next().value!,
+          [additionalService.name.toLowerCase()]:
+            additionalService.activePricings.keys().next().value!,
+        },
+        testOrganization.id!,
+        undefined,
+        app
+      );
+      const multiContractResponse = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send(multiContractData);
+
+      expect(multiContractResponse.status).toEqual(201);
+      const multiContractBefore = multiContractResponse.body as LeanContract;
+      contractsToCleanup.add(multiContractBefore.userContact.userId);
+
+      const updateResponse = await request(app)
+        .put(`${baseUrl}/services/${testService.name.toLowerCase()}`)
+        .set('x-api-key', testApiKey)
+        .send({ name: newName, organizationId: newOrganization.id });
+
+      expect(updateResponse.status).toEqual(200);
+      expect(updateResponse.body.name).toEqual(newName);
+      expect(updateResponse.body.organizationId).toEqual(newOrganization.id);
+
+      const singleContractAfter = await getContractByUserId(
+        singleContractBefore.userContact.userId,
+        app
+      );
+      expect(singleContractAfter.organizationId).toEqual(newOrganization.id);
+      expect(singleContractAfter.contractedServices).toHaveProperty(newName.toLowerCase());
+      expect(singleContractAfter.contractedServices).not.toHaveProperty(
+        testService.name.toLowerCase()
+      );
+
+      const multiContractAfter = await getContractByUserId(
+        multiContractBefore.userContact.userId,
+        app
+      );
+      expect(multiContractAfter.organizationId).toEqual(testOrganization.id);
+      expect(multiContractAfter.contractedServices).not.toHaveProperty(
+        testService.name.toLowerCase()
+      );
+      expect(multiContractAfter.contractedServices).not.toHaveProperty(newName.toLowerCase());
+      expect(multiContractAfter.contractedServices).toHaveProperty(
+        additionalService.name.toLowerCase()
+      );
+
+      await deleteTestService(additionalService.name, testOrganization.id!);
+      await deleteTestOrganization(newOrganization.id!);
+
+      testService.id = undefined; // Mark original service as potentially deleted for afterEach cleanup
+    });
+
+    
+
+    // ======== NEGATIVE TESTS ========
+
+    it('Should return 4XX when trying to rename service to an existing name', async function () {
+      // Create another service
+      const secondService = await createTestService(testOrganization.id);
+
+      // Try to rename first service to second service's name
+      const responseUpdate = await request(app)
+        .put(`${baseUrl}/services/${testService.name.toLowerCase()}`)
+        .set('x-api-key', testApiKey)
+        .send({ name: secondService.name });
+
+      expect(responseUpdate.status).toBeGreaterThanOrEqual(400);
+      expect(responseUpdate.status).toBeLessThan(500);
+      expect(responseUpdate.body.error).toBeDefined();
+      expect(responseUpdate.body.error.toLowerCase()).toContain('conflict');
+
+      // Cleanup additional service
+      await deleteTestService(secondService.name, testOrganization.id!);
+    });
+
+    it('Should return 4XX when trying to move service to non-existent organization', async function () {
+      const fakeOrgId = '507f1f77bcf86cd799439012';
+
+      const responseUpdate = await request(app)
+        .put(`${baseUrl}/services/${testService.name.toLowerCase()}`)
+        .set('x-api-key', testApiKey)
+        .send({ organizationId: fakeOrgId });
+
+      expect(responseUpdate.status).toBeGreaterThanOrEqual(400);
+      expect(responseUpdate.status).toBeLessThan(500);
+      expect(responseUpdate.body.error).toBeDefined();
+      expect(responseUpdate.body.error.toLowerCase()).toContain('not found');
+    });
+
+    it('Should return 404 when trying to update non-existent service', async function () {
+      const nonExistentServiceName = 'non-existent-service-' + Date.now();
+
+      const responseUpdate = await request(app)
+        .put(`${baseUrl}/services/${nonExistentServiceName}`)
+        .set('x-api-key', testApiKey)
+        .send({ name: 'new-name' });
+
+      expect(responseUpdate.status).toEqual(404);
+      expect(responseUpdate.body.error).toBeDefined();
+    });
+
+    it('Should ignore empty/null update payload', async function () {
+      const serviceBeforeUpdate = await getService(testOrganization.id!, testService.name, app);
+
+      const responseUpdate = await request(app)
+        .put(`${baseUrl}/services/${testService.name.toLowerCase()}`)
+        .set('x-api-key', testApiKey)
+        .send({});
+
+      expect(responseUpdate.status).toEqual(200);
+      expect(responseUpdate.body.name).toEqual(serviceBeforeUpdate.name);
+      expect(responseUpdate.body.organizationId).toEqual(serviceBeforeUpdate.organizationId);
     });
   });
-
   describe('DELETE /services/{serviceName}', function () {
     it('Should return 204', async function () {
       const responseDelete = await request(app)

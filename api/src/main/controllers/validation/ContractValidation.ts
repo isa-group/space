@@ -292,7 +292,7 @@ async function isSubscriptionValid(subscription: Subscription, organizationId: s
 
     if (!pricing) {
       throw new Error(
-        `Service ${serviceName} not found in the request organization. Please check the services declared in subscriptionPlans and subscriptionAddOns.`
+        `NOT FOUND: Service with name ${serviceName} in the request organization. Please check the services declared in subscriptionPlans and subscriptionAddOns.`
       );
     }
 

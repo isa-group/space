@@ -1232,7 +1232,7 @@ describe('Organization API Test Suite', function () {
     });
   });
 
-  describe('DELETE /organizations/api-keys', function () {
+  describe('DELETE /organizations/:organizationId/api-keys/:apiKey', function () {
     let testOrganization: LeanOrganization;
     let ownerUser: any;
     let adminUser: any;
@@ -1313,9 +1313,8 @@ describe('Organization API Test Suite', function () {
 
     it('Should return 200 and delete API key from organization with SPACE ADMIN request', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys/${testEvaluationApiKey}`)
         .set('x-api-key', adminApiKey)
-        .send({ apiKey: testEvaluationApiKey })
         .expect(200);
 
       expect(response.body).toBeDefined();
@@ -1323,9 +1322,8 @@ describe('Organization API Test Suite', function () {
 
     it('Should return 200 and delete API key from organization with organization ADMIN request', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys/${testEvaluationApiKey}`)
         .set('x-api-key', adminUser.apiKey)
-        .send({ apiKey: testEvaluationApiKey })
         .expect(200);
 
       expect(response.body).toBeDefined();
@@ -1333,9 +1331,8 @@ describe('Organization API Test Suite', function () {
 
     it('Should return 200 and delete API key from organization with organization MANAGER request', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys/${testEvaluationApiKey}`)
         .set('x-api-key', managerUser.apiKey)
-        .send({ apiKey: testEvaluationApiKey })
         .expect(200);
 
       expect(response.body).toBeDefined();
@@ -1343,9 +1340,8 @@ describe('Organization API Test Suite', function () {
 
     it('Should return 200 and delete MANAGEMENT API key from organization with organization MANAGER request', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys/${testManagementApiKey}`)
         .set('x-api-key', managerUser.apiKey)
-        .send({ apiKey: testManagementApiKey })
         .expect(200);
 
       expect(response.body).toBeDefined();
@@ -1353,9 +1349,8 @@ describe('Organization API Test Suite', function () {
 
     it('Should return 403 when user without org role tries to delete API key', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys/${testEvaluationApiKey}`)
         .set('x-api-key', regularUserNoPermission.apiKey)
-        .send({ apiKey: testEvaluationApiKey })
         .expect(403);
 
       expect(response.body.error).toBeDefined();
@@ -1363,9 +1358,8 @@ describe('Organization API Test Suite', function () {
 
     it('Should return 403 when MANAGER user tries to delete ALL API key', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys/${testAllApiKey}`)
         .set('x-api-key', managerUser.apiKey)
-        .send({ apiKey: testAllApiKey })
         .expect(403);
 
       expect(response.body.error).toBeDefined();
@@ -1373,9 +1367,8 @@ describe('Organization API Test Suite', function () {
 
     it('Should return 403 when EVALUATOR user tries to delete API key', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys/${testEvaluationApiKey}`)
         .set('x-api-key', evaluatorUser.apiKey)
-        .send({ apiKey: testEvaluationApiKey })
         .expect(403);
 
       expect(response.body.error).toBeDefined();
@@ -1383,31 +1376,27 @@ describe('Organization API Test Suite', function () {
 
     it('Should return 400 when deleting non-existent API key', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys/nonexistent_key_${Date.now()}`)
         .set('x-api-key', adminApiKey)
-        .send({ apiKey: `nonexistent_key_${Date.now()}` })
         .expect(400);
 
       expect(response.body.error).toBeDefined();
     });
 
-    it('Should return 400 when apiKey field is missing', async function () {
+    it('Should return 404 when apiKey field is missing', async function () {
       const response = await request(app)
         .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
-        .set('x-api-key', adminApiKey)
-        .send({})
-        .expect(400);
+        .set('x-api-key', adminApiKey);
 
-      expect(response.body.error).toBeDefined();
+      expect(response.status).toBe(404);
     });
 
     it('Should return 404 when organization does not exist', async function () {
       const fakeId = '000000000000000000000000';
 
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/${fakeId}/api-keys`)
+        .delete(`${baseUrl}/organizations/${fakeId}/api-keys/${testEvaluationApiKey}`)
         .set('x-api-key', adminApiKey)
-        .send({ apiKey: testEvaluationApiKey })
         .expect(404);
 
       expect(response.body.error).toBeDefined();
@@ -1415,9 +1404,8 @@ describe('Organization API Test Suite', function () {
 
     it('Should return 422 with invalid organization ID format', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/invalid-id/api-keys`)
+        .delete(`${baseUrl}/organizations/invalid-id/api-keys/${testEvaluationApiKey}`)
         .set('x-api-key', adminApiKey)
-        .send({ apiKey: testEvaluationApiKey })
         .expect(422);
 
       expect(response.body.error).toBeDefined();

@@ -154,7 +154,7 @@ class OrganizationController {
   async removeApiKey(req: any, res: any) {
     try {
       const organizationId = req.params.organizationId;
-      const { apiKey } = req.body;
+      const apiKey = req.params.apiKey;
 
       if (!organizationId) {
         return res.status(400).send({ error: 'organizationId query parameter is required' });

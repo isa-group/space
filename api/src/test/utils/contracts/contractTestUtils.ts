@@ -233,6 +233,16 @@ async function incrementAllUsageLevel(
   return response.body;
 }
 
+async function deleteTestContract(userId: string, app?: any): Promise<void> {
+  const copyApp = await useApp(app);
+  const apiKey = await getTestAdminApiKey();
+
+  await request(copyApp)
+    .delete(`${baseUrl}/contracts/${userId}`)
+    .set('x-api-key', apiKey)
+    .expect(204);
+}
+
 export {
   createTestContract,
   createRandomContracts,
@@ -243,4 +253,5 @@ export {
   createRandomContractsForService,
   incrementAllUsageLevel,
   incrementUsageLevel,
+  deleteTestContract
 };

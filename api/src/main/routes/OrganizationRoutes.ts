@@ -14,19 +14,11 @@ const loadFileRoutes = function (app: express.Application) {
   app
     .route(`${baseUrl}/organizations/`)
     .get(organizationController.getAll)
-    .post(
-      OrganizationValidation.create,
-      handleValidation,
-      organizationController.create
-    );
+    .post(OrganizationValidation.create, handleValidation, organizationController.create);
 
   app
     .route(`${baseUrl}/organizations/:organizationId`)
-    .get(
-      OrganizationValidation.getById,
-      handleValidation,
-      organizationController.getById
-    )
+    .get(OrganizationValidation.getById, handleValidation, organizationController.getById)
     .put(OrganizationValidation.update, handleValidation, isOrgOwner, organizationController.update)
     .delete(
       OrganizationValidation.getById,
@@ -43,15 +35,9 @@ const loadFileRoutes = function (app: express.Application) {
       handleValidation,
       hasOrgRole(['OWNER', 'ADMIN', 'MANAGER']),
       organizationController.addMember
-    )
-    .delete(
-      OrganizationValidation.getById,
-      handleValidation,
-      hasOrgRole(['OWNER', 'ADMIN', 'MANAGER']),
-      organizationController.removeMember
     );
-  
-    app
+
+  app
     .route(`${baseUrl}/organizations/:organizationId/members/:username`)
     .delete(
       OrganizationValidation.getById,
@@ -67,7 +53,10 @@ const loadFileRoutes = function (app: express.Application) {
       handleValidation,
       hasOrgRole(['OWNER', 'ADMIN', 'MANAGER']),
       organizationController.addApiKey
-    )
+    );
+
+  app
+    .route(`${baseUrl}/organizations/:organizationId/api-keys/:apiKey`)
     .delete(
       OrganizationValidation.getById,
       handleValidation,

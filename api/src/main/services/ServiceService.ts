@@ -19,11 +19,13 @@ import { generateUsageLevels } from '../utils/contracts/helpers';
 import { escapeVersion } from '../utils/helpers';
 import { resetEscapeVersionInService } from '../utils/services/helpers';
 import CacheService from './CacheService';
+import OrganizationRepository from '../repositories/mongoose/OrganizationRepository';
 
 class ServiceService {
   private readonly serviceRepository: ServiceRepository;
   private readonly pricingRepository: PricingRepository;
   private readonly contractRepository: ContractRepository;
+  private readonly organizationRepository: OrganizationRepository;
   private readonly cacheService: CacheService;
   private readonly eventService;
 
@@ -31,6 +33,7 @@ class ServiceService {
     this.serviceRepository = container.resolve('serviceRepository');
     this.pricingRepository = container.resolve('pricingRepository');
     this.contractRepository = container.resolve('contractRepository');
+    this.organizationRepository = container.resolve('organizationRepository');
     this.eventService = container.resolve('eventService');
     this.cacheService = container.resolve('cacheService');
   }
@@ -64,7 +67,7 @@ class ServiceService {
     }
 
     if (!service) {
-      throw new Error(`Service ${serviceName} not found`);
+      throw new Error(`NOT FOUND: Service with name ${serviceName}`);
     }
 
     const pricingsToReturn =
@@ -128,7 +131,7 @@ class ServiceService {
       service = await this.serviceRepository.findByName(serviceName, organizationId);
       await this.cacheService.set(cacheKey, service, 3600, true);
       if (!service) {
-        throw new Error(`Service ${serviceName} not found`);
+        throw new Error(`NOT FOUND: Service with name ${serviceName}`);
       }
     }
 
@@ -147,7 +150,7 @@ class ServiceService {
 
     const formattedPricingVersion = escapeVersion(pricingVersion);
     if (!service) {
-      throw new Error(`Service ${serviceName} not found`);
+      throw new Error(`NOT FOUND: Service with name ${serviceName}`);
     }
 
     const pricingLocator =
@@ -236,7 +239,7 @@ class ServiceService {
       }
       service = await this.serviceRepository.findByName(serviceName, organizationId);
       if (!service) {
-        throw new Error(`Service ${serviceName} not found`);
+        throw new Error(`NOT FOUND: Service with name ${serviceName}`);
       }
 
       if (
@@ -569,7 +572,7 @@ class ServiceService {
       // Update an existing service
       const service = await this.serviceRepository.findByName(serviceName, organizationId);
       if (!service) {
-        throw new Error(`Service ${serviceName} not found`);
+        throw new Error(`NOT FOUND: Service with name ${serviceName}`);
       }
 
       // If already active, reject
@@ -653,27 +656,82 @@ class ServiceService {
   async update(serviceName: string, newServiceData: any, organizationId: string) {
     const cacheKey = `service.${organizationId}.${serviceName}`;
     let service = await this.cacheService.get(cacheKey);
+    let dataToUpdate: any = {};
+    let contractsToRemoveService: LeanContract[] = [];
+    let contractsToUpdateOrgId: LeanContract[] = [];
 
     if (!service) {
       service = await this.serviceRepository.findByName(serviceName, organizationId);
     }
 
     if (!service) {
-      throw new Error(`Service ${serviceName} not found`);
+      throw new Error(`NOT FOUND: Service with name ${serviceName}`);
     }
 
-    // TODO: Change name in affected contracts and pricings
+    if (newServiceData.name && newServiceData.name !== service.name) {
+      const existingService = await this.serviceRepository.findByName(
+        newServiceData.name,
+        organizationId
+      );
+      if (existingService) {
+        throw new Error(`CONFLICT: Service name ${newServiceData.name} already exists`);
+      }
+      dataToUpdate.name = newServiceData.name;
+    }
+
+    if (newServiceData.organizationId && newServiceData.organizationId !== organizationId) {
+      const organization = await this.organizationRepository.findById(newServiceData.organizationId);
+      if (!organization) {
+        throw new Error(`INVALID DATA: Organization with id ${newServiceData.organizationId} not found`);
+      }
+
+      const contracts = await this.contractRepository.findByFilters({filters: {services: [service.name]}, organizationId});
+      
+      for (const contract of contracts) {
+        if (Object.keys(contract.contractedServices).length > 1) {
+          contractsToRemoveService.push(contract);   
+        }else{
+          if (dataToUpdate.name) {
+            contract.contractedServices[dataToUpdate.name] = contract.contractedServices[service.name];
+            delete contract.contractedServices[service.name];
+          }
+          contractsToUpdateOrgId.push(contract);
+        }
+      }
+
+      dataToUpdate.organizationId = newServiceData.organizationId;
+    }
 
     const updatedService = await this.serviceRepository.update(
       service.name,
-      newServiceData,
+      dataToUpdate,
       organizationId
     );
 
-    if (newServiceData.name && newServiceData.name !== service.name) {
+    if (dataToUpdate.name) {
       // If the service name has changed, we need to update the cache key
       await this.cacheService.del(cacheKey);
-      serviceName = newServiceData.name;
+      serviceName = dataToUpdate.name;
+
+      await this.contractRepository.changeServiceName(service.name, dataToUpdate.name, organizationId);
+      const updatedContracts = await this.contractRepository.findByFilters({filters: {services: [dataToUpdate.name]}, organizationId: dataToUpdate.organizationId || organizationId});
+
+      await this.cacheService.delMany(updatedContracts.map(c => `contracts.${c.userContact.userId}`));
+    }
+
+    if (dataToUpdate.organizationId) {
+      for (const contract of contractsToRemoveService) {
+        delete contract.contractedServices[service.name];
+      }
+      await this.contractRepository.bulkUpdate(contractsToRemoveService);
+
+      for (const contract of contractsToUpdateOrgId) {
+        contract.organizationId = dataToUpdate.organizationId;
+      }
+      await this.contractRepository.bulkUpdate(contractsToUpdateOrgId);
+
+      await this.cacheService.delMany(contractsToRemoveService.map(c => `contracts.${c.userContact.userId}`));
+      await this.cacheService.delMany(contractsToUpdateOrgId.map(c => `contracts.${c.userContact.userId}`));
     }
 
     let newCacheKey = `service.${organizationId}.${serviceName}`;
@@ -704,7 +762,7 @@ class ServiceService {
     const formattedPricingVersion = escapeVersion(pricingVersion);
 
     if (!service) {
-      throw new Error(`Service ${serviceName} not found`);
+      throw new Error(`NOT FOUND: Service with name ${serviceName}`);
     }
 
     // If newAvailability is the same as the current one, return the service
@@ -825,7 +883,7 @@ class ServiceService {
     }
 
     if (!service) {
-      throw new Error(`INVALID DATA: Service ${serviceName} not found`);
+      throw new Error(`NOT FOUND: Service with name ${serviceName}`);
     }
 
     const contractNovationResult = await this._removeServiceFromContracts(
@@ -852,7 +910,7 @@ class ServiceService {
     }
 
     if (!service) {
-      throw new Error(`INVALID DATA: Service ${serviceName} not found`);
+      throw new Error(`NOT FOUND: Service with name ${serviceName}`);
     }
 
     const contractNovationResult = await this._removeServiceFromContracts(
@@ -881,7 +939,7 @@ class ServiceService {
     }
 
     if (!service) {
-      throw new Error(`Service ${serviceName} not found`);
+      throw new Error(`NOT FOUND: Service with name ${serviceName}`);
     }
 
     const formattedPricingVersion = escapeVersion(pricingVersion);

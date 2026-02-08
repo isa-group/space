@@ -581,7 +581,7 @@ paths:
         **Authentication**: User API Key
 
         **Permission**: 
-        - Organization members can view their organization
+        - USER user can only view organizations they own or are a member of
         - ADMIN users can view any organization
 
       tags:
@@ -618,10 +618,10 @@ paths:
         **Authentication**: User API Key
 
         **Permission**: 
-        - Organization owner: can update name and transfer ownership
+        - Organization OWNER: can update name and transfer ownership
         - Organization ADMIN: can update name only
         - Organization MANAGER: can update name only
-        - System ADMIN: can update any field
+        - ADMIN user: can update name and transfer ownership
 
       tags:
         - Organizations
@@ -671,9 +671,11 @@ paths:
         **Authentication**: User API Key
 
         **Permission**: 
-        - Organization owner can delete their organization
-        - System ADMIN users can delete any organization
-        - Cannot delete default organizations (unless owner is being deleted)
+        - Organization OWNER: can delete the organization they own
+        - ADMIN user: can delete any organization
+
+        **Constarints**:
+        - Cannot delete default organizations
 
         **Cascading Deletions**:
         - All services and pricing versions are deleted
@@ -710,10 +712,10 @@ paths:
         **Authentication**: User API Key
 
         **Permission**: 
-        - Organization owner: can add any member with any role
+        - Organization OWNER: can add any member with any role
         - Organization ADMIN: can add any member with any role
-        - Organization MANAGER: can add MANAGER/EVALUATOR roles only (not OWNER/ADMIN)
-        - System admin: can add with any role
+        - Organization MANAGER: can add any member with MANAGER/EVALUATOR roles (not OWNER/ADMIN)
+        - ADMIN user: can add with any role
 
       tags:
         - Organizations
@@ -740,7 +742,7 @@ paths:
                   example: user_to_add
                 role:
                   type: string
-                  enum: [OWNER, ADMIN, MANAGER, EVALUATOR]
+                  enum: [ADMIN, MANAGER, EVALUATOR]
                   example: MANAGER
       responses:
         '200':
@@ -759,57 +761,20 @@ paths:
         '404':
           description: Organization or user not found
 
+  /organizations/{organizationId}/members/{username}:
     delete:
-      summary: Remove member from organization
+      summary: Remove specific member from organization
       description: |
         Removes a user from the organization.
 
         **Authentication**: User API Key
 
         **Permission**: 
-        - Organization owner: can remove any member
+        - Organization OWNER: can remove any member
         - Organization ADMIN: can remove members except other ADMINs or OWNER
         - Organization MANAGER: can remove MANAGER/EVALUATOR only  
         - Organization EVALUATOR: can only remove themselves
-        - System ADMIN: can remove any member
-
-      tags:
-        - Organizations
-      security:
-        - ApiKeyAuth: []
-      parameters:
-        - name: organizationId
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: username
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Username of member to remove
-      responses:
-        '200':
-          description: Member removed successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-        '403':
-          description: Forbidden - insufficient permissions
-        '404':
-          description: Organization or member not found
-
-  /organizations/{organizationId}/members/{username}:
-    delete:
-      summary: Remove specific member (alternative path style)
-      description: |
-        Removes a user from the organization using path parameter style.
-        Same permissions and behavior as DELETE /organizations/:organizationId/members.
+        - ADMIN user: can remove any member
 
       tags:
         - Organizations
@@ -850,10 +815,10 @@ paths:
         **Authentication**: User API Key
 
         **Permission**: 
-        - Organization owner: can create any scope
+        - Organization OWNER: can create any scope
         - Organization ADMIN: can create any scope
         - Organization MANAGER: can create MANAGEMENT/EVALUATION scopes only
-        - System ADMIN: can create any scope
+        - ADMIN user: can create any scope
 
         **Scopes**:
         - `ALL`: Unrestricted access to all organization operations
@@ -901,6 +866,7 @@ paths:
         '404':
           description: Organization not found
 
+  /organizations/{organizationId}/api-keys/{apiKeyId}:
     delete:
       summary: Remove organization API Key
       description: |
@@ -909,10 +875,10 @@ paths:
         **Authentication**: User API Key
 
         **Permission**: 
-        - Organization owner: can remove any key
+        - Organization OWNER: can remove any key
         - Organization ADMIN: can remove any key
         - Organization MANAGER: can remove non-ALL scope keys only
-        - System ADMIN: can remove any key
+        - ADMIN user: can remove any key
 
       tags:
         - Organizations
@@ -925,7 +891,7 @@ paths:
           schema:
             type: string
         - name: apiKey
-          in: query
+          in: path
           required: true
           schema:
             type: string
@@ -951,11 +917,11 @@ paths:
       description: |
         Lists all services configured in the organization.
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: organization member with any role (OWNER/ADMIN/MANAGER/EVALUATOR)
-        - Org Key: ANY scope (ALL/MANAGEMENT/EVALUATION)
+        - USER user: must be an organization member with any role (OWNER/ADMIN/MANAGER/EVALUATOR)
+        - ADMIN user: can view services in any organization
 
       tags:
         - Services
@@ -986,11 +952,11 @@ paths:
       description: |
         Creates a new service in the organization.
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: OWNER/ADMIN/MANAGER role required
-        - Org Key: ALL or MANAGEMENT scope required
+        - USER user: OWNER/ADMIN/MANAGER role required
+        - ADMIN user: can create services in any organization
 
       tags:
         - Services
@@ -1041,11 +1007,11 @@ paths:
       description: |
         Deletes all services and associated pricings in the organization (irreversible operation).
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: OWNER/ADMIN role required
-        - Org Key: ALL scope required
+        - USER user: OWNER/ADMIN role required
+        - ADMIN user: can delete services in any organization
 
       tags:
         - Services
@@ -1069,13 +1035,13 @@ paths:
     get:
       summary: Get service details
       description: |
-        Retrieves detailed information about a specific service.
+        Retrieves detailed information about a specific service in a organization.
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: organization member with any role
-        - Org Key: ANY scope 
+        - USER user: must be an organization member with any role (OWNER/ADMIN/MANAGER/EVALUATOR)
+        - ADMIN user: can view service details in any organization
 
       tags:
         - Services
@@ -1108,13 +1074,19 @@ paths:
     put:
       summary: Update service
       description: |
-        Updates service metadata (name, description).
+        Updates service metadata (name, organization).
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: OWNER/ADMIN/MANAGER role required
-        - Org Key: ALL or MANAGEMENT scope required
+        - USER user: OWNER/ADMIN/MANAGER role required
+        - ADMIN user: can update services in any organization
+
+        **Cascading Operations**:
+        - Renaming a service propagates the change by updating the corresponding `contractedServices` references in all associated contracts.
+        - Updating `organizationId` triggers one of the following behaviors:
+            - If contracts include **only the updated service**, each contract’s `organizationId`` is updated to reflect the new organization.
+            - If contracts include **multiple contracted services**, the updated service is removed from them.
 
       tags:
         - Services
@@ -1140,7 +1112,7 @@ paths:
               properties:
                 name:
                   type: string
-                description:
+                organizationId:
                   type: string
       responses:
         '200':
@@ -1150,11 +1122,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Service'
         '400':
-          description: Invalid update data
+          description: Invalid update data (e.g., organization not found)
         '403':
           description: Forbidden
         '404':
           description: Service not found
+        '409':
+          description: Service name already exists
 
     delete:
       summary: Disable service

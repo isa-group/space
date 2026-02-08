@@ -209,6 +209,16 @@ class ServiceController {
 
       res.json(service);
     } catch (err: any) {
+      if (err.message.toLowerCase().includes('invalid data')) {
+        res.status(400).send({ error: err.message });
+      }
+      if (err.message.toLowerCase().includes('not found')) {
+        res.status(404).send({ error: err.message });
+      }
+      if (err.message.toLowerCase().includes('conflict')) {
+        res.status(409).send({ error: err.message });
+        return;
+      }
       res.status(500).send({ error: err.message });
     }
   }
