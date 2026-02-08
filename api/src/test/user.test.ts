@@ -426,7 +426,7 @@ describe('User API routes', function () {
         .send({ role: USER_ROLES[USER_ROLES.length - 1] });
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe('PERMISSION ERROR: Only admins can update admin users.');
+      expect(response.body.error).toBe('PERMISSION ERROR: Only admins can change roles for other users.');
     });
 
     it('returns 403 when trying to demote the last admin', async function () {

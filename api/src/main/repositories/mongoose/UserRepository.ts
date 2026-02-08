@@ -75,6 +75,10 @@ class UserRepository extends RepositoryBase {
       { new: true, projection: { password: 0 } }
     );
 
+    if (!updatedUser) {
+      throw new Error('INVALID DATA: User not found');
+    }
+
     return toPlainObject<LeanUser>(updatedUser?.toJSON()).apiKey;
   }
 

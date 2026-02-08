@@ -95,15 +95,16 @@ class UserService {
   }
 
   async regenerateApiKey(username: string, reqUser: LeanUser): Promise<string> {
-    const newApiKey = await this.userRepository.regenerateApiKey(username);
-    
     if (reqUser.username !== username && reqUser.role !== 'ADMIN') {
       throw new Error('PERMISSION ERROR: Only admins can regenerate API keys for other users.');
     }
     
+    const newApiKey = await this.userRepository.regenerateApiKey(username);
+    
     if (!newApiKey) {
       throw new Error('API Key could not be regenerated');
     }
+    
     return newApiKey;
   }
 
