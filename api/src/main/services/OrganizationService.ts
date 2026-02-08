@@ -211,6 +211,80 @@ class OrganizationService {
     // 4. Persistence
     await this.organizationRepository.addMember(organizationId, organizationMember);
   }
+  
+  async updateMemberRole(
+    organizationId: string,
+    username: string,
+    role: string,
+    reqUser: any
+  ): Promise<void> {
+    // 1. Basic validation
+    if (!username || !role) {
+      throw new Error('INVALID DATA: username and role are required.');
+
+    }
+
+    const organization = await this.organizationRepository.findById(organizationId);
+
+    if (!organization) {
+      throw new Error(`INVALID DATA: Organization with ID ${organizationId} does not exist.`);
+    }
+
+    if (!organization.members.some(member => member.username === username)) {
+      throw new Error(`INVALID DATA: User with username ${username} is not a member of the organization.`);
+    }
+
+    // 2. Identify roles and context once
+    const isSpaceAdmin = reqUser.role === 'ADMIN';
+    
+    // Locate the requester within the organization's member list
+    const reqMemberRole = reqUser.orgRole;
+    const isOwner = reqMemberRole === 'OWNER';
+    
+    // Locate user being updated within the organization's member list
+    const userToUpdate = organization.members.find(m => m.username === username);
+
+    if (!userToUpdate){
+      throw new Error(`INVALID DATA: User with username ${username} is not a member of the organization.`);
+    }
+
+    if (userToUpdate.role === role) {
+      throw new Error(`CONFLICT: User with username ${username} already has the role ${role}.`);
+    }
+
+    // Define privilege tiers
+    const hasManagerPrivileges = ['OWNER', 'ADMIN', 'MANAGER'].includes(reqMemberRole || '');
+    const hasHighPrivileges = ['OWNER', 'ADMIN'].includes(reqMemberRole || '');
+
+    // --- PERMISSION CHECKS ---
+
+    // Rule 1: General permission to add members
+    // Requires Space Admin, Org Owner, or Org Manager+
+    if (!isSpaceAdmin && !isOwner && !hasManagerPrivileges) {
+      throw new Error(
+        'PERMISSION ERROR: Only SPACE admins or organization-level OWNER, ADMIN and MANAGER can update member roles.'
+      );
+    }
+
+    // Rule 2: Escalated permission for adding High-Level roles
+    // Only Space Admins or Org Owner/Admins can grant OWNER or ADMIN roles
+    const targetIsHighLevel = ['OWNER', 'ADMIN'].includes(userToUpdate?.role || '');
+    if (targetIsHighLevel && !isSpaceAdmin && !isOwner && !hasHighPrivileges) {
+      throw new Error(
+        'PERMISSION ERROR: Only SPACE admins or organization-level OWNER/ADMIN can add high-level members.'
+      );
+    }
+
+    const newRoleIsHighLevel = ['OWNER', 'ADMIN'].includes(role);
+    if (newRoleIsHighLevel && !isSpaceAdmin && !isOwner && !hasHighPrivileges) {
+      throw new Error(
+        'PERMISSION ERROR: Only SPACE admins or organization-level OWNER/ADMIN can add high-level members.'
+      );
+    }
+
+    // 4. Persistence
+    await this.organizationRepository.updateMemberRole(organizationId, username, role);
+  }
 
   async update(organizationId: string, updateData: any, reqUser: any): Promise<void> {
     const organization = await this.organizationRepository.findById(organizationId);

@@ -27,6 +27,13 @@ const update = [
     .isString().withMessage('Owner username must be a string')
 ];
 
+const updateMemberRole = [
+  body('role')
+    .exists().withMessage('Member role is required')
+    .notEmpty().withMessage('Member role cannot be empty')
+    .isIn(['ADMIN', 'MANAGER', 'EVALUATOR']).withMessage('Member role must be one of ADMIN, MANAGER, EVALUATOR')
+]
+
 const addMember = [
   check('organizationId')
     .exists().withMessage('organizationId parameter is required')
@@ -42,4 +49,4 @@ const addMember = [
     .isIn(['ADMIN', 'MANAGER', 'EVALUATOR']).withMessage('Member role must be one of ADMIN, MANAGER, EVALUATOR')
 ]
 
-export { create, update, getById, addMember };
+export { create, update, updateMemberRole, getById, addMember };

@@ -387,9 +387,9 @@ describe('Organization API Test Suite', function () {
       await request(app)
         .put(`${baseUrl}/organizations/${ownerTestOrg1.id}`)
         .set('x-api-key', ownerApiKey)
-        .send({default: true})
+        .send({ default: true })
         .expect(200);
-      
+
       const response = await request(app)
         .put(`${baseUrl}/organizations/${ownerTestOrg2.id}`)
         .set('x-api-key', ownerApiKey)
@@ -403,7 +403,7 @@ describe('Organization API Test Suite', function () {
       await deleteTestOrganization(ownerTestOrg2.id!);
       await deleteTestUser(newOwner.username);
     });
-    
+
     it('Should return 409 when trying to assign second default organization to owner', async function () {
       const ownerApiKey = ownerUser.apiKey;
       const testOrg1 = await createTestOrganization(ownerUser.username);
@@ -418,7 +418,7 @@ describe('Organization API Test Suite', function () {
         .set('x-api-key', ownerApiKey)
         .send(updateData)
         .expect(200);
-      
+
       const response = await request(app)
         .put(`${baseUrl}/organizations/${testOrg2.id}`)
         .set('x-api-key', ownerApiKey)
@@ -427,7 +427,7 @@ describe('Organization API Test Suite', function () {
       expect(response.status).toBe(409);
       expect(response.body.error).toBeDefined();
     });
-    
+
     it('Should return 409 when trying to assign second default organization to updated owner', async function () {
       const ownerApiKey = ownerUser.apiKey;
       const newOwner = await createTestUser('USER');
@@ -443,15 +443,15 @@ describe('Organization API Test Suite', function () {
       await request(app)
         .put(`${baseUrl}/organizations/${ownerTestOrg1.id}`)
         .set('x-api-key', ownerApiKey)
-        .send({default: true})
+        .send({ default: true })
         .expect(200);
-      
+
       await request(app)
         .put(`${baseUrl}/organizations/${newOwnerTestOrg2.id}`)
         .set('x-api-key', newOwner.apiKey)
-        .send({default: true})
+        .send({ default: true })
         .expect(200);
-      
+
       const response = await request(app)
         .put(`${baseUrl}/organizations/${ownerTestOrg2.id}`)
         .set('x-api-key', ownerApiKey)
@@ -873,6 +873,345 @@ describe('Organization API Test Suite', function () {
     });
   });
 
+  describe('PUT /organizations/:organizationId/members/:username', function () {
+    let spaceAdmin: any;
+    let testOrganization: LeanOrganization;
+    let ownerUser: any;
+    let adminMember: any;
+    let managerMember: any;
+    let evaluatorMember: any;
+    let regularMember: any;
+    let regularUserNoPermission: any;
+
+    beforeAll(async function () {
+      spaceAdmin = await createTestUser('ADMIN');
+    });
+
+    afterAll(async function () {
+      if (spaceAdmin?.username) {
+        await deleteTestUser(spaceAdmin.username);
+      }
+      await shutdownApp();
+    });
+
+    beforeEach(async function () {
+      ownerUser = await createTestUser('USER');
+      testOrganization = await createTestOrganization(ownerUser.username);
+      adminMember = await createTestUser('USER');
+      managerMember = await createTestUser('USER');
+      evaluatorMember = await createTestUser('USER');
+      regularMember = await createTestUser('USER');
+      regularUserNoPermission = await createTestUser('USER');
+
+      // Add members to organization with different roles
+      await addMemberToOrganization(testOrganization.id!, {
+        username: adminMember.username,
+        role: 'ADMIN',
+      });
+      await addMemberToOrganization(testOrganization.id!, {
+        username: managerMember.username,
+        role: 'MANAGER',
+      });
+      await addMemberToOrganization(testOrganization.id!, {
+        username: evaluatorMember.username,
+        role: 'EVALUATOR',
+      });
+      await addMemberToOrganization(testOrganization.id!, {
+        username: regularMember.username,
+        role: 'EVALUATOR',
+      });
+    });
+
+    afterEach(async function () {
+      if (testOrganization?.id) {
+        await deleteTestOrganization(testOrganization.id);
+      }
+      if (ownerUser?.username) {
+        await deleteTestUser(ownerUser.username);
+      }
+      if (adminMember?.username) {
+        await deleteTestUser(adminMember.username);
+      }
+      if (managerMember?.username) {
+        await deleteTestUser(managerMember.username);
+      }
+      if (evaluatorMember?.username) {
+        await deleteTestUser(evaluatorMember.username);
+      }
+      if (regularMember?.username) {
+        await deleteTestUser(regularMember.username);
+      }
+      if (regularUserNoPermission?.username) {
+        await deleteTestUser(regularUserNoPermission.username);
+      }
+    });
+
+    // Successful updates
+    it('Should return 200 and update member role with SPACE admin request', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', spaceAdmin.apiKey)
+        .send({ role: 'MANAGER' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBeDefined();
+    });
+
+    it('Should return 200 and update member role with OWNER request', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'ADMIN' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBeDefined();
+    });
+
+    it('Should return 200 and update member role with org ADMIN request', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', adminMember.apiKey)
+        .send({ role: 'MANAGER' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBeDefined();
+    });
+
+    it('Should return 200 and update member role with org MANAGER request', async function () {
+      
+      const testManager = await createTestUser('USER');
+      await addMemberToOrganization(testOrganization.id!, {
+        username: testManager.username,
+        role: 'MANAGER',
+      });
+      
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${testManager.username}`)
+        .set('x-api-key', managerMember.apiKey)
+        .send({ role: 'EVALUATOR' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBeDefined();
+
+      await deleteTestUser(testManager.username);
+    });
+
+    it('Should return 200 and promote EVALUATOR to MANAGER', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'MANAGER' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBeDefined();
+    });
+
+    it('Should return 200 and demote MANAGER to EVALUATOR', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${managerMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'EVALUATOR' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBeDefined();
+    });
+
+    it('Should return 200 and promote EVALUATOR to ADMIN', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'ADMIN' })
+        .expect(200);
+
+      expect(response.body.id).toBeDefined();
+    });
+
+    // Permission errors (403)
+    it('Should return 403 when EVALUATOR tries to update member role', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${regularMember.username}`)
+        .set('x-api-key', evaluatorMember.apiKey)
+        .send({ role: 'MANAGER' })
+        .expect(403);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 403 when user without org role tries to update member role', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', regularUserNoPermission.apiKey)
+        .send({ role: 'ADMIN' })
+        .expect(403);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 403 when MANAGER tries to promote member to ADMIN', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', managerMember.apiKey)
+        .send({ role: 'ADMIN' })
+        .expect(403);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 403 when MANAGER tries to update ADMIN member role', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${adminMember.username}`)
+        .set('x-api-key', managerMember.apiKey)
+        .send({ role: 'EVALUATOR' })
+        .expect(403);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    // Validation errors (422)
+    it('Should return 422 when role field is not provided', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({})
+        .expect(422);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 422 when role field is empty', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: '' })
+        .expect(422);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 422 when role field is invalid', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'INVALID_ROLE' })
+        .expect(422);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 422 when trying to assign OWNER role', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'OWNER' })
+        .expect(422);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 422 with invalid organization ID format', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/invalid-id/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'MANAGER' })
+        .expect(422);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 422 when role is not a string', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 123 })
+        .expect(422);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    // Invalid data errors (400)
+    it('Should return 400 when trying to update non-existent member', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/nonexistent_user`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'MANAGER' })
+        .expect(400);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 400 when trying to update member not in organization', async function () {
+      const response = await request(app)
+        .put(
+          `${baseUrl}/organizations/${testOrganization.id}/members/${regularUserNoPermission.username}`
+        )
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'MANAGER' })
+        .expect(400);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    // Not found errors (404)
+    it('Should return 404 when organization does not exist', async function () {
+      const fakeId = '000000000000000000000000';
+
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${fakeId}/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'MANAGER' })
+        .expect(404);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    // Edge cases
+    it('Should return 400 when trying to update organization owner role', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${ownerUser.username}`)
+        .set('x-api-key', spaceAdmin.apiKey)
+        .send({ role: 'ADMIN' })
+        .expect(400);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 409 when updating same role', async function () {
+    const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'EVALUATOR' })
+        .expect(409);
+
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('Should return 400 when username parameter is missing', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'MANAGER' })
+        .expect(404);
+    });
+
+    it('Should handle multiple role updates correctly', async function () {
+      // First update
+      await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'MANAGER' })
+        .expect(200);
+
+      // Second update
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ role: 'ADMIN' })
+        .expect(200);
+
+      expect(response.body.id).toBeDefined();
+    });
+  });
+
   describe('DELETE /organizations/:organizationId', function () {
     let testOrganization: LeanOrganization;
     let spaceAdmin: any;
@@ -988,14 +1327,14 @@ describe('Organization API Test Suite', function () {
         name: `Default Organization ${Date.now()}`,
         owner: ownerUser.username,
         default: true,
-      }
+      };
 
       const response = await request(app)
         .post(`${baseUrl}/organizations/`)
         .set('x-api-key', spaceAdmin.apiKey)
         .send(defaultOrg)
         .expect(201);
-      
+
       const responseDelete = await request(app)
         .delete(`${baseUrl}/organizations/${response.body.id}`)
         .set('x-api-key', spaceAdmin.apiKey);
@@ -1206,7 +1545,7 @@ describe('Organization API Test Suite', function () {
       const response = await request(app)
         .delete(`${baseUrl}/organizations/${testOrganization.id}/members`)
         .set('x-api-key', adminApiKey);
-      
+
       expect(response.status).toBe(404);
     });
 
@@ -1375,7 +1714,9 @@ describe('Organization API Test Suite', function () {
 
     it('Should return 400 when deleting non-existent API key', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/${testOrganization.id}/api-keys/nonexistent_key_${Date.now()}`)
+        .delete(
+          `${baseUrl}/organizations/${testOrganization.id}/api-keys/nonexistent_key_${Date.now()}`
+        )
         .set('x-api-key', adminApiKey)
         .expect(400);
 

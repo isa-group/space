@@ -91,6 +91,21 @@ class OrganizationRepository extends RepositoryBase {
     return result.modifiedCount;
   }
 
+  async updateMemberRole(organizationId: string, username: string, role: string): Promise<number> {
+    const result = await OrganizationMongoose.updateOne(
+      { _id: organizationId, 'members.username': username },
+      { $set: { 'members.$.role': role } }
+    ).exec();
+
+    if (result.modifiedCount === 0) {
+      throw new Error(
+        `INVALID DATA: Member with username ${username} not found in organization ${organizationId}.`
+      );
+    }
+
+    return result.modifiedCount;
+  }
+
   async changeOwner(organizationId: string, newOwner: string): Promise<number> {
     const result = await OrganizationMongoose.updateOne(
       { _id: organizationId },

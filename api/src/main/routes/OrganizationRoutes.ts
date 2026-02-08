@@ -4,6 +4,7 @@ import * as OrganizationValidation from '../controllers/validation/OrganizationV
 import { handleValidation } from '../middlewares/ValidationHandlingMiddleware';
 import OrganizationController from '../controllers/OrganizationController';
 import { hasOrgRole, isOrgOwner } from '../middlewares/ApiKeyAuthMiddleware';
+import { memberRole } from '../middlewares/AuthMiddleware';
 
 const loadFileRoutes = function (app: express.Application) {
   const organizationController = new OrganizationController();
@@ -39,6 +40,14 @@ const loadFileRoutes = function (app: express.Application) {
 
   app
     .route(`${baseUrl}/organizations/:organizationId/members/:username`)
+    .put(
+      OrganizationValidation.getById,
+      OrganizationValidation.updateMemberRole,
+      handleValidation,
+      memberRole,
+      hasOrgRole(['OWNER', 'ADMIN', 'MANAGER']),
+      organizationController.updateMemberRole
+    )
     .delete(
       OrganizationValidation.getById,
       handleValidation,

@@ -762,6 +762,170 @@ paths:
           description: Organization or user not found
 
   /organizations/{organizationId}/members/{username}:
+    put:
+      summary: Update member role in organization
+      description: |
+        Updates the role of a member within the organization. Only users with appropriate permissions can change member roles.
+
+        **Authentication**: User API Key
+
+        **Permission Model**:
+        - **SPACE Admin**: Can promote/demote any member to any role (except OWNER)
+        - **Organization OWNER**: Can promote/demote any member (except themselves) to any role (except OWNER)
+        - **Organization ADMIN**: Can promote/demote any member (except OWNER and other ADMINs) to any role (except OWNER and ADMIN)
+        - **Organization MANAGER**: Can promote/demote MANAGER and EVALUATOR members to lower roles (MANAGER/EVALUATOR only)
+        - **Organization EVALUATOR and below**: No permission to change roles
+
+        **Available Roles**: ADMIN, MANAGER, EVALUATOR
+
+        **Constraints**:
+        - Cannot change OWNER's role (organization owner cannot be downgraded)
+        - Cannot assign OWNER role (OWNER role is special, only changed via organization transfer)
+        - Cannot update a member to their current role (must be a different role)
+        - Member must initially exist in the organization
+
+      tags:
+        - Organizations
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          description: The organization ID (must be valid MongoDB ObjectId)
+          schema:
+            type: string
+            format: uuid
+        - name: username
+          in: path
+          required: true
+          description: The username of the member whose role is being updated
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - role
+              properties:
+                role:
+                  type: string
+                  enum: [ADMIN, MANAGER, EVALUATOR]
+                  description: The new role to assign to the member
+            examples:
+              promoteToAdmin:
+                summary: Promote member to ADMIN
+                value:
+                  role: ADMIN
+              demoteToEvaluator:
+                summary: Demote member to EVALUATOR
+                value:
+                  role: EVALUATOR
+      responses:
+        '200':
+          description: Member role updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          description: Invalid data or request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              examples:
+                nonExistentMember:
+                  summary: Member does not exist
+                  value:
+                    error: "INVALID DATA: User with username nonexistent_user is not a member of the organization."
+                ownerRole:
+                  summary: Cannot change owner's role
+                  value:
+                    error: "INVALID DATA: Cannot change the role of the organization owner."
+                invalidOrganization:
+                  summary: Invalid organization ID format
+                  value:
+                    error: "INVALID DATA: Invalid organization ID"
+        '403':
+          description: Forbidden - User lacks required permissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              examples:
+                noPermission:
+                  summary: User cannot update member roles
+                  value:
+                    error: "PERMISSION ERROR: Only SPACE admins or organization-level OWNER, ADMIN and MANAGER can update member roles."
+                escalatedPermission:
+                  summary: Manager trying to promote to ADMIN
+                  value:
+                    error: "PERMISSION ERROR: Only SPACE admins or organization-level OWNER/ADMIN can add high-level members."
+        '404':
+          description: Organization not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              examples:
+                notFound:
+                  summary: Organization does not exist
+                  value:
+                    error: "Organization with ID 000000000000000000000000 not found"
+        '409':
+          description: Conflict - Member already has the target role
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              examples:
+                sameRole:
+                  summary: Member already has this role
+                  value:
+                    error: "CONFLICT: User with username john_doe already has the role EVALUATOR."
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              examples:
+                missingRole:
+                  summary: Missing role field
+                  value:
+                    error: "Validation error: role field is required"
+                invalidRole:
+                  summary: Invalid role value
+                  value:
+                    error: "Validation error: role must be one of ADMIN, MANAGER, EVALUATOR"
+                invalidRoleType:
+                  summary: Role is not a string
+                  value:
+                    error: "Validation error: role must be a string"
+                ownerRoleAttempt:
+                  summary: Attempting to assign OWNER role
+                  value:
+                    error: "Validation error: OWNER role cannot be assigned via this endpoint"
+
     delete:
       summary: Remove specific member from organization
       description: |

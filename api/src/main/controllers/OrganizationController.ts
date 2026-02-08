@@ -10,6 +10,7 @@ class OrganizationController {
     this.getById = this.getById.bind(this);
     this.create = this.create.bind(this);
     this.addMember = this.addMember.bind(this);
+    this.updateMemberRole = this.updateMemberRole.bind(this);
     this.update = this.update.bind(this);
     this.addApiKey = this.addApiKey.bind(this);
     this.removeApiKey = this.removeApiKey.bind(this);
@@ -93,6 +94,38 @@ class OrganizationController {
       }
       if (err.message.includes('INVALID DATA')) {
         return res.status(400).send({ error: err.message });
+      }
+      res.status(500).send({ error: err.message });
+    }
+  }
+  
+  async updateMemberRole(req: any, res: any) {
+    try {
+      const organizationId = req.params.organizationId;
+      const username = req.params.username;
+      const { role } = req.body;
+
+      if (!organizationId) {
+        return res.status(400).send({ error: 'organizationId query parameter is required' });
+      }
+
+      if (!username) {
+        return res.status(400).send({ error: 'username field is required' });
+      }
+
+      await this.organizationService.updateMemberRole(organizationId, username, role, req.user);
+      
+      const updatedOrganization = await this.organizationService.findById(organizationId);
+      res.json(updatedOrganization);
+    } catch (err: any) {
+      if (err.message.includes('PERMISSION ERROR')) {
+        return res.status(403).send({ error: err.message });
+      }
+      if (err.message.includes('INVALID DATA')) {
+        return res.status(400).send({ error: err.message });
+      }
+      if (err.message.includes('CONFLICT')) {
+        return res.status(409).send({ error: err.message });
       }
       res.status(500).send({ error: err.message });
     }
