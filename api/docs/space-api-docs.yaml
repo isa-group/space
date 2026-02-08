@@ -1135,11 +1135,11 @@ paths:
       description: |
         Disables a service. Cannot be permanently deleted; use disable to mark unavailable.
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: OWNER/ADMIN role required
-        - Org Key: ALL scope required
+        - USER user: OWNER/ADMIN role required
+        - ADMIN user: can disable services in any organization
 
       tags:
         - Services
@@ -1168,13 +1168,13 @@ paths:
     get:
       summary: List service pricings
       description: |
-        Lists all pricing versions for a specific service.
+        Lists all pricing versions for a specific service in a organization.
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: organization member with any role
-        - Org Key: ANY scope
+        - USER user: organization member with any role
+        - ADMIN user: can view pricings of any service in any organization
 
       tags:
         - Services
