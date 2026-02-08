@@ -5,9 +5,7 @@
     },
     "name": "Zoom",
     "disabled": false,
-    "organizationId": {
-      "$oid": "63f74bf8eeed64054274b60d"
-    },
+    "organizationId": "63f74bf8eeed64054274b60d",
     "activePricings": {
       "2_0_0": {
         "id": {
