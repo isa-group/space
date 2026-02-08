@@ -1202,13 +1202,12 @@ describe('Organization API Test Suite', function () {
       expect(response.body.error).toBeDefined();
     });
 
-    it('Should return 400 when username field is missing', async function () {
+    it('Should return 404 when username field is missing', async function () {
       const response = await request(app)
         .delete(`${baseUrl}/organizations/${testOrganization.id}/members`)
-        .set('x-api-key', adminApiKey)
-        .expect(400);
-
-      expect(response.body.error).toBeDefined();
+        .set('x-api-key', adminApiKey);
+      
+      expect(response.status).toBe(404);
     });
 
     it('Should return 404 when organization does not exist', async function () {

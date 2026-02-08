@@ -166,7 +166,7 @@ describe('Services API Test Suite', function () {
         .get(`${baseUrl}/services/unexistent-service`)
         .set('x-api-key', testApiKey);
       expect(response.status).toEqual(404);
-      expect(response.body.error).toBe('Service unexistent-service not found');
+      expect(response.body.error).toBe('NOT FOUND: Service with name unexistent-service');
     });
   });
 
@@ -630,7 +630,7 @@ describe('Services API Test Suite', function () {
         .get(`${baseUrl}/services/unexistent-service/pricings`)
         .set('x-api-key', testApiKey);
       expect(response.status).toEqual(404);
-      expect(response.body.error).toBe('Service unexistent-service not found');
+      expect(response.body.error).toBe('NOT FOUND: Service with name unexistent-service');
     });
   });
 
@@ -760,7 +760,7 @@ describe('Services API Test Suite', function () {
         .get(`${baseUrl}/services/unexistent-service/pricings/${testService.activePricings.keys().next().value}`)
         .set('x-api-key', testApiKey);
       expect(response.status).toEqual(404);
-      expect(response.body.error).toBe('Service unexistent-service not found');
+      expect(response.body.error).toBe('NOT FOUND: Service with name unexistent-service');
     });
 
     it('Should return 404 due to pricing not found', async function () {

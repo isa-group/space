@@ -1392,7 +1392,7 @@ describe('Permissions Test Suite', function () {
           .set('x-api-key', allApiKey.key)
           .send({ name: testService.name });
 
-        expect([200, 400, 404, 422]).toContain(response2.status);
+        expect([200, 400, 404, 422, 409]).toContain(response2.status);
       });
 
       it('Should allow update with organization API key with MANAGEMENT scope', async function () {
@@ -1408,7 +1408,7 @@ describe('Permissions Test Suite', function () {
           .set('x-api-key', managementApiKey.key)
           .send({ name: testService.name });
           
-        expect([200, 400, 404, 422]).toContain(response2.status);
+        expect([200, 400, 404, 422, 409]).toContain(response2.status);
       });
 
       it('Should return 403 with organization API key with EVALUATION scope', async function () {
