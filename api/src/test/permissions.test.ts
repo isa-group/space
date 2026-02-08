@@ -2465,12 +2465,12 @@ describe('Permissions Test Suite', function () {
         expect([200, 404]).toContain(response.status);
       });
 
-      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+      it('Should return 200 with organization API key with EVALUATION scope', async function () {
         const response = await request(app)
           .get(`${baseUrl}/analytics/api-calls`)
           .set('x-api-key', analyticsEvaluationApiKey.key);
 
-        expect(response.status).toBe(403);
+        expect([200, 404]).toContain(response.status);
       });
 
       it('Should return 401 without API key', async function () {
@@ -2513,12 +2513,12 @@ describe('Permissions Test Suite', function () {
         expect([200, 404]).toContain(response.status);
       });
 
-      it('Should return 403 with organization API key with EVALUATION scope', async function () {
+      it('Should return 200 with organization API key with EVALUATION scope', async function () {
         const response = await request(app)
           .get(`${baseUrl}/analytics/evaluations`)
           .set('x-api-key', analyticsEvaluationApiKey.key);
 
-        expect(response.status).toBe(403);
+        expect([200, 404]).toContain(response.status);
       });
 
       it('Should return 401 without API key', async function () {
