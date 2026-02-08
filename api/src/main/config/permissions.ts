@@ -232,7 +232,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
     path: '/analytics/**',
     methods: ['GET'],
     allowedUserRoles: ['ADMIN', 'USER'],
-    allowedOrgRoles: ['ALL', 'MANAGEMENT'],
+    allowedOrgRoles: ['ALL', 'MANAGEMENT', 'EVALUATION'],
   },
 
   // ============================================

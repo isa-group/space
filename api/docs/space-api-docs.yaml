@@ -1208,13 +1208,16 @@ paths:
     post:
       summary: Add pricing version to service
       description: |
-        Uploads and adds a new pricing version to the service in YAML or JSON format.
+        Uploads and adds a new pricing version to the service.
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: OWNER/ADMIN/MANAGER role required
-        - Org Key: ALL or MANAGEMENT scope required
+        - USER user: OWNER/ADMIN/MANAGER role required
+        - ADMIN user: can add pricings to any service in any organization
+
+        **Constraints**:
+        - Pricing `saasName` and `serviceName` must be the same
 
       tags:
         - Services
@@ -1265,11 +1268,11 @@ paths:
         Retrieves complete details about a specific pricing version including 
         plans, add-ons, and availability.
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: organization member with any role
-        - Org Key: ANY scope
+        - USER user: organization member with any role
+        - ADMIN user: can view any pricing version from any service in any organization
 
       tags:
         - Services
@@ -1307,11 +1310,11 @@ paths:
       description: |
         Updates the availability status of a pricing version.
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: OWNER/ADMIN/MANAGER role required
-        - Org Key: ALL or MANAGEMENT scope required
+        - USER user: OWNER/ADMIN/MANAGER role required
+        - ADMIN user: can update availability of any pricing version from any service in any organization
 
       tags:
         - Services
@@ -1358,13 +1361,13 @@ paths:
     delete:
       summary: Delete pricing version
       description: |
-        Removes a pricing version from the service (irreversible operation).
+        Removes a pricing version from the given service in the given organization (irreversible operation).
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: OWNER/ADMIN role required
-        - Org Key: ALL scope required
+        - USER user: OWNER/ADMIN role required
+        - ADMIN user: can delete any pricing version from any service in any organization
 
       tags:
         - Services
@@ -1396,20 +1399,62 @@ paths:
 
   /services:
     get:
-      summary: List all services (direct access, Org Key only)
+      summary: List all services
       description: |
-        Lists all services across all organizations using direct API access.
+        Lists all services configured in the organization.
 
-        **Authentication**: Organization API Key only
+        **Authentication**: Organization API Key | User API Key
 
-        **Cannot use**: User API Keys
+        **Organization API Key Permission**:
+          - ALL scope: can view and filter all services from the organization
+          - MANAGEMENT scope: can view and filter all services from the organization
+          - EVALUATION scope: can view and filter all services from the organization
 
-        **Permission**: Org Key with ANY scope (ALL/MANAGEMENT/EVALUATION)
-
+        **User API Key Permission**:
+          - ADMIN user: can view all services from any organization
       tags:
         - Services
       security:
         - ApiKeyAuth: []
+      parameters:
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Case-insensitive partial match on service name (regex "contains").
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for pagination. Ignored when `offset` is provided and greater than 0.
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of items to skip. When `offset` is greater than 0, it overrides `page`.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 20
+          description: Max number of items to return per request.
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+          description: Sort order by service name.
       responses:
         '200':
           description: List of all services
@@ -1425,13 +1470,14 @@ paths:
           description: Forbidden - User API Keys cannot access this endpoint
 
     post:
-      summary: Create service (direct access, Org Key only)
+      summary: Create service
       description: |
-        Creates a service using direct Organization API Key access (not organization-scoped).
+        Creates a new service in the organization.
 
-        **Authentication**: Organization API Key only
+        **Authentication**: Organization API Key
 
-        **Permission**: Org Key with ALL or MANAGEMENT scope
+        **Permission**: 
+          - Org Key with ALL or MANAGEMENT scope
 
       tags:
         - Services
@@ -1465,14 +1511,17 @@ paths:
           description: Forbidden
 
     delete:
-      summary: Delete all services (direct access, Org Key only)
+      summary: Delete all services
       description: |
-        Deletes all services across all organizations (requires ALL scope).
+        Deletes all services and associated pricings in the organization (irreversible operation).
 
-        **Authentication**: Organization API Key only
+        **Authentication**: Organization API Key | User API Key
 
-        **Permission**: Org Key with ALL scope
+        **Organization Permission**:
+          - ALL scope: delete all services from the organization.
 
+        **User Permission**:
+          - ADMIN user: can delete all services allocated in a SPACE instance.
       tags:
         - Services
       security:
@@ -1485,13 +1534,13 @@ paths:
 
   /services/{serviceName}:
     get:
-      summary: Get service (direct access)
+      summary: Get service
       description: |
-        Retrieves service details using direct Organization API Key access.
+        Retrieves detailed information about a specific service in a organization.
 
-        **Authentication**: Organization API Key only
+        **Authentication**: Organization API Key
 
-        **Permission**: Org Key with ANY scope
+        **Permission**: Org Key with any scope
 
       tags:
         - Services
@@ -1514,13 +1563,21 @@ paths:
           description: Service not found
 
     put:
-      summary: Update service (direct access)
+      summary: Update service
       description: |
-        Updates service using direct Organization API Key access.
+        Updates service metadata (name, organization).
 
-        **Authentication**: Organization API Key only
+        **Authentication**: Organization API Key
 
-        **Permission**: Org Key with ALL or MANAGEMENT scope
+        **Permission**: 
+          - ALL scope: can update service name and organization.
+          - MANAGEMENT scope: can update service name and organization
+
+        **Cascading Operations**:
+        - Renaming a service propagates the change by updating the corresponding `contractedServices` references in all associated contracts.
+        - Updating `organizationId` triggers one of the following behaviors:
+            - If contracts include **only the updated service**, each contract’s `organizationId` is updated to reflect the new organization.
+            - If contracts include **multiple contracted services**, the updated service is removed from them.
 
       tags:
         - Services
@@ -1541,7 +1598,7 @@ paths:
               properties:
                 name:
                   type: string
-                description:
+                organizationId:
                   type: string
       responses:
         '200':
@@ -1554,13 +1611,14 @@ paths:
           description: Forbidden
 
     delete:
-      summary: Disable service (direct access)
+      summary: Disable service
       description: |
-        Disables a service using direct Organization API Key access.
+        Disables a service. Cannot be permanently deleted; use disable to mark unavailable.
 
-        **Authentication**: Organization API Key only
+        **Authentication**: Organization API Key
 
-        **Permission**: Org Key with ALL scope
+        **Permission**:
+          - ALL scope: can disable any service from the organization.
 
       tags:
         - Services
@@ -1580,13 +1638,13 @@ paths:
 
   /services/{serviceName}/pricings:
     get:
-      summary: List pricings (direct access)
+      summary: List pricings
       description: |
-        Lists all pricings for a service using direct Organization API Key access.
+        Lists all pricing versions for a specific service in a organization.
 
-        **Authentication**: Organization API Key only
+        **Authentication**: Organization API Key
 
-        **Permission**: Org Key with ANY scope
+        **Permission**: Org Key with any scope
 
       tags:
         - Services
@@ -1611,13 +1669,18 @@ paths:
           description: Service not found
 
     post:
-      summary: Add pricing (direct access)
+      summary: Add pricing
       description: |
-        Adds pricing to a service using direct Organization API Key access.
+        Uploads and adds a new pricing version to the service.
 
-        **Authentication**: Organization API Key only
+        **Constraints**:
+        - Pricing `saasName` and `serviceName` must be the same
 
-        **Permission**: Org Key with ALL or MANAGEMENT scope
+        **Authentication**: Organization API Key
+
+        **Permission**: 
+          - ALL scope: can add pricings to any service in the organization.
+          - MANAGEMENT scope: can add pricings to any service in the organization.
 
       tags:
         - Services
@@ -1651,13 +1714,14 @@ paths:
 
   /services/{serviceName}/pricings/{pricingVersion}:
     get:
-      summary: Get pricing (direct access)
+      summary: Get pricing
       description: |
-        Retrieves pricing details using direct Organization API Key access.
+        Retrieves complete details about a specific pricing version including 
+        plans, add-ons, and availability.
 
-        **Authentication**: Organization API Key only
+        **Authentication**: Organization API Key
 
-        **Permission**: Org Key with ANY scope
+        **Permission**: Org Key with any scope
 
       tags:
         - Services
@@ -1685,13 +1749,15 @@ paths:
           description: Pricing not found
 
     put:
-      summary: Update pricing availability (direct access)
+      summary: Update pricing availability
       description: |
-        Updates pricing availability using direct Organization API Key access.
+        Updates the availability status of a pricing version.
 
         **Authentication**: Organization API Key only
 
-        **Permission**: Org Key with ALL or MANAGEMENT scope
+        **Permission**:
+          - ALL scope: can update availability of any pricing version from any service in the organization.
+          - MANAGEMENT scope: can update availability of any pricing version from any service in the organization.
 
       tags:
         - Services
@@ -1728,13 +1794,14 @@ paths:
           description: Forbidden
 
     delete:
-      summary: Delete pricing (direct access)
+      summary: Delete pricing
       description: |
-        Deletes a pricing version using direct Organization API Key access.
+        Removes a pricing version from the given service in the given organization (irreversible operation).
 
-        **Authentication**: Organization API Key only
+        **Authentication**: Organization API Key
 
-        **Permission**: Org Key with ALL scope
+        **Permission**:
+          - ALL scope: can delete any pricing version from any service in the organization.
 
       tags:
         - Services
@@ -1761,13 +1828,13 @@ paths:
     get:
       summary: List contracts in organization
       description: |
-        Lists all subscription contracts in the organization.
+        Lists all contracts in the organization.
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: organization member with any role
-        - Org Key: ANY scope 
+        - USER user: must be an organization member with any role (OWNER/ADMIN/MANAGER/EVALUATOR)
+        - ADMIN user: can view contracts in any organization
 
       tags:
         - Contracts
@@ -1779,6 +1846,70 @@ paths:
           required: true
           schema:
             type: string
+        - name: username
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter contracts by username (case-insensitive regex match)
+        - name: firstName
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter contracts by user's first name (case-insensitive regex match)
+        - name: lastName
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter contracts by user's last name (case-insensitive regex match)
+        - name: email
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter contracts by user email (case-insensitive regex match)
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: |
+            Page number for pagination (1-based). 
+            **Note**: Ignored when `offset > 0`.
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: |
+            Number of contracts to skip (0-based offset). 
+            **Precedence**: When `offset > 0`, it overrides the `page` parameter.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Maximum number of contracts to return per page
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [firstName, lastName, username, email]
+          description: Field to sort contracts by
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+          description: Sort order (ascending or descending)
       responses:
         '200':
           description: List of contracts
@@ -1796,11 +1927,11 @@ paths:
       description: |
         Creates a new subscription contract in the organization.
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: OWNER/ADMIN/MANAGER role required
-        - Org Key: ALL or MANAGEMENT scope required
+        - USER user: must have OWNER/ADMIN/MANAGER role
+        - ADMIN user: can create contracts in any organization
 
       tags:
         - Contracts
@@ -1833,11 +1964,11 @@ paths:
       description: |
         Deletes all subscription contracts in the organization (irreversible).
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: OWNER/ADMIN role required
-        - Org Key: ALL scope required
+        - USER user: must have OWNER/ADMIN role with the organization
+        - ADMIN user: can delete contracts in any organization
 
       tags:
         - Contracts
@@ -1861,11 +1992,11 @@ paths:
       description: |
         Retrieves details of a specific user's contract in the organization.
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: organization member
-        - Org Key: ANY scope
+        - USER user: must be an organization member with any role (OWNER/ADMIN/MANAGER/EVALUATOR)
+        - ADMIN user: can view contracts in any organization
 
       tags:
         - Contracts
@@ -1897,11 +2028,11 @@ paths:
       description: |
         Updates contract details (contract novation - subscription composition change).
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: OWNER/ADMIN/MANAGER role required
-        - Org Key: ALL or MANAGEMENT scope required
+        - USER user: must have OWNER/ADMIN/MANAGER role
+        - ADMIN user: can update contracts in any organization
 
       tags:
         - Contracts
@@ -1939,11 +2070,11 @@ paths:
       description: |
         Deletes a specific subscription contract.
 
-        **Authentication**: User API Key | Organization API Key
+        **Authentication**: User API Key
 
         **Permission**: 
-        - User Key: OWNER/ADMIN role required
-        - Org Key: ALL scope required
+        - USER user: must have OWNER/ADMIN role in the organization
+        - ADMIN user: can delete contracts in any organization
 
       tags:
         - Contracts
@@ -1968,20 +2099,88 @@ paths:
 
   /contracts:
     get:
-      summary: List all contracts (direct access)
+      summary: List all contracts
       description: |
-        Lists all contracts across all organizations (direct access).
+        Lists all contracts in the organization.
 
         **Authentication**: User API Key (ADMIN) | Organization API Key
 
-        **Permission**: 
-        - User Key: ADMIN role only
-        - Org Key: ALL or MANAGEMENT scope
+        **User Permission**: 
+        - ADMIN user: can view all contracts from any organization
+
+        **Organization Permission**:
+        - ALL scope: can view all contracts from the organization
+        - MANAGEMENT scope: can view all contracts from the organization
 
       tags:
         - Contracts
       security:
         - ApiKeyAuth: []
+      parameters:
+        - name: username
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter contracts by username (case-insensitive regex match)
+        - name: firstName
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter contracts by user's first name (case-insensitive regex match)
+        - name: lastName
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter contracts by user's last name (case-insensitive regex match)
+        - name: email
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter contracts by user email (case-insensitive regex match)
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: |
+            Page number for pagination (1-based). 
+            **Note**: Ignored when `offset > 0`.
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: |
+            Number of contracts to skip (0-based offset). 
+            **Precedence**: When `offset > 0`, it overrides the `page` parameter.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Maximum number of contracts to return per page
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [firstName, lastName, username, email]
+          description: Field to sort contracts by
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+          description: Sort order (ascending or descending)
       responses:
         '200':
           description: List of all contracts
@@ -1993,15 +2192,18 @@ paths:
                   $ref: '#/components/schemas/Contract'
 
     post:
-      summary: Create contract (direct access)
+      summary: Create contract
       description: |
-        Creates a contract using direct access (not organization-scoped).
+        Creates a new subscription contract in the organization.
 
         **Authentication**: User API Key (ADMIN) | Organization API Key
 
-        **Permission**: 
-        - User Key: ADMIN role only
-        - Org Key: ALL or MANAGEMENT scope
+        **User Permission**: 
+        - ADMIN user: can create contracts in any organization
+
+        **Organization Permission**:
+        - ALL scope: can create contracts in the organization
+        - MANAGEMENT scope: can create contracts in the organization
 
       tags:
         - Contracts
@@ -2022,15 +2224,17 @@ paths:
                 $ref: '#/components/schemas/Contract'
 
     delete:
-      summary: Delete all contracts (direct access)
+      summary: Delete all contracts
       description: |
-        Deletes all contracts across organizations (direct access, requires ALL scope).
+        Deletes all subscription contracts in the organization (irreversible).
 
         **Authentication**: User API Key (ADMIN) | Organization API Key
 
-        **Permission**: 
-        - User Key: ADMIN role only
-        - Org Key: ALL scope
+        **User Permission**: 
+        - ADMIN user: can delete all contracts from any organization
+
+        **Organization Permission**:
+        - ALL scope: can delete all contracts from the organization
 
       tags:
         - Contracts
@@ -2042,15 +2246,18 @@ paths:
 
   /contracts/{userId}:
     get:
-      summary: Get contract (direct access)
+      summary: Get contract
       description: |
-        Retrieves contract details using direct access.
+        Retrieves details of a specific user's contract in the organization.
 
         **Authentication**: User API Key (ADMIN) | Organization API Key
 
-        **Permission**: 
-        - User Key: ADMIN role only
-        - Org Key: ALL or MANAGEMENT scope
+        **User Permission**: 
+        - ADMIN user: can view contracts in any organization
+
+        **Organization Permission**:
+        - ALL scope: can view contracts in the organization
+        - MANAGEMENT scope: can view contracts in the organization
 
       tags:
         - Contracts
@@ -2071,15 +2278,18 @@ paths:
                 $ref: '#/components/schemas/Contract'
 
     put:
-      summary: Update contract (direct access)
+      summary: Update contract
       description: |
-        Updates contract using direct access.
+        Updates contract details (contract novation - subscription composition change).
 
         **Authentication**: User API Key (ADMIN) | Organization API Key
 
-        **Permission**: 
-        - User Key: ADMIN role only
-        - Org Key: ALL or MANAGEMENT scope
+        **User Permission**: 
+        - ADMIN user: can update contracts in any organization
+
+        **Organization Permission**:
+        - ALL scope: can update contracts in the organization
+        - MANAGEMENT scope: can update contracts in the organization
 
       tags:
         - Contracts
@@ -2106,15 +2316,17 @@ paths:
                 $ref: '#/components/schemas/Contract'
 
     delete:
-      summary: Delete contract (direct access)
+      summary: Delete contract
       description: |
-        Deletes a contract using direct access.
+        Deletes a specific subscription contract.
 
         **Authentication**: User API Key (ADMIN) | Organization API Key
 
-        **Permission**: 
-        - User Key: ADMIN role only
-        - Org Key: ALL scope
+        **User Permission**: 
+        - ADMIN user: can delete contracts in any organization
+
+        **Organization Permission**:
+        - ALL scope: can delete contracts in the organization
 
       tags:
         - Contracts
@@ -2138,9 +2350,12 @@ paths:
 
         **Authentication**: User API Key (ADMIN) | Organization API Key
 
-        **Permission**: 
-        - User Key: ADMIN role only
-        - Org Key: ALL or MANAGEMENT scope
+        **User Permission**: 
+        - ADMIN user: can reset usage levels in any organization
+
+        **Organization Permission**:
+        - ALL scope: can reset usage levels in the organization
+        - MANAGEMENT scope: can reset usage levels in the organization
 
       tags:
         - Contracts
@@ -2174,9 +2389,12 @@ paths:
 
         **Authentication**: User API Key (ADMIN) | Organization API Key
 
-        **Permission**: 
-        - User Key: ADMIN role only
-        - Org Key: ALL or MANAGEMENT scope
+        **User Permission**: 
+        - ADMIN user: can update contact information in any organization
+
+        **Organization Permission**:
+        - ALL scope: can update contact information in the organization
+        - MANAGEMENT scope: can update contact information in the organization
 
       tags:
         - Contracts
@@ -2210,9 +2428,12 @@ paths:
 
         **Authentication**: User API Key (ADMIN) | Organization API Key
 
-        **Permission**: 
-        - User Key: ADMIN role only
-        - Org Key: ALL or MANAGEMENT scope
+        **User Permission**: 
+        - ADMIN user: can update billing period in any organization
+
+        **Organization Permission**:
+        - ALL scope: can update billing period in the organization
+        - MANAGEMENT scope: can update billing period in the organization
 
       tags:
         - Contracts
@@ -2244,16 +2465,80 @@ paths:
       description: |
         Retrieves all features available in the system for evaluation.
 
-        **Authentication**: Organization API Key only
+        **Authentication**: Organization API Key
 
-        **Cannot use**: User API Keys
-
-        **Permission**: Org Key with ANY scope (ALL/MANAGEMENT/EVALUATION)
+        **Permission**: Org Key with any scope (ALL/MANAGEMENT/EVALUATION)
 
       tags:
         - Features
       security:
         - ApiKeyAuth: []
+      parameters:
+        - name: featureName
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter features by name (case-insensitive regex match)
+        - name: serviceName
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter features by service name (case-insensitive regex match)
+        - name: pricingVersion
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter features by pricing version
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: |
+            Page number for pagination (1-based). 
+            Ignored when offset is greater than 0.
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: |
+            Number of features to skip (0-based offset). 
+            When offset is greater than 0, it overrides the page parameter.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Maximum number of features to return per page
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [featureName, serviceName]
+          description: Field to sort features by
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+          description: Sort order (ascending or descending)
+        - name: show
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [active, archived, all]
+          description: Filter features by status (active, archived, or all)
       responses:
         '200':
           description: List of available features
@@ -2273,7 +2558,7 @@ paths:
 
         **Authentication**: Organization API Key only
 
-        **Permission**: Org Key with ANY scope
+        **Permission**: Org Key with any scope
 
       tags:
         - Features
@@ -2285,6 +2570,20 @@ paths:
           required: true
           schema:
             type: string
+        - name: details
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Return detailed feature evaluation information including limits and consumption
+        - name: server
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Perform evaluation using server-side context instead of token-based evaluation
       requestBody:
         required: true
         content:
@@ -2313,7 +2612,7 @@ paths:
 
         **Authentication**: Organization API Key only
 
-        **Permission**: Org Key with ANY scope
+        **Permission**: Org Key with any scope
 
       tags:
         - Features
@@ -2325,6 +2624,13 @@ paths:
           required: true
           schema:
             type: string
+        - name: server
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Perform evaluation using server-side context instead of token-based evaluation
       responses:
         '200':
           description: Pricing token generated
@@ -2346,7 +2652,7 @@ paths:
 
         **Authentication**: Organization API Key only
 
-        **Permission**: Org Key with ANY scope
+        **Permission**: Org Key with any scope
 
       tags:
         - Features
@@ -2363,6 +2669,27 @@ paths:
           required: true
           schema:
             type: string
+        - name: server
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Perform evaluation using server-side context instead of token-based evaluation
+        - name: revert
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Reset feature usage levels after evaluation
+        - name: latest
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Use the latest feature configuration
       requestBody:
         required: true
         content:
@@ -2392,11 +2719,16 @@ paths:
       description: |
         Retrieves statistics about API call usage in the system.
 
-        **Authentication**: User API Key (ADMIN) | Organization API Key
+        **Authentication**: User API Key (ADMIN, USER) | Organization API Key
 
-        **Permission**: 
-        - User Key: ADMIN role only
-        - Org Key: ALL or MANAGEMENT scope
+        **User Permission**:
+          - USER user: can view API call statistics
+          - ADMIN user: can view API call statistics
+
+        **Organization Permission**:
+          - ALL scope: can view API call statistics
+          - MANAGEMENT scope: can view API call statistics
+          - EVALUATION scope: can view API call statistics
 
       tags:
         - Analytics
@@ -2421,11 +2753,16 @@ paths:
       description: |
         Retrieves statistics about feature evaluations performed by the system.
 
-        **Authentication**: User API Key (ADMIN) | Organization API Key
+        **Authentication**: User API Key (ADMIN, USER) | Organization API Key
 
-        **Permission**: 
-        - User Key: ADMIN role only
-        - Org Key: ALL or MANAGEMENT scope
+        **User Permission**:
+          - USER user: can view feature evaluation statistics
+          - ADMIN user: can view feature evaluation statistics
+
+        **Organization Permission**:
+          - ALL scope: can view feature evaluation statistics
+          - MANAGEMENT scope: can view feature evaluation statistics
+          - EVALUATION scope: can view feature evaluation statistics
 
       tags:
         - Analytics
@@ -2532,44 +2869,44 @@ paths:
                     type: string
                     example: The WebSocket event service is active
 
-  /events/test-event:
-    post:
-      summary: Send test event (for testing)
-      description: |
-        Sends a test event to all connected WebSocket clients (used for testing purposes).
+  # /events/test-event:
+  #   post:
+  #     summary: Send test event (for testing)
+  #     description: |
+  #       Sends a test event to all connected WebSocket clients (used for testing purposes).
 
-        **Authentication**: Public
+  #       **Authentication**: Public
 
-      tags:
-        - Events
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - serviceName
-                - pricingVersion
-              properties:
-                serviceName:
-                  type: string
-                  example: Zoom
-                pricingVersion:
-                  type: string
-                  example: "1.0"
-      responses:
-        '200':
-          description: Event sent successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
+  #     tags:
+  #       - Events
+  #     requestBody:
+  #       required: true
+  #       content:
+  #         application/json:
+  #           schema:
+  #             type: object
+  #             required:
+  #               - serviceName
+  #               - pricingVersion
+  #             properties:
+  #               serviceName:
+  #                 type: string
+  #                 example: Zoom
+  #               pricingVersion:
+  #                 type: string
+  #                 example: "1.0"
+  #     responses:
+  #       '200':
+  #         description: Event sent successfully
+  #         content:
+  #           application/json:
+  #             schema:
+  #               type: object
+  #               properties:
+  #                 success:
+  #                   type: boolean
+  #                 message:
+  #                   type: string
 
   /events/client:
     get:
