@@ -11,8 +11,6 @@ export default function OrganizationSelector({ collapsed }: OrganizationSelector
   const { currentOrganization, organizations, switchOrganization } = useOrganization();
   const [isOpen, setIsOpen] = useState(false);
 
-  console.log('[OrganizationSelector] Current org:', currentOrganization?.id, currentOrganization?.name);
-
   if (!currentOrganization || organizations.length === 0) {
     return null;
   }

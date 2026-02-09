@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useRef } from "react";
 import axios from "../lib/axios";
 import { getOrganizations } from "@/api/organizations/organizationsApi";
+import { getCurrentUser } from "@/api/users/usersApi";
 import { OrganizationContext } from "./OrganizationContext";
 
 export interface UserData {
@@ -31,46 +32,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<UserData>({
     username: isDevelopmentEnvironment ? "devUser" : "",
     apiKey: isDevelopmentEnvironment ? import.meta.env.VITE_SPACE_ADMIN_API_KEY : "",
-    role: isDevelopmentEnvironment ? "ADMIN" : "",
+    role: "", // Will be loaded from API
   });
+
+  // Load user role from API in development mode
+  useEffect(() => {
+    if (!isDevelopmentEnvironment || !user.apiKey || user.role) {
+      return;
+    }
+
+    const loadUserRole = async () => {
+      try {
+        const currentUser = await getCurrentUser(user.apiKey);
+        setUser(prev => ({
+          ...prev,
+          username: currentUser.username,
+          role: currentUser.role
+        }));
+      } catch (error) {
+        console.error('[AuthContext] Failed to load user role:', error);
+      }
+    };
+
+    loadUserRole();
+  }, [isDevelopmentEnvironment, user.apiKey, user.role]);
 
   // Load organizations when user is authenticated (for dev mode or after login)
   useEffect(() => {
     if (!isAuthenticated || !user.apiKey || !organizationContext) {
-      console.log('[AuthContext] Skipping org load - missing requirements:', { isAuthenticated, hasApiKey: !!user.apiKey, hasOrgContext: !!organizationContext });
       return;
     }
 
     // Only load once per API key
     if (organizationsLoadedRef.current) {
-      console.log('[AuthContext] Organizations already loaded, skipping');
       return;
     }
 
-    console.log('[AuthContext] Starting organization load for:', user.username);
     let isMounted = true;
 
     const loadOrganizations = async () => {
       try {
-        console.log('[AuthContext] Fetching organizations from API...');
         const organizations = await getOrganizations(user.apiKey);
-        console.log('[AuthContext] API returned organizations:', organizations);
         
         if (isMounted && organizations && organizations.length > 0) {
           // Mark as loaded ONLY after successful load
           organizationsLoadedRef.current = true;
           
-          console.log('[AuthContext] Organizations loaded, count:', organizations.length);
-          console.log('[AuthContext] Calling setOrganizations with:', organizations);
           organizationContext.setOrganizations(organizations);
           
           // Set default organization
           const defaultOrg = organizations.find(org => org.default) || organizations[0];
           if (defaultOrg) {
-            console.log('[AuthContext] Setting default organization:', defaultOrg.name);
             organizationContext.setCurrentOrganization(defaultOrg);
           } else {
-            console.log('[AuthContext] No default organization found');
+            console.warn('[AuthContext] No default organization found, and organizations list is not empty');
           }
         } else if (isMounted) {
           console.warn('[AuthContext] No organizations returned from API');

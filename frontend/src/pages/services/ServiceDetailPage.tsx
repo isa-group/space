@@ -25,9 +25,9 @@ export default function ServiceDetailPage() {
   const [confirm, setConfirm] = useState<null | { pricing: Pricing; to: 'active' | 'archived' }>(
     null
   );
-  const [showAlert, alertElement] = useCustomAlert();
+  const { showAlert, alertElement } = useCustomAlert();
   const [addVersionOpen, setAddVersionOpen] = useState(false);
-  const [showConfirm, confirmElement] = useCustomConfirm();
+  const { showConfirm, confirmElement } = useCustomConfirm();
 
   const router = useNavigate();
 
@@ -118,7 +118,6 @@ export default function ServiceDetailPage() {
           .catch(error => {
             showAlert(`Failed to disable service ${name}. Error: ${error.message}`);
           });
-        console.log(`service ${name} is going to be disabled`);
       }
     });
   }

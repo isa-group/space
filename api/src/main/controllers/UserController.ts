@@ -9,6 +9,7 @@ class UserController {
     this.userService = container.resolve('userService');
     this.create = this.create.bind(this);
     this.authenticate = this.authenticate.bind(this);
+    this.getCurrentUser = this.getCurrentUser.bind(this);
     this.getAll = this.getAll.bind(this);
     this.getByUsername = this.getByUsername.bind(this);
     this.update = this.update.bind(this);
@@ -44,6 +45,20 @@ class UserController {
       res.json({username: user.username, apiKey: user.apiKey, role: user.role });
     } catch (err: any) {
       res.status(401).send({ error: err.message });
+    }
+  }
+
+  async getCurrentUser(req: any, res: any) {
+    try {
+      // req.user is populated by the authentication middleware
+      if (!req.user) {
+        return res.status(401).send({ error: 'Authentication required' });
+      }
+      
+      const user = await this.userService.findByUsername(req.user.username);
+      res.json({ username: user.username, role: user.role });
+    } catch (err: any) {
+      res.status(500).send({ error: err.message });
     }
   }
 

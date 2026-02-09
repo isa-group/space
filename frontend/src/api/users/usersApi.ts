@@ -2,6 +2,23 @@ import axios from "@/lib/axios";
 
 const DEFAULT_TIMEOUT = 5000;
 
+export async function getCurrentUser(apiKey: string): Promise<{ username: string; role: string }> {
+  return axios
+    .get('/users/me', {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      timeout: DEFAULT_TIMEOUT,
+    })
+    .then(response => response.data)
+    .catch(error => {
+      throw new Error(
+        'Failed to fetch current user. ' + (error.response?.data?.error || error.message)
+      );
+    });
+}
+
 export async function getUsers(apiKey: string): Promise<Array<{ username: string; apiKey: string; role: 'ADMIN' | 'MANAGER' | 'EVALUATOR' }>> {
   return axios
     .get('/users', {
