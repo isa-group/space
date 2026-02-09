@@ -18,6 +18,7 @@ export type OrganizationUserRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'EVALUATOR';
 
 export interface OrganizationFilter {
   owner?: string;
+  username?: string;
   default?: boolean;
 }
 

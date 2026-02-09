@@ -20,13 +20,17 @@ class OrganizationController {
 
   async getAll(req: any, res: any) {
     try {
-      // Allows non-admin users to only see their own organizations
-      if (req.user.role !== 'ADMIN') {
-        req.query.owner = req.user.username;
+      let organizations;
+      
+      // SPACE admins can see all organizations
+      if (req.user.role === 'ADMIN') {
+        const filters = req.query || {};
+        organizations = await this.organizationService.findAll(filters);
+      } else {
+        // Non-admin users see organizations where they are owner or member
+        organizations = await this.organizationService.findByUser(req.user.username);
       }
-
-      const filters = req.query || {};
-      const organizations = await this.organizationService.findAll(filters);
+      
       res.json(organizations);
     } catch (err: any) {
       if (err.message.includes('PERMISSION ERROR')) {

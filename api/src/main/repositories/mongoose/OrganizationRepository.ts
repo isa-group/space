@@ -4,7 +4,12 @@ import OrganizationMongoose from './models/OrganizationMongoose';
 
 class OrganizationRepository extends RepositoryBase {
   async findAll(filters: OrganizationFilter): Promise<LeanOrganization[]> {
-    const organizations = await OrganizationMongoose.find(filters).exec();
+    const query: any = {
+      ...(filters.owner ? { owner: filters.owner } : {}),
+      ...(filters.default !== undefined ? { default: filters.default } : {}),
+    };
+    
+    const organizations = await OrganizationMongoose.find(query).exec();
     return organizations.map(org => org.toObject() as unknown as LeanOrganization);
   }
 

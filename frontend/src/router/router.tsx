@@ -8,6 +8,7 @@ import ServiceDetailPage from "@/pages/services/ServiceDetailPage";
 import SettingsPage from "@/pages/settings";
 import ContractsDashboard from "@/pages/contracts/ContractsDashboard";
 import InstanceMonitoringPage from "@/pages/instance-monitoring";
+import OrganizationSettingsPage from "@/pages/organization-settings";
 import RegisterPage from "@/pages/register";
 import NotFoundPage from "@/pages/not-found";
 import useAuth from "@/hooks/useAuth";
@@ -46,6 +47,7 @@ export function SpaceRouter() {
         <Route path="/services" element={<RequireAuth><LoggedLayout><ServicesPage/></LoggedLayout></RequireAuth>}/>
         <Route path="/services/:name" element={<RequireAuth><LoggedLayout><ServiceDetailPage/></LoggedLayout></RequireAuth>}/>
         <Route path="/settings" element={<RequireAuth><LoggedLayout><SettingsPage/></LoggedLayout></RequireAuth>}/>
+        <Route path="/organization-settings" element={<RequireAuth><LoggedLayout><OrganizationSettingsPage/></LoggedLayout></RequireAuth>}/>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>

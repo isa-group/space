@@ -11,6 +11,7 @@ const baseTabs = [
   { label: 'Members', path: '/members', icon: <FiUsers size={22} /> },
   { label: 'API Keys', path: '/api-keys', icon: <FiKey size={22} /> },
   { label: 'Services Management', path: '/services', icon: <FiServer size={22} /> },
+  { label: 'Organization Settings', path: '/organization-settings', icon: <FiSettings size={22} /> },
   { label: 'Settings', path: '/settings', icon: <FiSettings size={22} /> },
 ];
 
@@ -22,6 +23,7 @@ function getSelectedTab(pathname: string) {
   if (pathname.startsWith('/members')) return '/members';
   if (pathname.startsWith('/api-keys')) return '/api-keys';
   if (pathname.startsWith('/services')) return '/services';
+  if (pathname.startsWith('/organization-settings')) return '/organization-settings';
   if (pathname.startsWith('/settings')) return '/settings';
   if (pathname.startsWith('/contracts/dashboard')) return '/contracts/dashboard';
   if (pathname.startsWith('/instance-monitoring')) return '/instance-monitoring';

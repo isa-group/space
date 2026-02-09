@@ -72,8 +72,38 @@ describe('Organization API Test Suite', function () {
         .expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
-      // Regular users should only see their own organizations
-      expect(response.body.every((org: any) => org.owner === regularUser.username)).toBe(true);
+      // Regular users should see organizations where they are owner or member
+      expect(response.body.every((org: any) => 
+        org.owner === regularUser.username || 
+        org.members.some((m: any) => m.username === regularUser.username)
+      )).toBe(true);
+    });
+
+    it('Should return 200 and include organizations where user is a member', async function () {
+      // Create an organization owned by admin
+      await createTestOrganization(regularUser.username);
+      const adminOrg = await createTestOrganization(adminUser.username);
+      
+      // Add regular user as a member
+      await addMemberToOrganization(adminOrg.id!, { username: regularUser.username, role: 'MANAGER' });
+
+      // Get organizations for regular user
+      const response = await request(app)
+        .get(`${baseUrl}/organizations/`)
+        .set('x-api-key', regularUserApiKey)
+        .expect(200);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      
+      // Regular user should see organizations where they are owner
+      const ownedOrgs = response.body.filter((org: any) => org.owner === regularUser.username);
+      expect(ownedOrgs.length).toBeGreaterThan(0);
+      
+      // Regular user should also see the organization where they are a member
+      const memberOrg = response.body.find((org: any) => org.id === adminOrg.id);
+      expect(memberOrg).toBeDefined();
+      expect(memberOrg.owner).toBe(adminUser.username);
+      expect(memberOrg.members.some((m: any) => m.username === regularUser.username)).toBe(true);
     });
   });
 
@@ -324,6 +354,7 @@ describe('Organization API Test Suite', function () {
       const ownerApiKey = ownerUser.apiKey;
       const testOrg = await createTestOrganization(ownerUser.username);
       const newOwner = otherUser.username;
+      const oldOwner = ownerUser.username;
 
       const updateData = {
         owner: newOwner,
@@ -336,12 +367,57 @@ describe('Organization API Test Suite', function () {
         .expect(200);
 
       expect(response.body.owner).toBe(newOwner);
+      
+      // Verify old owner is now a member with ADMIN role
+      const oldOwnerMember = response.body.members.find((m: any) => m.username === oldOwner);
+      expect(oldOwnerMember).toBeDefined();
+      expect(oldOwnerMember.role).toBe('ADMIN');
+    });
+
+    it('Should return 200 and remove new owner from members when transferring ownership', async function () {
+      const ownerApiKey = ownerUser.apiKey;
+      const testOrg = await createTestOrganization(ownerUser.username);
+      const newOwner = otherUser.username;
+      const oldOwner = ownerUser.username;
+
+      // Add the new owner as a member first
+      await request(app)
+        .post(`${baseUrl}/organizations/${testOrg.id}/members`)
+        .set('x-api-key', ownerApiKey)
+        .send({
+          username: newOwner,
+          role: 'MANAGER'
+        })
+        .expect(200);
+
+      // Transfer ownership to the member
+      const updateData = {
+        owner: newOwner,
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrg.id}`)
+        .set('x-api-key', ownerApiKey)
+        .send(updateData)
+        .expect(200);
+
+      expect(response.body.owner).toBe(newOwner);
+      
+      // Verify old owner is now a member with ADMIN role
+      const oldOwnerMember = response.body.members.find((m: any) => m.username === oldOwner);
+      expect(oldOwnerMember).toBeDefined();
+      expect(oldOwnerMember.role).toBe('ADMIN');
+      
+      // Verify new owner is NOT in members array anymore
+      const newOwnerMember = response.body.members.find((m: any) => m.username === newOwner);
+      expect(newOwnerMember).toBeUndefined();
     });
 
     it('Should return 200 and update organization owner when SPACE admin request', async function () {
       const adminApiKey = adminUser.apiKey;
       const testOrg = await createTestOrganization(ownerUser.username);
       const newOwner = otherUser.username;
+      const oldOwner = ownerUser.username;
 
       const updateData = {
         owner: newOwner,
@@ -354,6 +430,11 @@ describe('Organization API Test Suite', function () {
         .expect(200);
 
       expect(response.body.owner).toBe(newOwner);
+      
+      // Verify old owner is now a member with ADMIN role
+      const oldOwnerMember = response.body.members.find((m: any) => m.username === oldOwner);
+      expect(oldOwnerMember).toBeDefined();
+      expect(oldOwnerMember.role).toBe('ADMIN');
     });
 
     it('Should return 200 and update organization default flag', async function () {

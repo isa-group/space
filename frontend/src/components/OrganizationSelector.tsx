@@ -1,7 +1,8 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
-import { FiChevronDown, FiCheck } from 'react-icons/fi';
+import { FiChevronDown, FiCheck, FiPlus } from 'react-icons/fi';
 import { useOrganization } from '@/hooks/useOrganization';
+import CreateOrganizationModal from './CreateOrganizationModal';
 
 interface OrganizationSelectorProps {
   collapsed: boolean;
@@ -10,6 +11,7 @@ interface OrganizationSelectorProps {
 export default function OrganizationSelector({ collapsed }: OrganizationSelectorProps) {
   const { currentOrganization, organizations, switchOrganization } = useOrganization();
   const [isOpen, setIsOpen] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   if (!currentOrganization || organizations.length === 0) {
     return null;
@@ -106,10 +108,27 @@ export default function OrganizationSelector({ collapsed }: OrganizationSelector
                   </button>
                 ))}
               </div>
+              <div className="border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => {
+                    setShowCreateModal(true);
+                    setIsOpen(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left text-indigo-600 dark:text-indigo-400 font-medium"
+                >
+                  <FiPlus size={16} />
+                  <span>Create Organization</span>
+                </button>
+              </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
+
+      <CreateOrganizationModal 
+        isOpen={showCreateModal} 
+        onClose={() => setShowCreateModal(false)} 
+      />
     </div>
   );
 }

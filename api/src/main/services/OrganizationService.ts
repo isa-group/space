@@ -38,6 +38,11 @@ class OrganizationService {
     return organization;
   }
 
+  async findByUser(username: string): Promise<LeanOrganization[]> {
+    const organizations = await this.organizationRepository.findByUser(username);
+    return organizations;
+  }
+
   async findByApiKey(
     apiKey: string
   ): Promise<{ organization: LeanOrganization; apiKeyData: LeanApiKey }> {
@@ -326,7 +331,28 @@ class OrganizationService {
         throw new Error(`INVALID DATA: User with username ${updateData.owner} does not exist.`);
       }
 
-      organization.owner = updateData.owner;
+      // Save the old owner to add them as ADMIN member
+      const oldOwner = organization.owner;
+      const newOwner = updateData.owner;
+      
+      // Check if new owner is currently a member - if so, remove them from members
+      const newOwnerIsMember = organization.members.some(m => m.username === newOwner);
+      if (newOwnerIsMember) {
+        await this.organizationRepository.removeMember(organizationId, newOwner);
+      }
+      
+      // Check if old owner is already a member
+      const oldOwnerIsMember = organization.members.some(m => m.username === oldOwner);
+      
+      // Add old owner as ADMIN member if not already a member
+      if (!oldOwnerIsMember) {
+        await this.organizationRepository.addMember(organizationId, {
+          username: oldOwner,
+          role: 'ADMIN',
+        });
+      }
+
+      organization.owner = newOwner;
     }
 
     if (updateData.default !== undefined) {
