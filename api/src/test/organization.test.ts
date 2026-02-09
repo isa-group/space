@@ -891,7 +891,6 @@ describe('Organization API Test Suite', function () {
       if (spaceAdmin?.username) {
         await deleteTestUser(spaceAdmin.username);
       }
-      await shutdownApp();
     });
 
     beforeEach(async function () {
