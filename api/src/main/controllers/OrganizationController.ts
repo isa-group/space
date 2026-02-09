@@ -164,18 +164,20 @@ class OrganizationController {
   async addApiKey(req: any, res: any) {
     try {
       const organizationId = req.params.organizationId;
-      const { keyScope } = req.body;
+      const { scope } = req.body;
 
       if (!organizationId) {
         return res.status(400).send({ error: 'organizationId query parameter is required' });
       }
 
-      if (!keyScope) {
-        return res.status(400).send({ error: 'keyScope field is required' });
+      if (!scope) {
+        return res.status(400).send({ error: 'scope field is required' });
       }
 
-      await this.organizationService.addApiKey(organizationId, keyScope, req.user);
-      res.json({ message: 'API key added successfully' });
+      await this.organizationService.addApiKey(organizationId, scope, req.user);
+      const updatedOrganization = await this.organizationService.findById(organizationId);
+
+      res.json(updatedOrganization);
     } catch (err: any) {
       if (err.message.includes('PERMISSION ERROR')) {
         return res.status(403).send({ error: err.message });
@@ -200,7 +202,9 @@ class OrganizationController {
       }
 
       await this.organizationService.removeApiKey(organizationId, apiKey, req.user);
-      res.json({ message: 'API key removed successfully' });
+      const updatedOrganization = await this.organizationService.findById(organizationId);
+      
+      return res.json(updatedOrganization);
     } catch (err: any) {
       if (err.message.includes('PERMISSION ERROR')) {
         return res.status(403).send({ error: err.message });

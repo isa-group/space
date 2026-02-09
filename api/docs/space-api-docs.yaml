@@ -750,10 +750,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
+                $ref: '#/components/schemas/Organization'
         '400':
           description: Invalid member data
         '403':
@@ -1003,9 +1000,9 @@ paths:
             schema:
               type: object
               required:
-                - keyScope
+                - scope
               properties:
-                keyScope:
+                scope:
                   type: string
                   enum: [ALL, MANAGEMENT, EVALUATION]
                   example: MANAGEMENT
@@ -1015,11 +1012,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: API key added successfully
+                $ref: '#/components/schemas/Organization'
         '400':
           description: Invalid scope value
         '403':
@@ -1063,10 +1056,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
+                $ref: '#/components/schemas/Organization'
         '403':
           description: Forbidden - cannot remove ALL-scope key (MANAGER)
         '404':

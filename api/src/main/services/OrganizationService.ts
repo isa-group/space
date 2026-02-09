@@ -99,13 +99,13 @@ class OrganizationService {
 
   async addApiKey(
     organizationId: string,
-    keyScope: OrganizationApiKeyRole,
+    scope: OrganizationApiKeyRole,
     reqUser: any
   ): Promise<void> {
     // 1. Basic Input Validation
     const validScopes = ['ALL', 'MANAGEMENT', 'EVALUATION'];
-    if (!keyScope || !validScopes.includes(keyScope)) {
-      throw new Error(`INVALID DATA: keyScope must be one of ${validScopes.join(', ')}.`);
+    if (!scope || !validScopes.includes(scope)) {
+      throw new Error(`INVALID DATA: scope must be one of ${validScopes.join(', ')}.`);
     }
 
     const organization = await this.organizationRepository.findById(organizationId);
@@ -138,7 +138,7 @@ class OrganizationService {
 
     // Rule 2: Protection for 'ALL' scope keys
     // 'ALL' scope keys are powerful; only Space Admins or Org Owner/Admins can create them.
-    if (keyScope === 'ALL' && !isSpaceAdmin && !isOwner && !hasHighPrivileges) {
+    if (scope === 'ALL' && !isSpaceAdmin && !isOwner && !hasHighPrivileges) {
       throw new Error(
         'PERMISSION ERROR: Only SPACE admins or organization-level OWNER and ADMIN can add API keys with ALL scope.'
       );
@@ -148,7 +148,7 @@ class OrganizationService {
     // We generate the key only after all permissions are verified
     const apiKeyData: LeanApiKey = {
       key: generateOrganizationApiKey(),
-      scope: keyScope,
+      scope: scope,
     };
 
     await this.organizationRepository.addApiKey(organizationId, apiKeyData);
