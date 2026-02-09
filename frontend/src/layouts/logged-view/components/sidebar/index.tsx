@@ -1,11 +1,11 @@
 import { motion } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router';
 import useAuth from '@/hooks/useAuth';
-import { FiHome, FiUsers, FiServer, FiSettings, FiChevronRight, FiKey } from 'react-icons/fi';
+import { FiHome, FiUsers, FiServer, FiSettings, FiChevronRight, FiKey, FiActivity } from 'react-icons/fi';
 import { AiOutlineDashboard } from 'react-icons/ai';
 import OrganizationSelector from '@/components/OrganizationSelector';
 
-const tabs = [
+const baseTabs = [
   { label: 'Overview', path: '/', icon: <FiHome size={22} /> },
   { label: 'Contracts Dashboard', path: '/contracts/dashboard', icon: <AiOutlineDashboard size={22}/> },
   { label: 'Members', path: '/members', icon: <FiUsers size={22} /> },
@@ -14,12 +14,17 @@ const tabs = [
   { label: 'Settings', path: '/settings', icon: <FiSettings size={22} /> },
 ];
 
+const adminOnlyTabs = [
+  { label: 'Instance Monitoring', path: '/instance-monitoring', icon: <FiActivity size={22} />, adminOnly: true },
+];
+
 function getSelectedTab(pathname: string) {
   if (pathname.startsWith('/members')) return '/members';
   if (pathname.startsWith('/api-keys')) return '/api-keys';
   if (pathname.startsWith('/services')) return '/services';
   if (pathname.startsWith('/settings')) return '/settings';
   if (pathname.startsWith('/contracts/dashboard')) return '/contracts/dashboard';
+  if (pathname.startsWith('/instance-monitoring')) return '/instance-monitoring';
   return '/';
 }
 
@@ -36,6 +41,10 @@ export default function Sidebar({
   const location = useLocation();
   const navigate = useNavigate();
   const selected = getSelectedTab(location.pathname);
+
+  // Build tabs array based on user role (robust comparison)
+  const isAdmin = user?.role?.trim().toUpperCase() === 'ADMIN';
+  const tabs = isAdmin ? [...baseTabs, ...adminOnlyTabs] : baseTabs;
 
   return (
     <motion.aside

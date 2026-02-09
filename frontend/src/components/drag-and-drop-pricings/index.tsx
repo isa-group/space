@@ -26,8 +26,8 @@ export default function DragDropPricings({
     null
   );
   const [overDelete, setOverDelete] = useState(false);
-  const [showConfirm, confirmElement] = useCustomConfirm();
-  const [showAlert, alertElement] = useCustomAlert();
+  const {showConfirm, confirmElement} = useCustomConfirm();
+  const {showAlert, alertElement} = useCustomAlert();
 
   const { user } = useAuth();
   const { currentOrganization } = useOrganization();

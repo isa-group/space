@@ -36,7 +36,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Load organizations when user is authenticated (for dev mode or after login)
   useEffect(() => {
-    if (!isAuthenticated || !user.apiKey || !organizationContext) return;
+    if (!isAuthenticated || !user.apiKey || !organizationContext) {
+      console.log('[AuthContext] Skipping org load - missing requirements:', { isAuthenticated, hasApiKey: !!user.apiKey, hasOrgContext: !!organizationContext });
+      return;
+    }
 
     // Only load once per API key
     if (organizationsLoadedRef.current) {
@@ -44,25 +47,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
-    organizationsLoadedRef.current = true;
+    console.log('[AuthContext] Starting organization load for:', user.username);
     let isMounted = true;
 
     const loadOrganizations = async () => {
       try {
-        console.log('[AuthContext] Loading organizations for user:', user.username);
+        console.log('[AuthContext] Fetching organizations from API...');
         const organizations = await getOrganizations(user.apiKey);
-        if (isMounted) {
-          console.log('[AuthContext] Organizations loaded:', organizations.length);
+        console.log('[AuthContext] API returned organizations:', organizations);
+        
+        if (isMounted && organizations && organizations.length > 0) {
+          // Mark as loaded ONLY after successful load
+          organizationsLoadedRef.current = true;
+          
+          console.log('[AuthContext] Organizations loaded, count:', organizations.length);
+          console.log('[AuthContext] Calling setOrganizations with:', organizations);
           organizationContext.setOrganizations(organizations);
           
           // Set default organization
           const defaultOrg = organizations.find(org => org.default) || organizations[0];
           if (defaultOrg) {
+            console.log('[AuthContext] Setting default organization:', defaultOrg.name);
             organizationContext.setCurrentOrganization(defaultOrg);
+          } else {
+            console.log('[AuthContext] No default organization found');
           }
+        } else if (isMounted) {
+          console.warn('[AuthContext] No organizations returned from API');
         }
       } catch (error) {
-        console.error('Failed to load organizations:', error);
+        console.error('[AuthContext] Failed to load organizations:', error);
+        // Don't mark as loaded on error so it can retry
       }
     };
 

@@ -99,7 +99,7 @@ export default function useContracts(apiKey: string, organizationId?: string) {
 
     // debug info
     console.debug('[Revenue] services discovered:', Object.keys(servicesMap).length);
-    if (process.env.NODE_ENV !== 'production') {
+    if (import.meta.env.NODE_ENV !== 'production') {
       console.debug('[Revenue] services list sample:', Object.keys(servicesMap).slice(0, 10));
     }
 
