@@ -961,10 +961,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
+                $ref: '#/components/schemas/Organization'
         '403':
           description: Forbidden
         '404':

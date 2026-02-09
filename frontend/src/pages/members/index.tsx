@@ -24,6 +24,7 @@ export default function MembersPage() {
     'EVALUATOR'
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modalError, setModalError] = useState<string>('');
 
   useEffect(() => {
     if (!currentOrganization?.id) return;
@@ -46,21 +47,54 @@ export default function MembersPage() {
   };
 
   const handleAddMember = async () => {
-    if (!currentOrganization || !user?.apiKey || !newMemberUsername) return;
+    if (!currentOrganization || !user?.apiKey) {
+      setModalError('Organization or user not found');
+      return;
+    }
+
+    // Validation
+    const trimmedUsername = newMemberUsername.trim();
+    if (!trimmedUsername) {
+      setModalError('Username is required');
+      return;
+    }
+
+    if (trimmedUsername.length < 2) {
+      setModalError('Username must be at least 2 characters');
+      return;
+    }
 
     setIsSubmitting(true);
+    setModalError('');
+    
     try {
       const updatedOrg = await addMember(user.apiKey, currentOrganization.id, {
-        username: newMemberUsername,
+        username: trimmedUsername,
         role: newMemberRole,
       });
+      
+      // Update both members and owner from the updated organization
       setMembers(updatedOrg.members || []);
+      setOwner(updatedOrg.owner);
       setShowAddModal(false);
       setNewMemberUsername('');
       setNewMemberRole('EVALUATOR');
+      setModalError('');
       showAlert('Member added successfully', 'success');
     } catch (error: any) {
-      showAlert(error.message || 'Failed to add member', 'danger');
+      // Extract the error message more intelligently
+      let errorMsg = error.message || 'Failed to add member';
+      
+      // Check if it's a user not found error
+      if (errorMsg.includes('does not exist')) {
+        errorMsg = 'User not found. Please check the username.';
+      } else if (errorMsg.includes('already a member') || errorMsg.includes('addToSet')) {
+        errorMsg = 'This user is already a member of the organization.';
+      } else if (errorMsg.includes('PERMISSION ERROR')) {
+        errorMsg = 'You do not have permission to add members.';
+      }
+      
+      setModalError(errorMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -79,6 +113,7 @@ export default function MembersPage() {
     try {
       const updatedOrg = await removeMember(user.apiKey, currentOrganization.id, username);
       setMembers(updatedOrg.members || []);
+      setOwner(updatedOrg.owner);
       showAlert('Member removed successfully', 'success');
     } catch (error: any) {
       showAlert(error.message || 'Failed to remove member', 'danger');
@@ -91,6 +126,7 @@ export default function MembersPage() {
     try {
       const updatedOrg = await updateMemberRole(user.apiKey, currentOrganization.id, username, newRole);
       setMembers(updatedOrg.members || []);
+      setOwner(updatedOrg.owner);
       showAlert('Member role updated successfully', 'success');
     } catch (error: any) {
       showAlert(error.message || 'Failed to update member role', 'danger');
@@ -101,15 +137,13 @@ export default function MembersPage() {
     member.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Include owner in the list
-  const allMembers = owner
-    ? [{ username: owner, role: 'OWNER' as const }, ...filteredMembers]
+  // Build display list: owner first, then other members
+  const displayMembers = owner
+    ? [
+        { username: owner, role: 'OWNER' as const },
+        ...filteredMembers
+      ]
     : filteredMembers;
-
-  // Filter all members by search term
-  const displayMembers = allMembers.filter(member =>
-    member.username.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   // Check if current user can remove members
   const isOwner = user?.username === owner;
@@ -206,7 +240,12 @@ export default function MembersPage() {
           />
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+            setShowAddModal(true);
+            setNewMemberUsername('');
+            setNewMemberRole('EVALUATOR');
+            setModalError('');
+          }}
           className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
         >
           <FiUserPlus size={20} />
@@ -294,7 +333,10 @@ export default function MembersPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/50 z-40"
-              onClick={() => setShowAddModal(false)}
+              onClick={() => {
+                setShowAddModal(false);
+                setModalError('');
+              }}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -306,6 +348,11 @@ export default function MembersPage() {
                 <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
                   Add Member
                 </h2>
+                {modalError && (
+                  <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+                    <p className="text-sm text-red-700 dark:text-red-300">{modalError}</p>
+                  </div>
+                )}
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -314,9 +361,14 @@ export default function MembersPage() {
                     <input
                       type="text"
                       value={newMemberUsername}
-                      onChange={e => setNewMemberUsername(e.target.value)}
-                      placeholder="Enter username"
+                      onChange={e => {
+                        setNewMemberUsername(e.target.value);
+                        setModalError('');
+                      }}
+                      placeholder="e.g. john_doe"
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      autoComplete="off"
+                      required
                     />
                   </div>
                   <div>
@@ -338,7 +390,12 @@ export default function MembersPage() {
                 </div>
                 <div className="flex gap-3 mt-6">
                   <button
-                    onClick={() => setShowAddModal(false)}
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setNewMemberUsername('');
+                      setNewMemberRole('EVALUATOR');
+                      setModalError('');
+                    }}
                     className="cursor-pointer flex-1 px-4 py-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   >
                     Cancel

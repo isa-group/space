@@ -87,7 +87,9 @@ class OrganizationController {
       }
 
       await this.organizationService.addMember(organizationId, {username, role}, req.user);
-      res.json({ message: 'Member added successfully' });
+      
+      const updatedOrganization = await this.organizationService.findById(organizationId);
+      res.json(updatedOrganization);
     } catch (err: any) {
       if (err.message.includes('PERMISSION ERROR')) {
         return res.status(403).send({ error: err.message });
@@ -224,7 +226,9 @@ class OrganizationController {
       }
 
       await this.organizationService.removeMember(organizationId, username, req.user);
-      res.json({ message: 'Member removed successfully' });
+      const updatedOrganization = await this.organizationService.findById(organizationId);
+      
+      res.json(updatedOrganization);
     } catch (err: any) {
       if (err.message.includes('PERMISSION ERROR')) {
         return res.status(403).send({ error: err.message });
