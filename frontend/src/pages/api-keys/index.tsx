@@ -10,9 +10,9 @@ import type { OrganizationApiKey } from '@/types/Organization';
 
 export default function ApiKeysPage() {
   const { user } = useAuth();
-  const { currentOrganization, setCurrentOrganization } = useOrganization();
+  const { currentOrganization } = useOrganization();
   const { showAlert } = useCustomAlert();
-  const { showConfirm } = useCustomConfirm();
+  const { showConfirm, confirmElement } = useCustomConfirm();
 
   const [apiKeys, setApiKeys] = useState<OrganizationApiKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,8 +22,9 @@ export default function ApiKeysPage() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!currentOrganization?.id) return;
     loadApiKeys();
-  }, [currentOrganization]);
+  }, [currentOrganization?.id]);
 
   const loadApiKeys = async () => {
     if (!currentOrganization || !user?.apiKey) return;
@@ -32,7 +33,6 @@ export default function ApiKeysPage() {
     try {
       const org = await getOrganization(user.apiKey, currentOrganization.id);
       setApiKeys(org.apiKeys || []);
-      setCurrentOrganization(org);
     } catch (error: any) {
       showAlert('Error', error.message || 'Failed to load API keys');
     } finally {
@@ -49,7 +49,6 @@ export default function ApiKeysPage() {
         scope: newKeyScope,
       });
       setApiKeys(updatedOrg.apiKeys || []);
-      setCurrentOrganization(updatedOrg);
       setShowAddModal(false);
       setNewKeyScope('EVALUATION');
       showAlert('API key created successfully', 'success');
@@ -73,7 +72,6 @@ export default function ApiKeysPage() {
     try {
       const updatedOrg = await deleteApiKey(user.apiKey, currentOrganization.id, key);
       setApiKeys(updatedOrg.apiKeys || []);
-      setCurrentOrganization(updatedOrg);
       showAlert('API key deleted successfully', 'success');
     } catch (error: any) {
       showAlert(error.message || 'Failed to delete API key', 'danger');
@@ -151,7 +149,7 @@ export default function ApiKeysPage() {
       >
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
+          className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
         >
           <FiPlus size={20} />
           <span>Create API Key</span>
@@ -201,7 +199,7 @@ export default function ApiKeysPage() {
                     </code>
                     <button
                       onClick={() => handleCopyKey(apiKey.key)}
-                      className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      className="cursor-pointer p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                       title="Copy API key"
                     >
                       {copiedKey === apiKey.key ? (
@@ -216,7 +214,7 @@ export default function ApiKeysPage() {
                 </div>
                 <button
                   onClick={() => handleDeleteApiKey(apiKey.key)}
-                  className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex-shrink-0"
+                  className="cursor-pointer p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex-shrink-0"
                   title="Delete API key"
                 >
                   <FiTrash2 size={18} />
@@ -260,9 +258,9 @@ export default function ApiKeysPage() {
                       }
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                      <option value="EVALUATION">EVALUATION - Read-only access</option>
-                      <option value="MANAGEMENT">MANAGEMENT - Limited management operations</option>
-                      <option value="ALL">ALL - Full access</option>
+                      <option value="EVALUATION">EVALUATION</option>
+                      <option value="MANAGEMENT">MANAGEMENT</option>
+                      <option value="ALL">ALL</option>
                     </select>
                     <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                       {getScopeDescription(newKeyScope)}
@@ -272,14 +270,14 @@ export default function ApiKeysPage() {
                 <div className="flex gap-3 mt-6">
                   <button
                     onClick={() => setShowAddModal(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    className="cursor-pointer flex-1 px-4 py-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleCreateApiKey}
                     disabled={isSubmitting}
-                    className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="cursor-pointer flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? 'Creating...' : 'Create'}
                   </button>
@@ -289,6 +287,7 @@ export default function ApiKeysPage() {
           </>
         )}
       </AnimatePresence>
+      {confirmElement}
     </div>
   );
 }

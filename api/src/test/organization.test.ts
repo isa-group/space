@@ -774,7 +774,7 @@ describe('Organization API Test Suite', function () {
       const response = await request(app)
         .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', adminApiKey)
-        .send({ keyScope: 'ALL' })
+        .send({ scope: 'ALL' })
         .expect(200);
 
       expect(response.body).toBeDefined();
@@ -784,7 +784,7 @@ describe('Organization API Test Suite', function () {
       const response = await request(app)
         .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', orgOwner.apiKey)
-        .send({ keyScope: 'ALL' })
+        .send({ scope: 'ALL' })
         .expect(200);
 
       expect(response.body).toBeDefined();
@@ -794,7 +794,7 @@ describe('Organization API Test Suite', function () {
       const response = await request(app)
         .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', adminMember.apiKey)
-        .send({ keyScope: 'ALL' })
+        .send({ scope: 'ALL' })
         .expect(200);
 
       expect(response.body).toBeDefined();
@@ -804,7 +804,7 @@ describe('Organization API Test Suite', function () {
       const response = await request(app)
         .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', managerMember.apiKey)
-        .send({ keyScope: 'MANAGEMENT' })
+        .send({ scope: 'MANAGEMENT' })
         .expect(200);
 
       expect(response.body).toBeDefined();
@@ -814,7 +814,7 @@ describe('Organization API Test Suite', function () {
       const response = await request(app)
         .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', managerMember.apiKey)
-        .send({ keyScope: 'ALL' })
+        .send({ scope: 'ALL' })
         .expect(403);
 
       expect(response.body).toBeDefined();
@@ -824,7 +824,7 @@ describe('Organization API Test Suite', function () {
       const response = await request(app)
         .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', regularUserNoPermission.apiKey)
-        .send({ keyScope: 'ALL' })
+        .send({ scope: 'ALL' })
         .expect(403);
 
       expect(response.body.error).toBeDefined();
@@ -834,13 +834,13 @@ describe('Organization API Test Suite', function () {
       const response = await request(app)
         .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', adminApiKey)
-        .send({ keyScope: 'READ' })
+        .send({ scope: 'READ' })
         .expect(400);
 
       expect(response.body).toBeDefined();
     });
 
-    it('Should return 400 when keyScope is missing', async function () {
+    it('Should return 400 when scope is missing', async function () {
       const response = await request(app)
         .post(`${baseUrl}/organizations/${testOrganization.id}/api-keys`)
         .set('x-api-key', adminApiKey)
@@ -856,7 +856,7 @@ describe('Organization API Test Suite', function () {
       const response = await request(app)
         .post(`${baseUrl}/organizations/${fakeId}/api-keys`)
         .set('x-api-key', adminApiKey)
-        .send({ keyScope: 'ALL' })
+        .send({ scope: 'ALL' })
         .expect(404);
 
       expect(response.body.error).toBeDefined();
@@ -866,7 +866,7 @@ describe('Organization API Test Suite', function () {
       const response = await request(app)
         .post(`${baseUrl}/organizations/invalid-id/api-keys`)
         .set('x-api-key', adminApiKey)
-        .send({ keyScope: 'ALL' })
+        .send({ scope: 'ALL' })
         .expect(422);
 
       expect(response.body.error).toBeDefined();
@@ -978,13 +978,12 @@ describe('Organization API Test Suite', function () {
     });
 
     it('Should return 200 and update member role with org MANAGER request', async function () {
-      
       const testManager = await createTestUser('USER');
       await addMemberToOrganization(testOrganization.id!, {
         username: testManager.username,
         role: 'MANAGER',
       });
-      
+
       const response = await request(app)
         .put(`${baseUrl}/organizations/${testOrganization.id}/members/${testManager.username}`)
         .set('x-api-key', managerMember.apiKey)
@@ -1176,7 +1175,7 @@ describe('Organization API Test Suite', function () {
     });
 
     it('Should return 409 when updating same role', async function () {
-    const response = await request(app)
+      const response = await request(app)
         .put(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorMember.username}`)
         .set('x-api-key', ownerUser.apiKey)
         .send({ role: 'EVALUATOR' })
