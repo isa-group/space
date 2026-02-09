@@ -106,10 +106,22 @@ describe('Contract API routes', function () {
   });
 
   describe('GET /organizations/:organizationId/contracts', function () {
-    it('returns 200 and contracts for specific organization with user API key', async function () {
+    it('returns 200 and contracts for specific organization with ADMIN user API key', async function () {
       const response = await request(app)
         .get(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
         .set('x-api-key', adminUser.apiKey);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.some((c: LeanContract) => c.userContact.userId === testContract.userContact.userId)).toBe(true);
+      expect(response.body.every((c: LeanContract) => c.organizationId === testOrganization.id)).toBe(true);
+    });
+    
+    it('returns 200 and contracts for specific organization with USER user API key', async function () {
+      const response = await request(app)
+        .get(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey);
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);

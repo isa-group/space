@@ -30,7 +30,7 @@ class ContractController {
       const filters = req.body?.filters;
       let organizationId = req.org?.id ?? req.params.organizationId;
       
-      if (req.user && req.user.role === 'ADMIN') {
+      if (req.user && req.user.role === 'ADMIN' && !req.org?.id) {
         organizationId = undefined;
       }
 
