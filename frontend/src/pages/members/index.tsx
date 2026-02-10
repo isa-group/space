@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiUserPlus, FiTrash2, FiSearch } from 'react-icons/fi';
+import { FiUserPlus, FiTrash2, FiSearch, FiLogOut } from 'react-icons/fi';
 import useAuth from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useCustomAlert } from '@/hooks/useCustomAlert';
 import { useCustomConfirm } from '@/hooks/useCustomConfirm';
-import { getOrganization, addMember, removeMember, updateMemberRole } from '@/api/organizations/organizationsApi';
+import { getOrganization, getOrganizations, addMember, removeMember, updateMemberRole, updateOrganization } from '@/api/organizations/organizationsApi';
 import type { OrganizationMember } from '@/types/Organization';
 
 export default function MembersPage() {
   const { user } = useAuth();
-  const { currentOrganization, setCurrentOrganization } = useOrganization();
+  const { currentOrganization, setCurrentOrganization, setOrganizations } = useOrganization();
   const { showAlert } = useCustomAlert();
   const { showConfirm, confirmElement } = useCustomConfirm();
 
@@ -147,8 +147,10 @@ export default function MembersPage() {
 
   // Check if current user can remove members
   const isOwner = user?.username === owner;
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = user?.role?.trim().toUpperCase() === 'ADMIN';
+  const currentMemberRole = members.find(member => member.username === user?.username)?.role;
   const canRemoveMembers = isOwner || isAdmin;
+  const canManageRoles = isAdmin || isOwner || currentMemberRole === 'ADMIN' || currentMemberRole === 'MANAGER';
 
   const canRemoveMember = (memberUsername: string) => {
     // Owner cannot be removed by anyone
@@ -157,11 +159,88 @@ export default function MembersPage() {
     return canRemoveMembers;
   };
 
-  const canChangeRole = (memberUsername: string) => {
+  const canChangeRole = (memberUsername: string, memberRole: OrganizationMember['role'] | 'OWNER') => {
     // Cannot change owner's role
     if (memberUsername === owner) return false;
-    // Only owner or admin can change roles
-    return canRemoveMembers;
+    if (!canManageRoles) return false;
+    if (isAdmin || isOwner || currentMemberRole === 'ADMIN') return true;
+    if (currentMemberRole === 'MANAGER') {
+      return memberRole === 'MANAGER' || memberRole === 'EVALUATOR';
+    }
+    return false;
+  };
+
+  const getAssignableRoles = (memberRole: OrganizationMember['role']) => {
+    if (isAdmin || isOwner || currentMemberRole === 'ADMIN') {
+      return ['ADMIN', 'MANAGER', 'EVALUATOR'] as const;
+    }
+    if (currentMemberRole === 'MANAGER') {
+      return ['MANAGER', 'EVALUATOR'] as const;
+    }
+    return [] as const;
+  };
+
+  const getNextOwner = () => {
+    const rolePriority: OrganizationMember['role'][] = ['ADMIN', 'MANAGER', 'EVALUATOR'];
+    for (const role of rolePriority) {
+      const candidate = members.find(member => member.role === role && member.username !== user?.username);
+      if (candidate) return candidate.username;
+    }
+    return '';
+  };
+
+  const refreshOrganizations = async () => {
+    if (!user?.apiKey) return;
+    const orgs = await getOrganizations(user.apiKey);
+    setOrganizations(orgs);
+    if (orgs.length === 0) {
+      setCurrentOrganization(null);
+      return;
+    }
+    const nextOrg = orgs.find(org => org.default) || orgs[0];
+    setCurrentOrganization(nextOrg);
+  };
+
+  const handleLeaveOrganization = async () => {
+    if (!currentOrganization || !user?.apiKey || !user?.username) return;
+
+    const confirmed = await showConfirm(
+      'Are you sure you want to leave this organization?',
+      'danger'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      if (isOwner) {
+        const nextOwner = getNextOwner();
+        if (!nextOwner) {
+          showAlert('You must transfer ownership before leaving.', 'danger');
+          return;
+        }
+
+        const transferConfirmed = await showConfirm(
+          `Ownership will be transferred to ${nextOwner} before you leave. Continue?`,
+          'danger'
+        );
+
+        if (!transferConfirmed) return;
+
+        const transferredOrg = await updateOrganization(user.apiKey, currentOrganization.id, {
+          owner: nextOwner,
+        });
+        setMembers(transferredOrg.members || []);
+        setOwner(transferredOrg.owner);
+      }
+
+      const updatedOrg = await removeMember(user.apiKey, currentOrganization.id, user.username);
+      setMembers(updatedOrg.members || []);
+      setOwner(updatedOrg.owner);
+      await refreshOrganizations();
+      showAlert('You left the organization successfully.', 'success');
+    } catch (error: any) {
+      showAlert(error.message || 'Failed to leave organization', 'danger');
+    }
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -285,15 +364,15 @@ export default function MembersPage() {
                       <div className="font-medium text-gray-900 dark:text-gray-100">
                         {member.username}
                       </div>
-                      {canChangeRole(member.username) ? (
+                      {canChangeRole(member.username, member.role) && member.role !== 'OWNER' ? (
                         <select
                           value={member.role}
                           onChange={(e) => handleChangeRole(member.username, e.target.value as 'ADMIN' | 'MANAGER' | 'EVALUATOR')}
                           className={`cursor-pointer px-2 py-1 text-xs font-medium rounded mt-1 border-0 focus:ring-2 focus:ring-indigo-500 ${getRoleBadgeColor(member.role)}`}
                         >
-                          <option value="ADMIN">ADMIN</option>
-                          <option value="MANAGER">MANAGER</option>
-                          <option value="EVALUATOR">EVALUATOR</option>
+                          {getAssignableRoles(member.role).map(role => (
+                            <option key={role} value={role}>{role}</option>
+                          ))}
                         </select>
                       ) : (
                         <div
@@ -304,7 +383,15 @@ export default function MembersPage() {
                       )}
                     </div>
                   </div>
-                  {canRemoveMember(member.username) ? (
+                  {member.username === user?.username ? (
+                    <button
+                      onClick={handleLeaveOrganization}
+                      className="cursor-pointer p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      title="Leave organization"
+                    >
+                      <FiLogOut size={18} />
+                    </button>
+                  ) : canRemoveMember(member.username) ? (
                     <button
                       onClick={() => handleRemoveMember(member.username)}
                       className="cursor-pointer p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
