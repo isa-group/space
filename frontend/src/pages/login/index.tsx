@@ -91,7 +91,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => navigate('/register')}
-              className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-sm font-medium transition-colors"
+              className="cursor-pointer text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-sm font-medium transition-colors"
             >
               Don't have an account? Register here
             </button>

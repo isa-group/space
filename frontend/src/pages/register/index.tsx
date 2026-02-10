@@ -6,6 +6,7 @@ import LightBackground from '../../layouts/background';
 import loginImage from '../../static/images/login-image.webp';
 import FormError from '../../components/FormError';
 import { registerUser } from '@/api/users/usersApi';
+import useAuth from '@/hooks/useAuth';
 
 export default function RegisterPage() {
   const [username, setUsername] = useState('');
@@ -13,6 +14,7 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -37,10 +39,9 @@ export default function RegisterPage() {
 
     try {
       await registerUser({ username, password });
+      await login(username, password);
       setSuccess(true);
-      setTimeout(() => {
-        navigate('/');
-      }, 2000);
+      navigate('/');
     } catch (error: any) {
       setError(error.message || 'Registration failed. Please try again.');
     }
@@ -70,7 +71,7 @@ export default function RegisterPage() {
               animate={{ opacity: 1, y: 0 }}
               className="bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-700 text-green-700 dark:text-green-300 px-4 py-3 rounded-lg"
             >
-              Registration successful! Redirecting to login...
+              Registration successful! Redirecting to welcome...
             </motion.div>
           ) : (
             <>
