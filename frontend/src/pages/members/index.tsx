@@ -1,12 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiUserPlus, FiTrash2, FiSearch, FiLogOut } from 'react-icons/fi';
+import { FiUserPlus, FiTrash2, FiSearch, FiLogOut, FiX } from 'react-icons/fi';
 import useAuth from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useCustomAlert } from '@/hooks/useCustomAlert';
 import { useCustomConfirm } from '@/hooks/useCustomConfirm';
 import { getOrganization, getOrganizations, addMember, removeMember, updateMemberRole, updateOrganization } from '@/api/organizations/organizationsApi';
+import { searchUsers } from '@/api/users/usersApi';
 import type { OrganizationMember } from '@/types/Organization';
+
+interface SelectedUser {
+  username: string;
+  role: 'ADMIN' | 'MANAGER' | 'EVALUATOR';
+}
 
 export default function MembersPage() {
   const { user } = useAuth();
@@ -19,17 +25,88 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newMemberUsername, setNewMemberUsername] = useState('');
-  const [newMemberRole, setNewMemberRole] = useState<'ADMIN' | 'MANAGER' | 'EVALUATOR'>(
-    'EVALUATOR'
-  );
+  const [selectedUsers, setSelectedUsers] = useState<SelectedUser[]>([]);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{ username: string; role: string }>>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string>('');
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestSearchQueryRef = useRef<string>('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!currentOrganization?.id) return;
     loadMembers();
   }, [currentOrganization?.id]);
+
+  // Debounced user search
+  useEffect(() => {
+    const trimmedQuery = userSearchQuery.trim();
+    latestSearchQueryRef.current = trimmedQuery;
+
+    if (!trimmedQuery || trimmedQuery.length < 2) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    // Clear previous timeout
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    // Set new timeout for debouncing
+    debounceTimeoutRef.current = setTimeout(async () => {
+      if (!user?.apiKey) return;
+      
+      setIsSearching(true);
+      try {
+        const results = await searchUsers(user.apiKey, trimmedQuery, 10);
+        if (latestSearchQueryRef.current !== trimmedQuery) {
+          return;
+        }
+        // Filter out already selected users and current members
+        const filteredResults = results.filter(
+          (result) =>
+            !selectedUsers.some((selected) => selected.username === result.username) &&
+            !members.some((member) => member.username === result.username) &&
+            result.username !== owner
+        );
+        setSearchResults(filteredResults);
+        setShowDropdown(true);
+      } catch (error) {
+        console.error('Failed to search users:', error);
+        if (latestSearchQueryRef.current === trimmedQuery) {
+          setSearchResults([]);
+          setShowDropdown(true);
+        }
+      } finally {
+        if (latestSearchQueryRef.current === trimmedQuery) {
+          setIsSearching(false);
+        }
+      }
+    }, 300); // 300ms debounce delay
+
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, [userSearchQuery, selectedUsers, members, owner, user?.apiKey]);
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const loadMembers = async () => {
     if (!currentOrganization || !user?.apiKey) return;
@@ -52,52 +129,85 @@ export default function MembersPage() {
       return;
     }
 
-    // Validation
-    const trimmedUsername = newMemberUsername.trim();
-    if (!trimmedUsername) {
-      setModalError('Username is required');
-      return;
-    }
-
-    if (trimmedUsername.length < 2) {
-      setModalError('Username must be at least 2 characters');
+    if (selectedUsers.length === 0) {
+      setModalError('Please select at least one user to add');
       return;
     }
 
     setIsSubmitting(true);
     setModalError('');
-    
+
+    const errors: string[] = [];
+    let successCount = 0;
+
     try {
-      const updatedOrg = await addMember(user.apiKey, currentOrganization.id, {
-        username: trimmedUsername,
-        role: newMemberRole,
-      });
-      
-      // Update both members and owner from the updated organization
-      setMembers(updatedOrg.members || []);
-      setOwner(updatedOrg.owner);
-      setShowAddModal(false);
-      setNewMemberUsername('');
-      setNewMemberRole('EVALUATOR');
-      setModalError('');
-      showAlert('Member added successfully', 'success');
-    } catch (error: any) {
-      // Extract the error message more intelligently
-      let errorMsg = error.message || 'Failed to add member';
-      
-      // Check if it's a user not found error
-      if (errorMsg.includes('does not exist')) {
-        errorMsg = 'User not found. Please check the username.';
-      } else if (errorMsg.includes('already a member') || errorMsg.includes('addToSet')) {
-        errorMsg = 'This user is already a member of the organization.';
-      } else if (errorMsg.includes('PERMISSION ERROR')) {
-        errorMsg = 'You do not have permission to add members.';
+      // Add members one by one
+      for (const selectedUser of selectedUsers) {
+        try {
+          await addMember(user.apiKey, currentOrganization.id, {
+            username: selectedUser.username,
+            role: selectedUser.role,
+          });
+          successCount++;
+        } catch (error: any) {
+          let errorMsg = error.message || 'Failed to add member';
+          if (errorMsg.includes('does not exist')) {
+            errorMsg = `User ${selectedUser.username} not found`;
+          } else if (errorMsg.includes('already a member')) {
+            errorMsg = `${selectedUser.username} is already a member`;
+          }
+          errors.push(errorMsg);
+        }
       }
-      
-      setModalError(errorMsg);
+
+      // Reload members after all additions
+      await loadMembers();
+
+      // Show results
+      if (successCount > 0) {
+        const message =
+          errors.length === 0
+            ? `Successfully added ${successCount} member${successCount > 1 ? 's' : ''}`
+            : `Added ${successCount} member${successCount > 1 ? 's' : ''} with ${errors.length} error${errors.length > 1 ? 's' : ''}`;
+        showAlert(message, errors.length === 0 ? 'success' : 'warning');
+      }
+
+      if (errors.length > 0 && successCount === 0) {
+        setModalError(errors.join('; '));
+      } else {
+        // Only close modal if at least one member was added successfully
+        if (successCount > 0) {
+          setShowAddModal(false);
+          setSelectedUsers([]);
+          setUserSearchQuery('');
+          setModalError('');
+        }
+      }
+    } catch (error: any) {
+      setModalError(error.message || 'Failed to add members');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSelectUser = (username: string) => {
+    const user = searchResults.find((u) => u.username === username);
+    if (user && !selectedUsers.some((u) => u.username === username)) {
+      setSelectedUsers([...selectedUsers, { username: user.username, role: 'EVALUATOR' }]);
+      setUserSearchQuery('');
+      setSearchResults([]);
+      setShowDropdown(false);
+    }
+  };
+
+  const handleRemoveSelectedUser = (username: string) => {
+    setSelectedUsers(selectedUsers.filter((u) => u.username !== username));
+  };
+
+  const handleChangeSelectedUserRole = (username: string, role: 'ADMIN' | 'MANAGER' | 'EVALUATOR') => {
+    setSelectedUsers(
+      selectedUsers.map((u) => (u.username === username ? { ...u, role } : u))
+    );
   };
 
   const handleRemoveMember = async (username: string) => {
@@ -321,8 +431,8 @@ export default function MembersPage() {
         <button
           onClick={() => {
             setShowAddModal(true);
-            setNewMemberUsername('');
-            setNewMemberRole('EVALUATOR');
+            setSelectedUsers([]);
+            setUserSearchQuery('');
             setModalError('');
           }}
           className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
@@ -431,56 +541,144 @@ export default function MembersPage() {
               exit={{ opacity: 0, scale: 0.95 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
             >
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full p-6">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-                  Add Member
+                  Add Members
                 </h2>
                 {modalError && (
                   <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
                     <p className="text-sm text-red-700 dark:text-red-300">{modalError}</p>
                   </div>
                 )}
+                
                 <div className="space-y-4">
-                  <div>
+                  {/* User Search Input with Autocomplete */}
+                  <div className="relative" ref={dropdownRef}>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Username
+                      Search Users
                     </label>
-                    <input
-                      type="text"
-                      value={newMemberUsername}
-                      onChange={e => {
-                        setNewMemberUsername(e.target.value);
-                        setModalError('');
-                      }}
-                      placeholder="e.g. john_doe"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      autoComplete="off"
-                      required
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={userSearchQuery}
+                        onChange={(e) => setUserSearchQuery(e.target.value)}
+                        placeholder="Type username to search..."
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        autoComplete="off"
+                      />
+                      {isSearching && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Autocomplete Dropdown */}
+                    <AnimatePresence>
+                      {showDropdown && userSearchQuery.trim().length >= 2 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+                        >
+                          {searchResults.length > 0 ? (
+                            searchResults.map((result) => (
+                              <button
+                                key={result.username}
+                                onClick={() => handleSelectUser(result.username)}
+                                className="cursor-pointer w-full px-3 py-2 text-left hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors flex items-center gap-2"
+                              >
+                                <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-indigo-600 dark:text-indigo-400 font-semibold text-sm">
+                                    {result.username.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                    {result.username}
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    {result.role}
+                                  </div>
+                                </div>
+                              </button>
+                            ))
+                          ) : (
+                            !isSearching && (
+                              <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                                No users found
+                              </div>
+                            )
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Role
-                    </label>
-                    <select
-                      value={newMemberRole}
-                      onChange={e =>
-                        setNewMemberRole(e.target.value as 'ADMIN' | 'MANAGER' | 'EVALUATOR')
-                      }
-                      className="cursor-pointer w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="EVALUATOR">Evaluator</option>
-                      <option value="MANAGER">Manager</option>
-                      <option value="ADMIN">Admin</option>
-                    </select>
-                  </div>
+
+                  {/* Selected Users (Chips) */}
+                  {selectedUsers.length > 0 && (
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Selected Members ({selectedUsers.length})
+                      </label>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        <AnimatePresence>
+                          {selectedUsers.map((selectedUser) => (
+                            <motion.div
+                              key={selectedUser.username}
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              transition={{ duration: 0.15 }}
+                              className="flex items-center gap-3 p-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg"
+                            >
+                              <div className="flex items-center gap-2 flex-1">
+                                <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-indigo-600 dark:text-indigo-400 font-semibold text-sm">
+                                    {selectedUser.username.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <span className="text-sm font-medium text-gray-900 dark:text-gray-100 flex-shrink-0">
+                                  {selectedUser.username}
+                                </span>
+                              </div>
+                              <select
+                                value={selectedUser.role}
+                                onChange={(e) =>
+                                  handleChangeSelectedUserRole(
+                                    selectedUser.username,
+                                    e.target.value as 'ADMIN' | 'MANAGER' | 'EVALUATOR'
+                                  )
+                                }
+                                className={`cursor-pointer px-2 py-1 text-xs font-medium rounded border-0 focus:ring-2 focus:ring-indigo-500 ${getRoleBadgeColor(selectedUser.role)}`}
+                              >
+                                <option value="EVALUATOR">EVALUATOR</option>
+                                <option value="MANAGER">MANAGER</option>
+                                <option value="ADMIN">ADMIN</option>
+                              </select>
+                              <button
+                                onClick={() => handleRemoveSelectedUser(selectedUser.username)}
+                                className="cursor-pointer p-1 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20 rounded transition-colors"
+                                title="Remove"
+                              >
+                                <FiX size={16} />
+                              </button>
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
                 <div className="flex gap-3 mt-6">
                   <button
                     onClick={() => {
                       setShowAddModal(false);
-                      setNewMemberUsername('');
-                      setNewMemberRole('EVALUATOR');
+                      setSelectedUsers([]);
+                      setUserSearchQuery('');
                       setModalError('');
                     }}
                     className="cursor-pointer flex-1 px-4 py-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -489,10 +687,10 @@ export default function MembersPage() {
                   </button>
                   <button
                     onClick={handleAddMember}
-                    disabled={isSubmitting || !newMemberUsername}
+                    disabled={isSubmitting || selectedUsers.length === 0}
                     className="cursor-pointer flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isSubmitting ? 'Adding...' : 'Add Member'}
+                    {isSubmitting ? `Adding ${selectedUsers.length}...` : `Add ${selectedUsers.length || ''} Member${selectedUsers.length !== 1 ? 's' : ''}`}
                   </button>
                 </div>
               </div>

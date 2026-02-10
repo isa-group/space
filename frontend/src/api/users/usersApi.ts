@@ -148,3 +148,21 @@ export async function registerUser(user: { username: string; password: string })
       );
     });
 }
+
+export async function searchUsers(apiKey: string, query: string, limit: number = 10): Promise<Array<{ username: string; role: string }>> {
+  return axios
+    .get('/users', {
+      params: { q: query, limit },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      timeout: DEFAULT_TIMEOUT,
+    })
+    .then(response => response.data)
+    .catch(error => {
+      throw new Error(
+        'Failed to search users. ' + (error.response?.data?.error || error.message)
+      );
+    });
+}
