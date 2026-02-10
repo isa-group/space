@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { FiSave, FiLoader, FiAlertCircle, FiArrowRight } from 'react-icons/fi';
 import useAuth from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
 import { updateOrganization, getOrganization } from '@/api/organizations/organizationsApi';
-import type { Organization, OrganizationMember } from '@/types/Organization';
+import type { Organization } from '@/types/Organization';
 
 export default function OrganizationSettingsPage() {
   const { user } = useAuth();
-  const { currentOrganization } = useOrganization();
+  const { currentOrganization, setCurrentOrganization, setOrganizations } = useOrganization();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [organizationName, setOrganizationName] = useState('');
   const [newOwner, setNewOwner] = useState('');
@@ -73,6 +72,12 @@ export default function OrganizationSettingsPage() {
 
       // Update local state with the response
       setOrganization(updatedOrg);
+      if (currentOrganization?.id === updatedOrg.id) {
+        setCurrentOrganization(updatedOrg);
+      }
+      setOrganizations((prev: Organization[]) =>
+        prev.map((org: Organization) => (org.id === updatedOrg.id ? updatedOrg : org))
+      );
       setSuccess('Organization name updated successfully');
     } catch (err: any) {
       setError(err.message || 'Failed to update organization name');
@@ -94,6 +99,12 @@ export default function OrganizationSettingsPage() {
 
       // Update local state with the response which includes updated members array
       setOrganization(updatedOrg);
+      if (currentOrganization?.id === updatedOrg.id) {
+        setCurrentOrganization(updatedOrg);
+      }
+      setOrganizations((prev: Organization[]) =>
+        prev.map((org: Organization) => (org.id === updatedOrg.id ? updatedOrg : org))
+      );
       setNewOwner('');
       setShowTransferConfirm(false);
       setSuccess('Ownership transferred successfully');
@@ -133,7 +144,7 @@ export default function OrganizationSettingsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="p-24 space-y-8">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
@@ -189,7 +200,7 @@ export default function OrganizationSettingsPage() {
               <button
                 onClick={handleSaveName}
                 disabled={isSaving || organizationName === organization.name}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg font-medium flex items-center gap-2 transition-colors"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg font-medium flex items-center gap-2 transition-colors cursor-pointer"
               >
                 {isSaving ? (
                   <FiLoader className="animate-spin" size={16} />
@@ -242,7 +253,7 @@ export default function OrganizationSettingsPage() {
           {!showTransferConfirm ? (
             <button
               onClick={() => setShowTransferConfirm(true)}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors"
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors cursor-pointer"
             >
               Transfer Ownership
             </button>
@@ -283,14 +294,14 @@ export default function OrganizationSettingsPage() {
                     setNewOwner('');
                   }}
                   disabled={isSaving}
-                  className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg font-medium transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleTransferOwnership}
                   disabled={isSaving || !newOwner}
-                  className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+                  className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
                   {isSaving ? (
                     <FiLoader className="animate-spin" size={16} />

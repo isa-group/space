@@ -4,8 +4,8 @@ import type { Organization } from '@/types/Organization';
 export interface OrganizationContextType {
   currentOrganization: Organization | null;
   organizations: Organization[];
-  setCurrentOrganization: (organization: Organization | null) => void;
-  setOrganizations: (organizations: Organization[]) => void;
+  setCurrentOrganization: React.Dispatch<React.SetStateAction<Organization | null>>;
+  setOrganizations: React.Dispatch<React.SetStateAction<Organization[]>>;
   switchOrganization: (organizationId: string) => void;
   isLoading: boolean;
 }
