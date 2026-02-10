@@ -263,6 +263,30 @@ paths:
                   error:
                     type: string
 
+  /users/me:
+    get:
+      summary: Get current user details
+      description: |
+        Retrieves detailed information about the user whose API key is used.
+
+        **Authentication**: User API Key
+
+        **Permission**: Any authenticated user can access their own details using this endpoint, regardless of role. This is the recommended endpoint for users to retrieve their own information without needing ADMIN privileges.
+
+      tags:
+        - Users
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Current user details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized or missing API key
+
   /users/{username}:
     get:
       summary: Get user by username
