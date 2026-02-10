@@ -5,9 +5,9 @@ import UserMongoose from '../../../main/repositories/mongoose/models/UserMongoos
 import { UserRole, USER_ROLES } from '../../../main/types/permissions';
 
 // Create a test user directly in the database
-export const createTestUser = async (role: UserRole = USER_ROLES[USER_ROLES.length - 1]): Promise<any> => {
+export const createTestUser = async (role: UserRole = USER_ROLES[USER_ROLES.length - 1], username: string = `test_user_${Date.now()}`): Promise<any> => {
   const userData = {
-    username: `test_user_${Date.now()}`,
+    username: username,
     password: 'password123',
     role
   };

@@ -14,6 +14,17 @@ class UserService {
     this.organizationService = container.resolve('organizationService');
   }
 
+  async getAllUsers() {
+    return this.userRepository.findAll();
+  }
+
+  async searchUsers(query: string, limit: number = 10) {
+    if (!query || query.trim().length === 0) {
+      return [];
+    }
+    return this.userRepository.searchByUsername(query.trim(), limit);
+  }
+
   async findByUsername(username: string) {
     const user = await this.userRepository.findByUsername(username);
     if (!user) {
@@ -147,10 +158,6 @@ class UserService {
     }
 
     return user;
-  }
-
-  async getAllUsers() {
-    return this.userRepository.findAll();
   }
 
   async destroy(username: string, reqUser: LeanUser) {

@@ -64,6 +64,26 @@ class UserController {
 
   async getAll(req: any, res: any) {
     try {
+      const {q, limit} = req.query;
+
+      // If query parameter is provided, search users
+      if (q !== null && q !== undefined) {
+        const trimmedQuery = q.trim();
+        if (trimmedQuery.length === 0) {
+          return res.json([]);
+        }
+
+        const searchLimit = limit ? parseInt(limit, 10) : 10;
+
+        if (Number.isNaN(searchLimit) || searchLimit < 1 || searchLimit > 50) {
+          return res.status(400).send({ error: 'INVALID DATA: Limit must be between 1 and 50' });
+        }
+
+        const users = await this.userService.searchUsers(trimmedQuery, searchLimit);
+        return res.json(users);
+      }
+      
+      // Otherwise return all users
       const users = await this.userService.getAllUsers();
       res.json(users);
     } catch (err: any) {

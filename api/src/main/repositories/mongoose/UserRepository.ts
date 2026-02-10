@@ -6,15 +6,43 @@ import { UserRole } from '../../types/permissions';
 import { generateUserApiKey } from '../../utils/users/helpers';
 
 class UserRepository extends RepositoryBase {
+
+  async findAll() {
+    try {
+      const users = await UserMongoose.find({}, { password: 0 });
+      return users.map(user => user.toObject({ getters: true, virtuals: true, versionKey: false }));
+    } catch (err) {
+      return [];
+    }
+  }
+  
   async findByUsername(username: string) {
     try {
-      const user = await UserMongoose.findOne({ username }).exec();
+      const user = (await this.searchByUsername(username))[0];
 
       if (!user) return null;
 
-      return toPlainObject<LeanUser>(user.toJSON());
+      
+      return user;
     } catch (err) {
       return null;
+    }
+  }
+  
+  async searchByUsername(username: string, limit: number = 10): Promise<LeanUser[]> {
+    try {
+      const users = await UserMongoose.find(
+        { username: { $regex: username, $options: 'i' } },
+        { password: 0 }
+      )
+        .limit(limit)
+        .exec();
+
+      if (!users) return [];
+
+      return users.map(user => toPlainObject<LeanUser>(user.toJSON()));
+    } catch (err) {
+      return [];
     }
   }
 
@@ -85,15 +113,6 @@ class UserRepository extends RepositoryBase {
   async destroy(username: string) {
     const result = await UserMongoose.deleteOne({ username: username });
     return result?.deletedCount === 1;
-  }
-
-  async findAll() {
-    try {
-      const users = await UserMongoose.find({}, { password: 0 });
-      return users.map(user => user.toObject({ getters: true, virtuals: true, versionKey: false }));
-    } catch (err) {
-      return [];
-    }
   }
 
   async changeRole(username: string, role: UserRole) {

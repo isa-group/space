@@ -92,7 +92,7 @@ describe('User API routes', function () {
         .set('x-api-key', adminApiKey);
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body)).toBeTruthy();
       expect(response.body.length).toBeGreaterThan(0);
     });
 
@@ -101,6 +101,103 @@ describe('User API routes', function () {
 
       expect(response.status).toBe(401);
       expect(response.body.error).toContain('API Key');
+    });
+    
+    it('returns 200 and all users when no query is provided', async function () {
+      const response = await request(app)
+        .get(`${baseUrl}/users`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.body.length).toBeGreaterThan(0);
+    });
+
+    it('returns 200 and matching users when query is provided', async function () {
+      const testUser1 = await createTestUser('USER', 'searchuser1');
+      const testUser2 = await createTestUser('USER', 'searchuser2');
+      const testUser3 = await createTestUser('USER', 'otheruser');
+      
+      trackUserForCleanup(testUser1);
+      trackUserForCleanup(testUser2);
+      trackUserForCleanup(testUser3);
+
+      const response = await request(app)
+        .get(`${baseUrl}/users?q=searchuser`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.body.length).toBeGreaterThanOrEqual(2);
+      expect(response.body.some((u: any) => u.username === 'searchuser1')).toBeTruthy();
+      expect(response.body.some((u: any) => u.username === 'searchuser2')).toBeTruthy();
+    });
+
+    it('returns only users whose usernames match the query', async function () {
+      const testUser1 = await createTestUser('USER', 'alphauser');
+      const testUser2 = await createTestUser('USER', 'betauser');
+
+      trackUserForCleanup(testUser1);
+      trackUserForCleanup(testUser2);
+
+      const response = await request(app)
+        .get(`${baseUrl}/users?q=alpha`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.body.some((u: any) => u.username === 'alphauser')).toBeTruthy();
+      expect(response.body.some((u: any) => u.username === 'betauser')).toBeFalsy();
+    });
+
+    it('returns 200 and empty array when no users match search', async function () {
+      const response = await request(app)
+        .get(`${baseUrl}/users?q=nonexistent_user_xyz123`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.body.length).toBe(0);
+    });
+
+    it('returns 200 and respects limit parameter when searching', async function () {
+      const response = await request(app)
+        .get(`${baseUrl}/users?q=test&limit=2`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.body.length).toBeLessThanOrEqual(2);
+    });
+
+    it('returns 400 when limit is out of range', async function () {
+      const response = await request(app)
+        .get(`${baseUrl}/users?q=test&limit=100`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+      expect(response.body.error).toContain('Limit must be between');
+    });
+
+    it('returns 401 when api key is missing', async function () {
+      const response = await request(app)
+        .get(`${baseUrl}/users?q=test`);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+
+    it('performs case-insensitive search', async function () {
+      const testUser = await createTestUser('USER', 'CaseSensitiveUser');
+      trackUserForCleanup(testUser);
+
+      const response = await request(app)
+        .get(`${baseUrl}/users?q=casesensitive`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(200);
+      expect(response.body.some((u: any) => u.username === 'CaseSensitiveUser')).toBeTruthy();
     });
   });
 

@@ -173,33 +173,86 @@ paths:
 
   /users:
     get:
-      summary: List all users (ADMIN only)
+      summary: List all users or search by username
       description: |
-        Retrieves a paginated list of all users in the system.
+        Retrieves a list of all users in the system or searches for users by username.
 
         **Authentication**: User API Key
 
-        **Required Role**: ADMIN
+        **Permission**: 
+        - Any authenticated user can search for users by providing the `q` parameter
+        - Only ADMIN users can retrieve all users (without search parameter)
 
-        **Permission**: Only ADMIN users can retrieve all users
+        **Search Feature**:
+        - Use the `q` parameter to search for users whose usernames match (case-insensitive)
+        - Optimized for autocomplete scenarios with client-side debouncing
+        - Limit results with the `limit` parameter (1-50, default 10)
 
       tags:
         - Users
       security:
         - ApiKeyAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+          description: Search query to match against usernames (case-insensitive). When provided, performs a search instead of listing all users.
+          example: john
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+          description: Maximum number of results to return when searching (only applies when `q` is provided)
+          example: 10
       responses:
         '200':
-          description: List of users
+          description: List of users or search results
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/User'
+              examples:
+                allUsers:
+                  summary: All users (no search query)
+                  value:
+                    - username: admin_user
+                      role: ADMIN
+                      apiKey: user_abc123
+                    - username: john_doe
+                      role: USER
+                      apiKey: user_def456
+                searchResults:
+                  summary: Search results (with q parameter)
+                  value:
+                    - username: john_doe
+                      role: USER
+                      apiKey: user_def456
+                    - username: johnny_test
+                      role: USER
+                      apiKey: user_ghi789
+        '400':
+          description: Bad request - invalid query parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Limit must be between 1 and 50
         '401':
           description: Unauthorized or missing API key
         '403':
-          description: Forbidden - insufficient permissions (ADMIN role required)
+          description: Forbidden - insufficient permissions (ADMIN role required when not searching)
 
     post:
       summary: Create new user
