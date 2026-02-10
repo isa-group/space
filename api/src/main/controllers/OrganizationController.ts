@@ -224,6 +224,7 @@ class OrganizationController {
     try {
       const organizationId = req.params.organizationId;
       const username = req.params.username;
+      const orgRole = req.user.orgRole;
 
       if (!organizationId) {
         return res.status(400).send({ error: 'organizationId parameter is required' });
@@ -231,6 +232,10 @@ class OrganizationController {
 
       if (!username) {
         return res.status(400).send({ error: 'username parameter is required' });
+      }
+
+      if (!['OWNER', 'ADMIN', 'MANAGER'].includes(orgRole) && req.user.role !== 'ADMIN' && username !== req.user.username) {
+        return res.status(403).send({ error: 'PERMISSION ERROR: Only users with OWNER, ADMIN, or MANAGER role can remove members, unless the user is removing themselves' });
       }
 
       await this.organizationService.removeMember(organizationId, username, req.user);

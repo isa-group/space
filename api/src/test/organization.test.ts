@@ -1542,8 +1542,9 @@ describe('Organization API Test Suite', function () {
     it('Should return 200 and remove member from organization with OWNER request', async function () {
       const response = await request(app)
         .delete(`${baseUrl}/organizations/${testOrganization.id}/members/${managerUser.username}`)
-        .set('x-api-key', ownerUser.apiKey)
-        .expect(200);
+        .set('x-api-key', ownerUser.apiKey);
+
+      expect(response.status).toBe(200);
       expect(response.body).toBeDefined();
     });
 
@@ -1563,22 +1564,29 @@ describe('Organization API Test Suite', function () {
       expect(response.body).toBeDefined();
     });
 
-    it('Should return 200 and remove himself with org EVALUATOR request', async function () {
+    it('Should return 200 when EVALUATOR user removes themselves from organization', async function () {
+      const secondEvaluatorUser = await createTestUser('USER');
       await addMemberToOrganization(testOrganization.id!, {
-        username: regularUserNoPermission.username,
+        username: secondEvaluatorUser.username,
         role: 'EVALUATOR',
       });
 
       const response = await request(app)
-        .delete(`${baseUrl}/organizations/${testOrganization.id}/members/${evaluatorUser.username}`)
-        .set('x-api-key', evaluatorUser.apiKey)
-        .expect(403);
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/members/${secondEvaluatorUser.username}`)
+        .set('x-api-key', secondEvaluatorUser.apiKey)
+        .expect(200);
+      
       expect(response.body).toBeDefined();
+      expect(response.body.members).toBeDefined();
+      expect(response.body.members.some((m: any) => m.username === secondEvaluatorUser.username)).toBe(false);
+
+      await deleteTestUser(secondEvaluatorUser.username);
     });
 
-    it('Should return 403 with org EVALUATOR request', async function () {
+    it('Should return 403 when EVALUATOR user tries to remove another member', async function () {
+      const secondEvaluatorUser = await createTestUser('USER');
       await addMemberToOrganization(testOrganization.id!, {
-        username: regularUserNoPermission.username,
+        username: secondEvaluatorUser.username,
         role: 'EVALUATOR',
       });
 
@@ -1586,9 +1594,12 @@ describe('Organization API Test Suite', function () {
         .delete(
           `${baseUrl}/organizations/${testOrganization.id}/members/${regularUserNoPermission.username}`
         )
-        .set('x-api-key', evaluatorUser.apiKey)
+        .set('x-api-key', secondEvaluatorUser.apiKey)
         .expect(403);
-      expect(response.body).toBeDefined();
+      
+      expect(response.body.error).toBeDefined();
+
+      await deleteTestUser(secondEvaluatorUser.username);
     });
 
     it('Should return 403 when MANAGER user tries to remove ADMIN member', async function () {
@@ -1646,6 +1657,83 @@ describe('Organization API Test Suite', function () {
         .expect(422);
 
       expect(response.body.error).toBeDefined();
+    });
+
+    describe('EVALUATOR member restrictions', function () {
+      let evaluatorGroupOrganization: LeanOrganization;
+      let evaluator1User: any;
+      let evaluator2User: any;
+      let managerInGroup: any;
+
+      beforeEach(async function () {
+        managerInGroup = await createTestUser('USER');
+        evaluator1User = await createTestUser('USER');
+        evaluator2User = await createTestUser('USER');
+
+        evaluatorGroupOrganization = await createTestOrganization(managerInGroup.username);
+
+        await addMemberToOrganization(evaluatorGroupOrganization.id!, {
+          username: evaluator1User.username,
+          role: 'EVALUATOR',
+        });
+        await addMemberToOrganization(evaluatorGroupOrganization.id!, {
+          username: evaluator2User.username,
+          role: 'EVALUATOR',
+        });
+      });
+
+      afterEach(async function () {
+        if (evaluatorGroupOrganization?.id) {
+          await deleteTestOrganization(evaluatorGroupOrganization.id);
+        }
+        if (managerInGroup?.username) {
+          await deleteTestUser(managerInGroup.username);
+        }
+        if (evaluator1User?.username) {
+          await deleteTestUser(evaluator1User.username);
+        }
+        if (evaluator2User?.username) {
+          await deleteTestUser(evaluator2User.username);
+        }
+      });
+
+      it('EVALUATOR can only remove themselves from organization', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/organizations/${evaluatorGroupOrganization.id}/members/${evaluator1User.username}`)
+          .set('x-api-key', evaluator1User.apiKey)
+          .expect(200);
+
+        expect(response.body).toBeDefined();
+        expect(response.body.members).toBeDefined();
+        expect(response.body.members.some((m: any) => m.username === evaluator1User.username)).toBe(false);
+      });
+
+      it('EVALUATOR cannot remove another EVALUATOR', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/organizations/${evaluatorGroupOrganization.id}/members/${evaluator2User.username}`)
+          .set('x-api-key', evaluator1User.apiKey)
+          .expect(403);
+
+        expect(response.body.error).toBeDefined();
+      });
+
+      it('EVALUATOR cannot remove MANAGER from organization', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/organizations/${evaluatorGroupOrganization.id}/members/${managerInGroup.username}`)
+          .set('x-api-key', evaluator1User.apiKey)
+          .expect(403);
+
+        expect(response.body.error).toBeDefined();
+      });
+
+      it('EVALUATOR cannot be removed by another EVALUATOR', async function () {
+        const response = await request(app)
+          .delete(`${baseUrl}/organizations/${evaluatorGroupOrganization.id}/members/${evaluator1User.username}`)
+          .set('x-api-key', evaluator2User.apiKey)
+          .expect(403);
+
+        expect(response.body.error).toBeDefined();
+      });
     });
   });
 

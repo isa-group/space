@@ -437,22 +437,12 @@ class OrganizationService {
     const targetMemberRole = targetMember?.role;
 
     // 2. Define permission flags based on hierarchy
-    // Managers and above (Owner, Admin, Manager)
-    const hasManagerPrivileges = ['OWNER', 'ADMIN', 'MANAGER'].includes(reqMemberRole || '');
     // High-level staff (Owner, Admin)
     const hasHighPrivileges = ['OWNER', 'ADMIN'].includes(reqMemberRole || '');
 
     // --- VALIDATION RULES ---
 
-    // Rule 1: General removal permission
-    // Only Space Admins, the Organization Owner, or Org-level Managers and above can perform removals.
-    if (!isSpaceAdmin && !isOwner && !hasManagerPrivileges) {
-      throw new Error(
-        'PERMISSION ERROR: Only SPACE admins or organization-level OWNER, ADMIN and MANAGER can remove members.'
-      );
-    }
-
-    // Rule 2: Protection for ADMIN members
+    // Rule 1: Protection for ADMIN members
     // Admin members are protected; they can only be removed by Space Admins, the Owner, or other Org Admins.
     if (targetMemberRole === 'ADMIN') {
       if (!isSpaceAdmin && !isOwner && !hasHighPrivileges) {
@@ -462,7 +452,7 @@ class OrganizationService {
       }
     }
 
-    // Rule 3: Evaluator restrictions
+    // Rule 2: Evaluator restrictions
     // Evaluators do not have management permissions; they can only opt-out (remove themselves).
     if (reqMemberRole === 'EVALUATOR' && username !== reqUser.username) {
       throw new Error('PERMISSION ERROR: Organization EVALUATOR can only remove themselves.');

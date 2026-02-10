@@ -51,7 +51,7 @@ const loadFileRoutes = function (app: express.Application) {
     .delete(
       OrganizationValidation.getById,
       handleValidation,
-      hasOrgRole(['OWNER', 'ADMIN', 'MANAGER']),
+      memberRole,
       organizationController.removeMember
     );
 

@@ -72,7 +72,7 @@ export function hasOrgRole(roles: string[]) {
     if ((userRoleInOrg && roles.includes(userRoleInOrg)) || req.user.role === 'ADMIN') {
       return next();
     } else {
-      return res.status(403).send({ error: `Insufficient organization permissions. Required: ${roles.join(', ')}` });
+      return res.status(403).send({ error: `PERMISSIONS ERROR: Insufficient organization permissions. Required: ${roles.join(', ')}` });
     }
   }
 }
