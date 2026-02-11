@@ -372,6 +372,17 @@ class OrganizationService {
     await this.organizationRepository.update(organizationId, updateData);
   }
 
+  async updateUsername(oldUsername: string, newUsername: string): Promise<void> {
+    const organizations = await this.organizationRepository.findByUser(oldUsername);
+    for (const org of organizations) {
+      if (org.owner === oldUsername) {
+        await this.organizationRepository.update(org.id!, { owner: newUsername });
+      }else{
+        await this.organizationRepository.update(org.id!, { members: org.members.map(m => m.username === oldUsername ? { ...m, username: newUsername } : m) });
+      }
+    }
+  }
+
   async removeApiKey(organizationId: string, apiKey: string, reqUser: any): Promise<void> {
     const organization = await this.organizationRepository.findById(organizationId);
 

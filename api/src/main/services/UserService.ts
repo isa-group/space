@@ -99,7 +99,14 @@ class UserService {
       userData.password = await hashPassword(userData.password);
     }
 
-    return await this.userRepository.update(username, userData);
+    const updatedUser = await this.userRepository.update(username, userData);
+
+    // If the username was changed, update the owner field in the organizations owned by the user
+    if (userData.username && userData.username !== username) {
+      await this.organizationService.updateUsername(username, userData.username);
+    }
+
+    return updatedUser;
   }
 
   async regenerateApiKey(username: string, reqUser: LeanUser): Promise<string> {
