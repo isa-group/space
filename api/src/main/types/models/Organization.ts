@@ -20,6 +20,7 @@ export interface OrganizationFilter {
   owner?: string;
   username?: string;
   default?: boolean;
+  name?: string;
 }
 
 export interface OrganizationMember {

@@ -46,64 +46,278 @@ describe('Organization API Test Suite', function () {
     let testOrganizations: LeanOrganization[] = [];
 
     beforeAll(async function () {
-      // Create multiple test organizations
-      for (let i = 0; i < 3; i++) {
-        const org = await createTestOrganization();
+      // Create multiple test organizations for pagination tests
+      for (let i = 0; i < 15; i++) {
+        const org = await createTestOrganization(adminUser.username);
         testOrganizations.push(org);
       }
     });
 
-    it('Should return 200 and all organizations for admin users', async function () {
-      const response = await request(app)
-        .get(`${baseUrl}/organizations/`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
-
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
+    afterAll(async function () {
+      // Clean up test organizations
+      for (const org of testOrganizations) {
+        if (org.id) {
+          await deleteTestOrganization(org.id);
+        }
+      }
     });
 
-    it('Should return 200 and only own organizations for regular users', async function () {
-      const userOrg = await createTestOrganization();
+    describe('Admin Users - Paginated Response', function () {
+      it('Should return 200 with paginated data structure for admin users', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/`)
+          .set('x-api-key', adminApiKey)
+          .expect(200);
 
-      const response = await request(app)
-        .get(`${baseUrl}/organizations/`)
-        .set('x-api-key', regularUserApiKey)
-        .expect(200);
+        expect(response.body).toHaveProperty('data');
+        expect(response.body).toHaveProperty('pagination');
+        expect(Array.isArray(response.body.data)).toBe(true);
+        expect(response.body.pagination).toHaveProperty('offset');
+        expect(response.body.pagination).toHaveProperty('limit');
+        expect(response.body.pagination).toHaveProperty('total');
+        expect(response.body.pagination).toHaveProperty('page');
+        expect(response.body.pagination).toHaveProperty('pages');
+      });
 
-      expect(Array.isArray(response.body)).toBe(true);
-      // Regular users should see organizations where they are owner or member
-      expect(response.body.every((org: any) => 
-        org.owner === regularUser.username || 
-        org.members.some((m: any) => m.username === regularUser.username)
-      )).toBe(true);
+      it('Should return default pagination (limit=10, offset=0) when not specified', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/`)
+          .set('x-api-key', adminApiKey)
+          .expect(200);
+
+        expect(response.body.pagination.limit).toBe(10);
+        expect(response.body.pagination.offset).toBe(0);
+        expect(response.body.pagination.page).toBe(1);
+        expect(response.body.data.length).toBeLessThanOrEqual(10);
+      });
+
+      it('Should respect custom limit parameter', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/?limit=5`)
+          .set('x-api-key', adminApiKey)
+          .expect(200);
+
+        expect(response.body.pagination.limit).toBe(5);
+        expect(response.body.data.length).toBeLessThanOrEqual(5);
+      });
+
+      it('Should respect custom offset parameter', async function () {
+        const firstPage = await request(app)
+          .get(`${baseUrl}/organizations/?limit=5&offset=0`)
+          .set('x-api-key', adminApiKey)
+          .expect(200);
+
+        const secondPage = await request(app)
+          .get(`${baseUrl}/organizations/?limit=5&offset=5`)
+          .set('x-api-key', adminApiKey)
+          .expect(200);
+
+        expect(secondPage.body.pagination.offset).toBe(5);
+        expect(secondPage.body.pagination.page).toBe(2);
+        
+        // Verify different data if there are enough organizations
+        if (firstPage.body.pagination.total > 5) {
+          expect(firstPage.body.data[0].id).not.toBe(secondPage.body.data[0].id);
+        }
+      });
+
+      it('Should calculate total pages correctly', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/?limit=5`)
+          .set('x-api-key', adminApiKey)
+          .expect(200);
+
+        const expectedPages = Math.ceil(response.body.pagination.total / 5) || 1;
+        expect(response.body.pagination.pages).toBe(expectedPages);
+      });
+
+      it('Should filter by organization name with query parameter', async function () {
+        // Create organization with unique name
+        const uniqueOrg = await createTestOrganization(adminUser.username);
+        const uniqueName = uniqueOrg.name;
+
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/?q=${uniqueName}`)
+          .set('x-api-key', adminApiKey)
+          .expect(200);
+
+        expect(response.body.data.length).toBeGreaterThan(0);
+        expect(response.body.data.some((org: any) => org.name === uniqueName)).toBe(true);
+        
+        // Clean up
+        if (uniqueOrg.id) {
+          await deleteTestOrganization(uniqueOrg.id);
+        }
+      });
+
+      it('Should perform case-insensitive search', async function () {
+        // Create organization with known name
+        const testOrg = await createTestOrganization(adminUser.username);
+        const orgName = testOrg.name;
+
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/?q=${orgName.toLowerCase()}`)
+          .set('x-api-key', adminApiKey)
+          .expect(200);
+
+        expect(response.body.data.some((org: any) => 
+          org.name.toLowerCase().includes(orgName.toLowerCase())
+        )).toBe(true);
+        
+        // Clean up
+        if (testOrg.id) {
+          await deleteTestOrganization(testOrg.id);
+        }
+      });
+
+      it('Should return 400 for invalid limit (too low)', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/?limit=0`)
+          .set('x-api-key', adminApiKey)
+          .expect(400);
+
+        expect(response.body.error).toBeDefined();
+        expect(response.body.error).toContain('Limit must be between 1 and 50');
+      });
+
+      it('Should return 400 for invalid limit (too high)', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/?limit=51`)
+          .set('x-api-key', adminApiKey)
+          .expect(400);
+
+        expect(response.body.error).toBeDefined();
+        expect(response.body.error).toContain('Limit must be between 1 and 50');
+      });
+
+      it('Should return 400 for invalid offset (negative)', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/?offset=-1`)
+          .set('x-api-key', adminApiKey)
+          .expect(400);
+
+        expect(response.body.error).toBeDefined();
+        expect(response.body.error).toContain('Offset must be a non-negative number');
+      });
+
+      it('Should handle non-numeric limit gracefully', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/?limit=abc`)
+          .set('x-api-key', adminApiKey)
+          .expect(400);
+
+        expect(response.body.error).toBeDefined();
+      });
+
+      it('Should handle non-numeric offset gracefully', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/?offset=xyz`)
+          .set('x-api-key', adminApiKey)
+          .expect(400);
+
+        expect(response.body.error).toBeDefined();
+      });
+
+      it('Should return all organizations when search query is empty', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/?q=`)
+          .set('x-api-key', adminApiKey)
+          .expect(200);
+
+        expect(response.body.data.length).toBeGreaterThan(0);
+        expect(response.body.pagination.total).toBeGreaterThan(0);
+      });
+
+      it('Should combine search and pagination parameters', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/?q=test&limit=3&offset=0`)
+          .set('x-api-key', adminApiKey)
+          .expect(200);
+
+        expect(response.body.pagination.limit).toBe(3);
+        expect(response.body.pagination.offset).toBe(0);
+        expect(response.body.data.length).toBeLessThanOrEqual(3);
+      });
     });
 
-    it('Should return 200 and include organizations where user is a member', async function () {
-      // Create an organization owned by admin
-      await createTestOrganization(regularUser.username);
-      const adminOrg = await createTestOrganization(adminUser.username);
-      
-      // Add regular user as a member
-      await addMemberToOrganization(adminOrg.id!, { username: regularUser.username, role: 'MANAGER' });
+    describe('Regular Users - Non-Paginated Response', function () {
+      it('Should return 200 with non-paginated data structure for regular users', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/`)
+          .set('x-api-key', regularUserApiKey)
+          .expect(200);
 
-      // Get organizations for regular user
-      const response = await request(app)
-        .get(`${baseUrl}/organizations/`)
-        .set('x-api-key', regularUserApiKey)
-        .expect(200);
+        expect(response.body).toHaveProperty('data');
+        expect(Array.isArray(response.body.data)).toBe(true);
+        expect(response.body).not.toHaveProperty('pagination');
+      });
 
-      expect(Array.isArray(response.body)).toBe(true);
-      
-      // Regular user should see organizations where they are owner
-      const ownedOrgs = response.body.filter((org: any) => org.owner === regularUser.username);
-      expect(ownedOrgs.length).toBeGreaterThan(0);
-      
-      // Regular user should also see the organization where they are a member
-      const memberOrg = response.body.find((org: any) => org.id === adminOrg.id);
-      expect(memberOrg).toBeDefined();
-      expect(memberOrg.owner).toBe(adminUser.username);
-      expect(memberOrg.members.some((m: any) => m.username === regularUser.username)).toBe(true);
+      it('Should return only organizations where user is owner or member', async function () {
+        const userOrg = await createTestOrganization(regularUser.username);
+
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/`)
+          .set('x-api-key', regularUserApiKey)
+          .expect(200);
+
+        expect(Array.isArray(response.body.data)).toBe(true);
+        // Regular users should see organizations where they are owner or member
+        expect(response.body.data.every((org: any) => 
+          org.owner === regularUser.username || 
+          org.members.some((m: any) => m.username === regularUser.username)
+        )).toBe(true);
+        
+        // Clean up
+        if (userOrg.id) {
+          await deleteTestOrganization(userOrg.id);
+        }
+      });
+
+      it('Should include organizations where user is a member', async function () {
+        // Create an organization owned by admin
+        const regularUserOrg = await createTestOrganization(regularUser.username);
+        const adminOrg = await createTestOrganization(adminUser.username);
+        
+        // Add regular user as a member
+        await addMemberToOrganization(adminOrg.id!, { username: regularUser.username, role: 'MANAGER' });
+
+        // Get organizations for regular user
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/`)
+          .set('x-api-key', regularUserApiKey)
+          .expect(200);
+
+        expect(Array.isArray(response.body.data)).toBe(true);
+        
+        // Regular user should see organizations where they are owner
+        const ownedOrgs = response.body.data.filter((org: any) => org.owner === regularUser.username);
+        expect(ownedOrgs.length).toBeGreaterThan(0);
+        
+        // Regular user should also see the organization where they are a member
+        const memberOrg = response.body.data.find((org: any) => org.id === adminOrg.id);
+        expect(memberOrg).toBeDefined();
+        expect(memberOrg.owner).toBe(adminUser.username);
+        expect(memberOrg.members.some((m: any) => m.username === regularUser.username)).toBe(true);
+        
+        // Clean up
+        if (regularUserOrg.id) {
+          await deleteTestOrganization(regularUserOrg.id);
+        }
+        if (adminOrg.id) {
+          await deleteTestOrganization(adminOrg.id);
+        }
+      });
+
+      it('Should ignore pagination parameters for regular users', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/organizations/?limit=5&offset=10`)
+          .set('x-api-key', regularUserApiKey)
+          .expect(200);
+
+        expect(response.body).toHaveProperty('data');
+        expect(response.body).not.toHaveProperty('pagination');
+        // Should return all accessible organizations, not paginated
+      });
     });
   });
 

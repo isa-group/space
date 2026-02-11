@@ -3,14 +3,25 @@ import RepositoryBase from '../RepositoryBase';
 import OrganizationMongoose from './models/OrganizationMongoose';
 
 class OrganizationRepository extends RepositoryBase {
-  async findAll(filters: OrganizationFilter): Promise<LeanOrganization[]> {
+  async find(filters: OrganizationFilter, limit?: number, offset?: number): Promise<LeanOrganization[]> {
     const query: any = {
+      ...(filters.name ? { name: { $regex: filters.name, $options: 'i' } } : {}),
+      ...(filters.owner ? { owner: filters.owner } : {}),
+      ...(filters.default !== undefined ? { default: filters.default } : {}),
+    };
+    const organizations = await OrganizationMongoose.find(query).skip(offset || 0).limit(limit || 10).exec();
+
+    return organizations.map(org => org.toObject() as unknown as LeanOrganization);
+  }
+
+  async count(filters: OrganizationFilter): Promise<number> {
+    const query: any = {
+      ...(filters.name ? { name: { $regex: filters.name, $options: 'i' } } : {}),
       ...(filters.owner ? { owner: filters.owner } : {}),
       ...(filters.default !== undefined ? { default: filters.default } : {}),
     };
     
-    const organizations = await OrganizationMongoose.find(query).exec();
-    return organizations.map(org => org.toObject() as unknown as LeanOrganization);
+    return await OrganizationMongoose.countDocuments(query).exec();
   }
 
   async findById(organizationId: string): Promise<LeanOrganization | null> {

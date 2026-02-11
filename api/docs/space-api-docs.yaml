@@ -625,37 +625,212 @@ paths:
 
   /organizations:
     get:
-      summary: List organizations
+      summary: List organizations with optional filtering and pagination
       description: |
         Retrieves a list of organizations accessible to the authenticated user.
 
         **Authentication**: User API Key
 
         **Permission**: 
-        - ADMIN users: can see all organizations (subject to optional filter)
-        - Regular users: can see only their own organizations
+        - ADMIN users: can see all organizations with pagination and filtering
+        - Regular users: can see only their own organizations (as owner or member) without pagination
+
+        **Two response formats based on user role**:
+        
+        1. **ADMIN Users** (paginated response):
+           - Returns all organizations in the system with pagination
+           - Supports search filtering by organization name
+           - Use `offset` and `limit` to paginate through results
+           - Returns object with `data` array and `pagination` metadata
+        
+        2. **Regular Users** (non-paginated response):
+           - Returns only organizations where user is owner or member
+           - No pagination applied
+           - Returns object with `data` array only (no pagination metadata)
+           - Query parameters for pagination are ignored
 
       tags:
         - Organizations
       security:
         - ApiKeyAuth: []
       parameters:
-        - name: owner
+        - name: q
           in: query
+          required: false
           schema:
             type: string
-          description: Filter by owner username (ADMIN only)
+          description: |
+            Search query to match against organization names (case-insensitive regex).
+            Only applies to ADMIN users.
+            - If provided: filters organizations by name
+            - If not provided or empty: returns all organizations
+          example: ACME
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+          description: |
+            Maximum number of results to return per page.
+            Only applies to ADMIN users. Regular users receive all their organizations.
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: |
+            Number of records to skip (for pagination).
+            Only applies to ADMIN users.
+          example: 0
       responses:
         '200':
-          description: List of organizations
+          description: Organizations list (format varies by user role)
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Organization'
+                oneOf:
+                  - type: object
+                    description: Paginated response for ADMIN users
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Organization'
+                        description: Array of organization objects
+                      pagination:
+                        type: object
+                        properties:
+                          offset:
+                            type: integer
+                            description: Current offset value
+                            example: 0
+                          limit:
+                            type: integer
+                            description: Current limit value
+                            example: 10
+                          total:
+                            type: integer
+                            description: Total number of organizations (filtered by search query if provided)
+                            example: 42
+                          page:
+                            type: integer
+                            description: Current page number (1-indexed)
+                            example: 1
+                          pages:
+                            type: integer
+                            description: Total number of pages
+                            example: 5
+                  - type: object
+                    description: Non-paginated response for regular users
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Organization'
+                        description: Array of organizations where user is owner or member
+              examples:
+                adminSearchResults:
+                  summary: ADMIN - Search results for organizations matching "ACME"
+                  value:
+                    data:
+                      - id: 507f1f77bcf86cd799439011
+                        name: ACME Corporation
+                        owner: john_doe
+                        members: []
+                        apiKeys:
+                          - key: org_abc123
+                            scope: ALL
+                        default: true
+                      - id: 507f1f77bcf86cd799439012
+                        name: ACME Industries
+                        owner: jane_smith
+                        members:
+                          - username: john_doe
+                            role: MANAGER
+                        apiKeys:
+                          - key: org_def456
+                            scope: ALL
+                        default: false
+                    pagination:
+                      offset: 0
+                      limit: 10
+                      total: 2
+                      page: 1
+                      pages: 1
+                adminListAll:
+                  summary: ADMIN - List of all organizations (page 1)
+                  value:
+                    data:
+                      - id: 507f1f77bcf86cd799439011
+                        name: ACME Corporation
+                        owner: john_doe
+                        members: []
+                        apiKeys:
+                          - key: org_abc123
+                            scope: ALL
+                        default: true
+                      - id: 507f1f77bcf86cd799439012
+                        name: Tech Startup
+                        owner: jane_smith
+                        members: []
+                        apiKeys:
+                          - key: org_def456
+                            scope: ALL
+                        default: false
+                    pagination:
+                      offset: 0
+                      limit: 10
+                      total: 42
+                      page: 1
+                      pages: 5
+                regularUserOrganizations:
+                  summary: Regular User - Organizations where user is owner or member
+                  value:
+                    data:
+                      - id: 507f1f77bcf86cd799439011
+                        name: My Organization
+                        owner: john_doe
+                        members: []
+                        apiKeys:
+                          - key: org_abc123
+                            scope: ALL
+                        default: true
+                      - id: 507f1f77bcf86cd799439013
+                        name: Shared Project
+                        owner: jane_smith
+                        members:
+                          - username: john_doe
+                            role: EVALUATOR
+                        apiKeys:
+                          - key: org_ghi789
+                            scope: ALL
+                        default: false
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              examples:
+                invalidLimit:
+                  summary: Limit out of range
+                  value:
+                    error: "INVALID DATA: Limit must be between 1 and 50"
+                invalidOffset:
+                  summary: Negative offset
+                  value:
+                    error: "INVALID DATA: Offset must be a non-negative number"
         '401':
-          description: Unauthorized
+          description: Unauthorized - missing or invalid API key
 
     post:
       summary: Create organization

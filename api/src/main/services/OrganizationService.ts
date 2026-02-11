@@ -23,9 +23,13 @@ class OrganizationService {
     this.serviceService = container.resolve('serviceService');
   }
 
-  async findAll(filters: OrganizationFilter): Promise<LeanOrganization[]> {
-    const organizations = await this.organizationRepository.findAll(filters);
+  async find(filters: OrganizationFilter, limit?: number, offset?: number): Promise<LeanOrganization[]> {
+    const organizations = await this.organizationRepository.find(filters, limit, offset);
     return organizations;
+  }
+
+  async count(filters: OrganizationFilter): Promise<number> {
+    return await this.organizationRepository.count(filters);
   }
 
   async findById(organizationId: string): Promise<LeanOrganization | null> {
@@ -78,7 +82,7 @@ class OrganizationService {
     }
 
     if (organizationData.default) {
-      const proposedOwnerDefaultOrg = await this.organizationRepository.findAll({ owner: proposedOwner.username, default: true });
+      const proposedOwnerDefaultOrg = await this.organizationRepository.find({ owner: proposedOwner.username, default: true });
   
       if (proposedOwnerDefaultOrg.length > 0) {
         throw new Error(`CONFLICT: The proposed owner ${proposedOwner.username} already has a default organization.`);
@@ -360,7 +364,7 @@ class OrganizationService {
         throw new Error('INVALID DATA: Invalid organization default flag.');
       }
 
-      const proposedOwnerDefaultOrg = await this.organizationRepository.findAll({ owner: organization.owner, default: true });
+      const proposedOwnerDefaultOrg = await this.organizationRepository.find({ owner: organization.owner, default: true });
   
       if (proposedOwnerDefaultOrg.length > 0) {
         throw new Error(`CONFLICT: The proposed owner ${organization.owner} already has a default organization.`);
