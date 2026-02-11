@@ -20,9 +20,9 @@ const settingsTabs = [
 ];
 
 const adminOnlyTabs = [
-  { label: 'Instance Monitoring', path: '/instance-monitoring', icon: <FiActivity size={22} />, adminOnly: true },
   { label: 'Users Management', path: '/users', icon: <FiUsers size={22} />, adminOnly: true },
   { label: 'Organizations', path: '/organizations', icon: <FiLayers size={22} />, adminOnly: true },
+  { label: 'Instance Monitoring', path: '/instance-monitoring', icon: <FiActivity size={22} />, adminOnly: true },
 ];
 
 function getSelectedTab(pathname: string) {
