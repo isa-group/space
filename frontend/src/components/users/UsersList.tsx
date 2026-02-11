@@ -50,7 +50,7 @@ export default function UsersList({
   totalPages: number;
   onUserChanged?: () => void;
 }) {
-  const { user: loggedUser, updateUser, logout } = useAuth();
+  const { user: loggedUser, updateUser, logout, refreshOrganizations } = useAuth();
   const [editing, setEditing] = useState<string | null>(null);
   const [usernameDraft, setUsernameDraft] = useState('');
   const [roleDropdown, setRoleDropdown] = useState<string | null>(null);
@@ -150,6 +150,8 @@ export default function UsersList({
         if (confirmed) {
           await deleteUser(loggedUser.apiKey, username);
           showAlert('User deleted successfully', 'info');
+          // Refresh organizations in case the deleted user's organization was removed
+          await refreshOrganizations();
           if (onUserChanged) onUserChanged();
         }
       })

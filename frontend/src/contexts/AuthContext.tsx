@@ -16,6 +16,7 @@ export interface AuthContextType {
   logout: () => void;
   user: UserData;
   updateUser: (newUser: Partial<UserData>) => void;
+  refreshOrganizations: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -167,8 +168,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setUser((prev) => ({ ...prev, ...newUser }));
   };
 
+  // Refresh organizations from the API
+  const refreshOrganizations = async () => {
+    if (!user.apiKey || !organizationContext) {
+      return;
+    }
+
+    try {
+      const organizations = await getOrganizations(user.apiKey);
+      
+      if (organizations && organizations.length > 0) {
+        organizationContext.setOrganizations(organizations);
+        
+        // Check if current organization still exists
+        const currentOrgStillExists = organizations.find(
+          org => org.id === organizationContext.currentOrganization?.id
+        );
+        
+        if (!currentOrgStillExists) {
+          // Current organization was deleted, switch to default or first
+          const defaultOrg = organizations.find(org => org.default) || organizations[0];
+          if (defaultOrg) {
+            organizationContext.setCurrentOrganization(defaultOrg);
+          }
+        } else {
+          // Update current organization data (in case members changed)
+          organizationContext.setCurrentOrganization(currentOrgStillExists);
+        }
+      } else {
+        // No organizations left
+        organizationContext.setOrganizations([]);
+        organizationContext.setCurrentOrganization(null);
+      }
+    } catch (error) {
+      console.error('[AuthContext] Failed to refresh organizations:', error);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout, user, updateUser }}>
+    <AuthContext.Provider value={{ isAuthenticated, login, logout, user, updateUser, refreshOrganizations }}>
       {children}
     </AuthContext.Provider>
   );
