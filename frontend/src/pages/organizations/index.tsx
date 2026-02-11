@@ -7,7 +7,7 @@ import { getOrganizationsPaginated } from '@/api/organizations/organizationsApi'
 import type { Organization } from '@/types/Organization';
 
 export default function OrganizationsPage() {
-  const { user, refreshOrganizations } = useAuth();
+  const { user } = useAuth();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [totalOrganizations, setTotalOrganizations] = useState(0);
   const [loading, setLoading] = useState(true);
