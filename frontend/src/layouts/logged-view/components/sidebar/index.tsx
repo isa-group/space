@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router';
 import useAuth from '@/hooks/useAuth';
-import { FiHome, FiUsers, FiServer, FiSettings, FiChevronRight, FiKey, FiActivity, FiUser } from 'react-icons/fi';
+import { FiHome, FiUsers, FiServer, FiSettings, FiChevronRight, FiKey, FiActivity, FiUser, FiLayers } from 'react-icons/fi';
 import { AiOutlineDashboard } from 'react-icons/ai';
 import OrganizationSelector from '@/components/OrganizationSelector';
 
@@ -22,6 +22,7 @@ const settingsTabs = [
 const adminOnlyTabs = [
   { label: 'Instance Monitoring', path: '/instance-monitoring', icon: <FiActivity size={22} />, adminOnly: true },
   { label: 'Users Management', path: '/users', icon: <FiUsers size={22} />, adminOnly: true },
+  { label: 'Organizations', path: '/organizations', icon: <FiLayers size={22} />, adminOnly: true },
 ];
 
 function getSelectedTab(pathname: string) {
@@ -33,6 +34,7 @@ function getSelectedTab(pathname: string) {
   if (pathname.startsWith('/contracts/dashboard')) return '/contracts/dashboard';
   if (pathname.startsWith('/instance-monitoring')) return '/instance-monitoring';
   if (pathname.startsWith('/users')) return '/users';
+  if (pathname.startsWith('/organizations')) return '/organizations';
   return '/';
 }
 

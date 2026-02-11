@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { FiChevronDown, FiCheck, FiPlus } from 'react-icons/fi';
 import { useOrganization } from '@/hooks/useOrganization';
 import CreateOrganizationModal from './CreateOrganizationModal';
@@ -12,6 +12,24 @@ export default function OrganizationSelector({ collapsed }: OrganizationSelector
   const { currentOrganization, organizations, switchOrganization } = useOrganization();
   const [isOpen, setIsOpen] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const selectorRef = useRef<HTMLDivElement>(null);
+
+  // Click outside to close
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (selectorRef.current && !selectorRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
 
   if (!currentOrganization || organizations.length === 0) {
     return null;
@@ -30,7 +48,7 @@ export default function OrganizationSelector({ collapsed }: OrganizationSelector
   }
 
   return (
-    <div className="px-4 mb-6 relative">
+    <div ref={selectorRef} className="px-4 mb-6 relative">
       <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">
         Organization
       </div>
@@ -64,22 +82,14 @@ export default function OrganizationSelector({ collapsed }: OrganizationSelector
 
       <AnimatePresence>
         {isOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40"
-              onClick={() => setIsOpen(false)}
-            />
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="absolute left-4 right-4 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 overflow-hidden"
+              className="absolute left-4 right-4 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 overflow-hidden flex flex-col"
             >
-              <div className="max-h-60 overflow-y-auto">
+              <div className="overflow-y-auto" style={{ maxHeight: '250px' }}>
                 {organizations.map((org) => (
                   <button
                     key={org.id}
@@ -108,7 +118,7 @@ export default function OrganizationSelector({ collapsed }: OrganizationSelector
                   </button>
                 ))}
               </div>
-              <div className="border-t border-gray-200 dark:border-gray-700">
+              <div className="border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <button
                   onClick={() => {
                     setShowCreateModal(true);
@@ -121,7 +131,6 @@ export default function OrganizationSelector({ collapsed }: OrganizationSelector
                 </button>
               </div>
             </motion.div>
-          </>
         )}
       </AnimatePresence>
 

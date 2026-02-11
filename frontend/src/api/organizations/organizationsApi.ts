@@ -5,17 +5,88 @@ import type {
   UpdateOrganizationRequest,
   AddMemberRequest,
   CreateApiKeyRequest,
-  OrganizationApiKey
 } from '@/types/Organization';
 
 const DEFAULT_TIMEOUT = 5000;
 
 /**
  * Get all organizations for the authenticated user
+ * For ADMIN users: fetches all organizations across all pages
+ * For regular users: fetches only organizations where they are owner or member
  */
 export async function getOrganizations(apiKey: string): Promise<Organization[]> {
+  try {
+    const response = await axios.get('/organizations', {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      timeout: DEFAULT_TIMEOUT,
+    });
+
+    // Check if response has pagination (ADMIN user)
+    if (response.data.pagination) {
+      const firstPageData = response.data.data;
+      const totalOrganizations = response.data.pagination.total;
+      const pageSize = response.data.pagination.limit;
+
+      // If all organizations fit in first page, return them
+      if (firstPageData.length >= totalOrganizations) {
+        return firstPageData;
+      }
+
+      // Otherwise, fetch all remaining pages
+      const allOrganizations: Organization[] = [...firstPageData];
+      const totalPages = Math.ceil(totalOrganizations / pageSize);
+
+      const remainingPagePromises = [];
+      for (let page = 2; page <= totalPages; page++) {
+        const offset = (page - 1) * pageSize;
+        remainingPagePromises.push(
+          axios.get('/organizations', {
+            params: { offset, limit: pageSize },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+            },
+            timeout: DEFAULT_TIMEOUT,
+          })
+        );
+      }
+
+      const remainingPages = await Promise.all(remainingPagePromises);
+      remainingPages.forEach(pageResponse => {
+        allOrganizations.push(...pageResponse.data.data);
+      });
+
+      return allOrganizations;
+    }
+
+    // Regular user response (data array without pagination)
+    return response.data.data || response.data;
+  } catch (error: any) {
+    console.error('Failed to fetch organizations:', error);
+    throw new Error('Failed to fetch organizations. ' + (error.response?.data?.error || error.message));
+  }
+}
+
+/**
+ * Get paginated organizations (for admins)
+ */
+export async function getOrganizationsPaginated(
+  apiKey: string,
+  offset: number = 0,
+  limit: number = 10,
+  query?: string
+): Promise<{ data: Organization[]; pagination: { offset: number; limit: number; total: number; page: number; pages: number } }> {
+  const params: any = { offset, limit };
+  if (query) {
+    params.q = query;
+  }
+
   return axios
     .get('/organizations', {
+      params,
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
