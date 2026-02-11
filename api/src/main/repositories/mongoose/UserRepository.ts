@@ -7,42 +7,33 @@ import { generateUserApiKey } from '../../utils/users/helpers';
 
 class UserRepository extends RepositoryBase {
 
-  async findAll() {
+  async find(username: string, limit: number = 10, offset: number = 0): Promise<LeanUser[]> {
     try {
-      const users = await UserMongoose.find({}, { password: 0 });
-      return users.map(user => user.toObject({ getters: true, virtuals: true, versionKey: false }));
+      const users = await UserMongoose.find({ username: { $regex: username, $options: 'i' } }, { password: 0 }).skip(offset).limit(limit).exec();
+      return users.map(user => user.toObject({ getters: true, virtuals: true, versionKey: false }) as unknown as LeanUser);
     } catch (err) {
       return [];
     }
   }
-  
-  async findByUsername(username: string) {
+
+  async count(query: string = '') {
     try {
-      const user = (await this.searchByUsername(username))[0];
+      return await UserMongoose.countDocuments({ username: { $regex: query, $options: 'i' } });
+    } catch (err) {
+      return 0;
+    }
+  }
+  
+  async findByUsername(username: string): Promise<LeanUser | null> {
+    try {
+      const user = (await this.find(username))[0];
 
       if (!user) return null;
 
       
-      return user;
+      return user as unknown as LeanUser;
     } catch (err) {
       return null;
-    }
-  }
-  
-  async searchByUsername(username: string, limit: number = 10): Promise<LeanUser[]> {
-    try {
-      const users = await UserMongoose.find(
-        { username: { $regex: username, $options: 'i' } },
-        { password: 0 }
-      )
-        .limit(limit)
-        .exec();
-
-      if (!users) return [];
-
-      return users.map(user => toPlainObject<LeanUser>(user.toJSON()));
-    } catch (err) {
-      return [];
     }
   }
 

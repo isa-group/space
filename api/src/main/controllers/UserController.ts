@@ -42,7 +42,7 @@ class UserController {
     try {
       const { username, password } = req.body;
       const user = await this.userService.authenticate(username, password);
-      res.json({username: user.username, apiKey: user.apiKey, role: user.role });
+      res.json({ username: user.username, apiKey: user.apiKey, role: user.role });
     } catch (err: any) {
       res.status(401).send({ error: err.message });
     }
@@ -54,7 +54,7 @@ class UserController {
       if (!req.user) {
         return res.status(401).send({ error: 'Authentication required' });
       }
-      
+
       const user = await this.userService.findByUsername(req.user.username);
       res.json({ username: user.username, role: user.role });
     } catch (err: any) {
@@ -64,28 +64,43 @@ class UserController {
 
   async getAll(req: any, res: any) {
     try {
-      const {q, limit} = req.query;
+      let { q, limit, offset } = req.query;
 
-      // If query parameter is provided, search users
-      if (q !== null && q !== undefined) {
-        const trimmedQuery = q.trim();
-        if (trimmedQuery.length === 0) {
-          return res.json([]);
-        }
+      q = q ?? '';
 
-        const searchLimit = limit ? parseInt(limit, 10) : 10;
-
-        if (Number.isNaN(searchLimit) || searchLimit < 1 || searchLimit > 50) {
-          return res.status(400).send({ error: 'INVALID DATA: Limit must be between 1 and 50' });
-        }
-
-        const users = await this.userService.searchUsers(trimmedQuery, searchLimit);
-        return res.json(users);
+      if (!req.user){
+        return res.status(401).send({ error: 'Authentication required' });
       }
-      
-      // Otherwise return all users
-      const users = await this.userService.getAllUsers();
-      res.json(users);
+
+      if (q.length === 0 && req.user.role !== 'ADMIN') {
+        return res.status(403).send({ error: 'PERMISSION ERROR: Only admins can retrieve the full user list without a search query' });
+      }
+
+      const searchLimit = limit ? parseInt(limit, 10) : 10;
+      const searchOffset = offset ? parseInt(offset, 10) : 0;
+
+      if (Number.isNaN(searchLimit) || searchLimit < 1 || searchLimit > 50) {
+        return res.status(400).send({ error: 'INVALID DATA: Limit must be between 1 and 50' });
+      }
+
+      if (Number.isNaN(searchOffset) || searchOffset < 0) {
+        return res
+          .status(400)
+          .send({ error: 'INVALID DATA: Offset must be a non-negative number' });
+      }
+
+      const users = await this.userService.getUsers(q, searchLimit, searchOffset);
+      const total = await this.userService.countUsers(q);
+      return res.json({
+        data: users,
+        pagination: {
+          offset: searchOffset,
+          limit: searchLimit,
+          total,
+          page: Math.floor(searchOffset / searchLimit) + 1,
+          pages: Math.ceil(total / searchLimit),
+        },
+      });
     } catch (err: any) {
       res.status(500).send({ error: err.message });
     }
@@ -109,7 +124,7 @@ class UserController {
         res.status(422).send({ error: err.message });
       } else if (err.message.toLowerCase().includes('permission error')) {
         res.status(403).send({ error: err.message });
-      }else if (
+      } else if (
         err.message.toLowerCase().includes('already') ||
         err.message.toLowerCase().includes('not found')
       ) {
@@ -132,7 +147,7 @@ class UserController {
         res.status(404).send({ error: err.message });
       } else if (err.message.toLowerCase().includes('permission error')) {
         res.status(403).send({ error: err.message });
-      }else {
+      } else {
         res.status(500).send({ error: err.message });
       }
     }
@@ -150,7 +165,7 @@ class UserController {
     } catch (err: any) {
       if (err.message.toLowerCase().includes('permission error')) {
         res.status(403).send({ error: err.message });
-      }else if (
+      } else if (
         err.message.toLowerCase().includes('already') ||
         err.message.toLowerCase().includes('not found')
       ) {

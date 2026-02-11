@@ -14,15 +14,12 @@ class UserService {
     this.organizationService = container.resolve('organizationService');
   }
 
-  async getAllUsers() {
-    return this.userRepository.findAll();
+  async getUsers(query: string = '', limit: number = 10, offset: number = 0): Promise<LeanUser[]> {
+    return await this.userRepository.find(query.trim(), limit, offset);
   }
 
-  async searchUsers(query: string, limit: number = 10) {
-    if (!query || query.trim().length === 0) {
-      return [];
-    }
-    return this.userRepository.searchByUsername(query.trim(), limit);
+  async countUsers(query: string = '') {
+    return this.userRepository.count(query.trim());
   }
 
   async findByUsername(username: string) {
@@ -85,7 +82,7 @@ class UserService {
     // Validación: no permitir degradar al último admin
     if (user.role === 'ADMIN' && userData.role && userData.role !== 'ADMIN') {
       const allUsers = await this.userRepository.findAll();
-      const adminCount = allUsers.filter(u => u.role === 'ADMIN' && u.username !== username).length;
+      const adminCount = allUsers.filter((u: LeanUser) => u.role === 'ADMIN' && u.username !== username).length;
       if (adminCount < 1) {
         throw new Error('PERMISSION ERROR: There must always be at least one ADMIN user in the system.');
       }
@@ -141,7 +138,7 @@ class UserService {
     // Validación: no permitir degradar al último admin
     if (user.role === 'ADMIN' && role !== 'ADMIN') {
       const allUsers = await this.userRepository.findAll();
-      const adminCount = allUsers.filter(u => u.role === 'ADMIN' && u.username !== username).length;
+      const adminCount = allUsers.filter((u: LeanUser) => u.role === 'ADMIN' && u.username !== username).length;
       if (adminCount < 1) {
         throw new Error('PERMISSION ERROR: There must always be at least one ADMIN user in the system.');
       }
@@ -174,7 +171,7 @@ class UserService {
     if (user.role === 'ADMIN') {
       // Contar admins restantes
       const allUsers = await this.userRepository.findAll();
-      const adminCount = allUsers.filter(u => u.role === 'ADMIN' && u.username !== username).length;
+      const adminCount = allUsers.filter((u: LeanUser) => u.role === 'ADMIN' && u.username !== username).length;
       if (adminCount < 1) {
         throw new Error('PERMISSION ERROR: There must always be at least one ADMIN user in the system.');
       }

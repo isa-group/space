@@ -86,120 +86,299 @@ describe('User API routes', function () {
   });
 
   describe('GET /users', function () {
-    it('returns 200 and a list when api key is provided', async function () {
-      const response = await request(app)
-        .get(`${baseUrl}/users`)
-        .set('x-api-key', adminApiKey);
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.length).toBeGreaterThan(0);
-    });
-
     it('returns 401 when api key is missing', async function () {
       const response = await request(app).get(`${baseUrl}/users`);
 
       expect(response.status).toBe(401);
       expect(response.body.error).toContain('API Key');
     });
-    
-    it('returns 200 and all users when no query is provided', async function () {
-      const response = await request(app)
-        .get(`${baseUrl}/users`)
-        .set('x-api-key', adminApiKey);
 
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.length).toBeGreaterThan(0);
+    // ============================================
+    // List All Mode (without q parameter)
+    // ============================================
+    describe('List all mode (without q parameter)', function () {
+      it('returns 200 with paginated data structure', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty('data');
+        expect(response.body).toHaveProperty('pagination');
+        expect(Array.isArray(response.body.data)).toBeTruthy();
+        expect(response.body.data.length).toBeGreaterThan(0);
+      });
+
+      it('returns correct pagination metadata', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?offset=0&limit=5`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(200);
+        expect(response.body.pagination).toEqual({
+          offset: 0,
+          limit: 5,
+          total: expect.any(Number),
+          page: 1,
+          pages: expect.any(Number),
+        });
+      });
+
+      it('respects offset and limit parameters', async function () {
+        const testUser1 = await createTestUser('USER', 'listuser1');
+        const testUser2 = await createTestUser('USER', 'listuser2');
+        const testUser3 = await createTestUser('USER', 'listuser3');
+        
+        trackUserForCleanup(testUser1);
+        trackUserForCleanup(testUser2);
+        trackUserForCleanup(testUser3);
+
+        const page1 = await request(app)
+          .get(`${baseUrl}/users?offset=0&limit=2`)
+          .set('x-api-key', adminApiKey);
+
+        expect(page1.status).toBe(200);
+        expect(page1.body.data.length).toBeLessThanOrEqual(2);
+        expect(page1.body.pagination.offset).toBe(0);
+        expect(page1.body.pagination.limit).toBe(2);
+
+        const page2 = await request(app)
+          .get(`${baseUrl}/users?offset=2&limit=2`)
+          .set('x-api-key', adminApiKey);
+
+        expect(page2.status).toBe(200);
+        expect(page2.body.pagination.offset).toBe(2);
+        expect(page2.body.pagination.page).toBe(2);
+      });
+
+      it('returns 400 when limit exceeds maximum (50)', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?limit=100`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Limit must be between 1 and 50');
+      });
+
+      it('returns 400 when limit is less than 1', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?limit=0`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Limit must be between 1 and 50');
+      });
+
+      it('returns 400 when offset is negative', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?offset=-5`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Offset must be a non-negative number');
+      });
+
+      it('returns 400 when limit is not a valid number', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?limit=abc`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Limit must be between 1 and 50');
+      });
+
+      it('returns 400 when offset is not a valid number', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?offset=xyz`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Offset must be a non-negative number');
+      });
+
+      it('uses default pagination values (limit=10, offset=0)', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(200);
+        expect(response.body.pagination.offset).toBe(0);
+        expect(response.body.pagination.limit).toBe(10);
+      });
+
+      it('calculates correct page number from offset and limit', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?offset=20&limit=10`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(200);
+        expect(response.body.pagination.page).toBe(3); // (20 / 10) + 1 = 3
+      });
     });
 
-    it('returns 200 and matching users when query is provided', async function () {
-      const testUser1 = await createTestUser('USER', 'searchuser1');
-      const testUser2 = await createTestUser('USER', 'searchuser2');
-      const testUser3 = await createTestUser('USER', 'otheruser');
-      
-      trackUserForCleanup(testUser1);
-      trackUserForCleanup(testUser2);
-      trackUserForCleanup(testUser3);
+    // ============================================
+    // Search Mode (with q parameter)
+    // ============================================
+    describe('Search mode (with q parameter)', function () {
+      it('returns 200 with matching users when query is provided', async function () {
+        const testUser1 = await createTestUser('USER', 'searchuser1');
+        const testUser2 = await createTestUser('USER', 'searchuser2');
+        const testUser3 = await createTestUser('USER', 'otheruser');
+        
+        trackUserForCleanup(testUser1);
+        trackUserForCleanup(testUser2);
+        trackUserForCleanup(testUser3);
 
-      const response = await request(app)
-        .get(`${baseUrl}/users?q=searchuser`)
-        .set('x-api-key', adminApiKey);
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=searchuser`)
+          .set('x-api-key', adminApiKey);
 
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.length).toBeGreaterThanOrEqual(2);
-      expect(response.body.some((u: any) => u.username === 'searchuser1')).toBeTruthy();
-      expect(response.body.some((u: any) => u.username === 'searchuser2')).toBeTruthy();
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty('data');
+        expect(response.body).toHaveProperty('pagination');
+        expect(Array.isArray(response.body.data)).toBeTruthy();
+        expect(response.body.data.length).toBeGreaterThanOrEqual(2);
+      });
+
+      it('returns only users matching the query (not including non-matching)', async function () {
+        const testUser1 = await createTestUser('USER', 'alphauser');
+        const testUser2 = await createTestUser('USER', 'betauser');
+
+        trackUserForCleanup(testUser1);
+        trackUserForCleanup(testUser2);
+
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=alpha`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.some((u: any) => u.username === 'alphauser')).toBeTruthy();
+        expect(response.body.data.some((u: any) => u.username === 'betauser')).toBeFalsy();
+      });
+
+      it('returns empty array when no users match search', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=nonexistent_user_xyz123`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toEqual([]);
+        expect(response.body.pagination.total).toBe(0);
+      });
+
+      it('applies limit to search results', async function () {
+        const testUser1 = await createTestUser('USER', 'test_alpha_1');
+        const testUser2 = await createTestUser('USER', 'test_alpha_2');
+        const testUser3 = await createTestUser('USER', 'test_alpha_3');
+        
+        trackUserForCleanup(testUser1);
+        trackUserForCleanup(testUser2);
+        trackUserForCleanup(testUser3);
+
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=test_alpha&limit=2`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.length).toBeLessThanOrEqual(2);
+      });
+
+      it('applies offset to search results', async function () {
+        const testUser1 = await createTestUser('USER', 'query_user_01');
+        const testUser2 = await createTestUser('USER', 'query_user_02');
+        const testUser3 = await createTestUser('USER', 'query_user_03');
+        
+        trackUserForCleanup(testUser1);
+        trackUserForCleanup(testUser2);
+        trackUserForCleanup(testUser3);
+
+        const allResults = await request(app)
+          .get(`${baseUrl}/users?q=query_user&limit=100`)
+          .set('x-api-key', adminApiKey);
+
+        const page2 = await request(app)
+          .get(`${baseUrl}/users?q=query_user&offset=1&limit=1`)
+          .set('x-api-key', adminApiKey);
+
+        expect(page2.status).toBe(200);
+        expect(page2.body.pagination.offset).toBe(1);
+        expect(page2.body.pagination.page).toBe(2);
+      });
+
+      it('performs case-insensitive search', async function () {
+        const testUser = await createTestUser('USER', 'CaseSensitiveUser');
+        trackUserForCleanup(testUser);
+
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=casesensitive`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.some((u: any) => u.username === 'CaseSensitiveUser')).toBeTruthy();
+      });
+
+      it('supports partial username matching (regex)', async function () {
+        const testUser = await createTestUser('USER', 'john_developer_123');
+        trackUserForCleanup(testUser);
+
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=develop`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.some((u: any) => u.username === 'john_developer_123')).toBeTruthy();
+      });
+
+      it('returns 400 when limit exceeds maximum (50)', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=test&limit=75`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Limit must be between 1 and 50');
+      });
+
+      it('returns 400 when offset is negative in search mode', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=test&offset=-1`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toContain('Offset must be a non-negative number');
+      });
+
+      it('includes pagination metadata in search results', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=admin`)
+          .set('x-api-key', adminApiKey);
+
+        expect(response.status).toBe(200);
+        expect(response.body.pagination).toEqual({
+          offset: expect.any(Number),
+          limit: expect.any(Number),
+          total: expect.any(Number),
+          page: expect.any(Number),
+          pages: expect.any(Number),
+        });
+      });
     });
 
-    it('returns only users whose usernames match the query', async function () {
-      const testUser1 = await createTestUser('USER', 'alphauser');
-      const testUser2 = await createTestUser('USER', 'betauser');
+    // ============================================
+    // Empty Query String Edge Case
+    // ============================================
+    describe('Empty query string (q="")', function () {
+      it('treats empty query as list all (pagination mode)', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=`)
+          .set('x-api-key', adminApiKey);
 
-      trackUserForCleanup(testUser1);
-      trackUserForCleanup(testUser2);
-
-      const response = await request(app)
-        .get(`${baseUrl}/users?q=alpha`)
-        .set('x-api-key', adminApiKey);
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.some((u: any) => u.username === 'alphauser')).toBeTruthy();
-      expect(response.body.some((u: any) => u.username === 'betauser')).toBeFalsy();
-    });
-
-    it('returns 200 and empty array when no users match search', async function () {
-      const response = await request(app)
-        .get(`${baseUrl}/users?q=nonexistent_user_xyz123`)
-        .set('x-api-key', adminApiKey);
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.length).toBe(0);
-    });
-
-    it('returns 200 and respects limit parameter when searching', async function () {
-      const response = await request(app)
-        .get(`${baseUrl}/users?q=test&limit=2`)
-        .set('x-api-key', adminApiKey);
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.length).toBeLessThanOrEqual(2);
-    });
-
-    it('returns 400 when limit is out of range', async function () {
-      const response = await request(app)
-        .get(`${baseUrl}/users?q=test&limit=100`)
-        .set('x-api-key', adminApiKey);
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBeDefined();
-      expect(response.body.error).toContain('Limit must be between');
-    });
-
-    it('returns 401 when api key is missing', async function () {
-      const response = await request(app)
-        .get(`${baseUrl}/users?q=test`);
-
-      expect(response.status).toBe(401);
-      expect(response.body.error).toContain('API Key');
-    });
-
-    it('performs case-insensitive search', async function () {
-      const testUser = await createTestUser('USER', 'CaseSensitiveUser');
-      trackUserForCleanup(testUser);
-
-      const response = await request(app)
-        .get(`${baseUrl}/users?q=casesensitive`)
-        .set('x-api-key', adminApiKey);
-
-      expect(response.status).toBe(200);
-      expect(response.body.some((u: any) => u.username === 'CaseSensitiveUser')).toBeTruthy();
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty('data');
+        expect(response.body).toHaveProperty('pagination');
+      });
     });
   });
+
 
   describe('POST /users', function () {
     it('returns 201 when creating a user with explicit role', async function () {

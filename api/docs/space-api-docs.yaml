@@ -173,20 +173,28 @@ paths:
 
   /users:
     get:
-      summary: List all users or search by username
+      summary: List all users with optional filtering and pagination
       description: |
-        Retrieves a list of all users in the system or searches for users by username.
+        Retrieves a paginated list of users, with optional filtering by username and search offset/limit.
 
         **Authentication**: User API Key
 
         **Permission**: 
-        - Any authenticated user can search for users by providing the `q` parameter
-        - Only ADMIN users can retrieve all users (without search parameter)
+        - Any authenticated user can search for users by providing the `q` parameter (autocomplete mode)
+        - Only ADMIN users can list all users without a search query (list all mode)
 
-        **Search Feature**:
-        - Use the `q` parameter to search for users whose usernames match (case-insensitive)
-        - Optimized for autocomplete scenarios with client-side debouncing
-        - Limit results with the `limit` parameter (1-50, default 10)
+        **Two modes of operation**:
+        
+        1. **Search Mode** (when `q` parameter is provided):
+           - Searches for users whose usernames match (case-insensitive regex)
+           - Returns a paginated list of matching users
+           - Optimized for autocomplete and user lookup
+           - `offset` and `limit` apply to search results, not the full user database
+        
+        2. **List All Mode** (when no `q` parameter or empty string):
+           - Returns all users in the system with pagination
+           - Use `offset` and `limit` to paginate through all users
+           - Requires ADMIN role
 
       tags:
         - Users
@@ -198,8 +206,10 @@ paths:
           required: false
           schema:
             type: string
-            minLength: 1
-          description: Search query to match against usernames (case-insensitive). When provided, performs a search instead of listing all users.
+          description: |
+            Search query to match against usernames (case-insensitive regex).
+            - If provided and not empty: performs search filtering
+            - If not provided or empty: returns all users (ADMIN required)
           example: john
         - name: limit
           in: query
@@ -209,38 +219,88 @@ paths:
             minimum: 1
             maximum: 50
             default: 10
-          description: Maximum number of results to return when searching (only applies when `q` is provided)
-          example: 10
+          description: Maximum number of results to return per page
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of records to skip (for pagination)
+          example: 0
       responses:
         '200':
-          description: List of users or search results
+          description: Paginated list of users (with metadata)
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/User'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                    description: Array of user objects
+                  pagination:
+                    type: object
+                    properties:
+                      offset:
+                        type: integer
+                        description: Current offset value
+                        example: 0
+                      limit:
+                        type: integer
+                        description: Current limit value
+                        example: 10
+                      total:
+                        type: integer
+                        description: Total number of users (filtered by search query if provided)
+                        example: 42
+                      page:
+                        type: integer
+                        description: Current page number (1-indexed)
+                        example: 1
+                      pages:
+                        type: integer
+                        description: Total number of pages
+                        example: 5
               examples:
-                allUsers:
-                  summary: All users (no search query)
-                  value:
-                    - username: admin_user
-                      role: ADMIN
-                      apiKey: user_abc123
-                    - username: john_doe
-                      role: USER
-                      apiKey: user_def456
                 searchResults:
-                  summary: Search results (with q parameter)
+                  summary: Search results for username matching "john"
                   value:
-                    - username: john_doe
-                      role: USER
-                      apiKey: user_def456
-                    - username: johnny_test
-                      role: USER
-                      apiKey: user_ghi789
+                    data:
+                      - username: john_doe
+                        role: USER
+                        apiKey: usr_abc123
+                      - username: johnny_test
+                        role: USER
+                        apiKey: usr_def456
+                    pagination:
+                      offset: 0
+                      limit: 10
+                      total: 2
+                      page: 1
+                      pages: 1
+                listAll:
+                  summary: List of all users (page 1)
+                  value:
+                    data:
+                      - username: admin_user
+                        role: ADMIN
+                        apiKey: usr_ghi789
+                      - username: john_doe
+                        role: USER
+                        apiKey: usr_abc123
+                    pagination:
+                      offset: 0
+                      limit: 2
+                      total: 42
+                      page: 1
+                      pages: 21
         '400':
-          description: Bad request - invalid query parameters
+          description: Bad request - invalid parameters
           content:
             application/json:
               schema:
@@ -248,11 +308,11 @@ paths:
                 properties:
                   error:
                     type: string
-                    example: Limit must be between 1 and 50
+                    example: "INVALID DATA: Limit must be between 1 and 50"
         '401':
           description: Unauthorized or missing API key
         '403':
-          description: Forbidden - insufficient permissions (ADMIN role required when not searching)
+          description: Forbidden - ADMIN role required to list all users (when not searching)
 
     post:
       summary: Create new user
