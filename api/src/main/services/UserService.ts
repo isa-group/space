@@ -137,9 +137,8 @@ class UserService {
 
     // Validación: no permitir degradar al último admin
     if (user.role === 'ADMIN' && role !== 'ADMIN') {
-      const allUsers = await this.userRepository.findAll();
-      const adminCount = allUsers.filter((u: LeanUser) => u.role === 'ADMIN' && u.username !== username).length;
-      if (adminCount < 1) {
+      const allAdmins = await this.userRepository.findByRole("ADMIN");
+      if (allAdmins.length < 2) {
         throw new Error('PERMISSION ERROR: There must always be at least one ADMIN user in the system.');
       }
     }

@@ -19,9 +19,10 @@ export async function getCurrentUser(apiKey: string): Promise<{ username: string
     });
 }
 
-export async function getUsers(apiKey: string): Promise<Array<{ username: string; apiKey: string; role: 'ADMIN' | 'MANAGER' | 'EVALUATOR' }>> {
+export async function getUsers(apiKey: string, offset: number = 0, limit: number = 10): Promise<{ data: Array<{ username: string; apiKey: string; role: 'ADMIN' | 'USER' }>; pagination: { offset: number; limit: number; total: number; page: number; pages: number } }> {
   return axios
     .get('/users', {
+      params: { offset, limit },
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
@@ -57,7 +58,7 @@ export async function updateUsername(apiKey: string, oldUsername: string, newUse
     });
 }
 
-export async function changeUserRole(apiKey: string, username: string, newRole: 'ADMIN' | 'MANAGER' | 'EVALUATOR') {
+export async function changeUserRole(apiKey: string, username: string, newRole: 'ADMIN' | 'USER') {
   return axios
     .put(
       `/users/${username}/role`,
@@ -116,7 +117,7 @@ export async function deleteUser(apiKey: string, username: string) {
     });
 }
 
-export async function createUser(apiKey: string, user: { username: string; password: string; role: 'ADMIN' | 'MANAGER' | 'EVALUATOR' }) {
+export async function createUser(apiKey: string, user: { username: string; password: string; role: 'ADMIN' | 'USER' }) {
   return axios
     .post('/users', user, {
       headers: {

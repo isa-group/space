@@ -1,5 +1,5 @@
 export interface User {
   username: string;
   apiKey: string;
-  role: 'ADMIN' | 'MANAGER' | 'EVALUATOR';
+  role: 'ADMIN' | 'USER';
 }

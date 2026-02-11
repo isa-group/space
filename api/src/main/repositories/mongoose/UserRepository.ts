@@ -37,6 +37,15 @@ class UserRepository extends RepositoryBase {
     }
   }
 
+  async findByRole(role: UserRole): Promise<LeanUser[]> {
+    try {
+      const users = await UserMongoose.find({ role: role }, { password: 0 }).exec();
+      return users.map(user => user.toObject({ getters: true, virtuals: true, versionKey: false }) as unknown as LeanUser);
+    } catch (err) {
+      return [];
+    }
+  }
+
   async authenticate(username: string, password: string): Promise<LeanUser | null> {
     const user = await UserMongoose.findOne({ username }).exec();
 

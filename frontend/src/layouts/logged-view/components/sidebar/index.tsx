@@ -21,6 +21,7 @@ const settingsTabs = [
 
 const adminOnlyTabs = [
   { label: 'Instance Monitoring', path: '/instance-monitoring', icon: <FiActivity size={22} />, adminOnly: true },
+  { label: 'Users Management', path: '/users', icon: <FiUsers size={22} />, adminOnly: true },
 ];
 
 function getSelectedTab(pathname: string) {
@@ -31,6 +32,7 @@ function getSelectedTab(pathname: string) {
   if (pathname.startsWith('/settings')) return '/settings';
   if (pathname.startsWith('/contracts/dashboard')) return '/contracts/dashboard';
   if (pathname.startsWith('/instance-monitoring')) return '/instance-monitoring';
+  if (pathname.startsWith('/users')) return '/users';
   return '/';
 }
 

@@ -11,6 +11,7 @@ import InstanceMonitoringPage from "@/pages/instance-monitoring";
 import OrganizationSettingsPage from "@/pages/organization-settings";
 import RegisterPage from "@/pages/register";
 import NotFoundPage from "@/pages/not-found";
+import UsersPage from "@/pages/users";
 import useAuth from "@/hooks/useAuth";
 import type { ReactNode } from "react";
 
@@ -42,6 +43,7 @@ export function SpaceRouter() {
         <Route path="/register" element={<RegisterPage/>}/>
         <Route path="/contracts/dashboard" element={<RequireAuth><LoggedLayout><ContractsDashboard/></LoggedLayout></RequireAuth>} />
         <Route path="/instance-monitoring" element={<RequireAuth><RequireRole allowedRoles={['ADMIN']}><LoggedLayout><InstanceMonitoringPage/></LoggedLayout></RequireRole></RequireAuth>} />
+        <Route path="/users" element={<RequireAuth><RequireRole allowedRoles={['ADMIN']}><LoggedLayout><UsersPage/></LoggedLayout></RequireRole></RequireAuth>} />
         <Route path="/members" element={<RequireAuth><LoggedLayout><MembersPage/></LoggedLayout></RequireAuth>}/>
         <Route path="/api-keys" element={<RequireAuth><LoggedLayout><ApiKeysPage/></LoggedLayout></RequireAuth>}/>
         <Route path="/services" element={<RequireAuth><LoggedLayout><ServicesPage/></LoggedLayout></RequireAuth>}/>
