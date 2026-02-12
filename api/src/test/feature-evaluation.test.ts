@@ -14,6 +14,7 @@ import { LeanContract } from '../main/types/models/Contract';
 import { cleanupAuthResources } from './utils/auth';
 import { LeanUser } from '../main/types/models/User';
 import { createTestUser } from './utils/users/userTestUtils';
+import { resetEscapeVersion } from '../main/utils/helpers';
 import {
   addApiKeyToOrganization,
   createTestOrganization,
@@ -79,23 +80,31 @@ const DETAILED_EVALUATION_EXPECTED_RESULT = {
 };
 
 function isActivePricing(pricingVersion: string, service: LeanService): boolean {
-  return Object.keys(service.activePricings).some(
-    (activePricingVersion: string) => activePricingVersion === pricingVersion
-  );
+  // Normalize version (convert underscores to dots)
+  const normalizedVersion = resetEscapeVersion(pricingVersion);
+  
+  // Handle both Map and plain object (from API responses)
+  if (service.activePricings instanceof Map) {
+    return service.activePricings.has(normalizedVersion);
+  }
+  // Handle plain object from API responses
+  return Object.prototype.hasOwnProperty.call(service.activePricings, normalizedVersion);
 }
 
 function isArchivedPricing(pricingVersion: string, service: LeanService): boolean {
   if (!service.archivedPricings) {
     return false;
   }
-
-  for (const key of service.archivedPricings?.keys()) {
-    if (key === pricingVersion) {
-      return true;
-    }
+  
+  // Normalize version (convert underscores to dots)
+  const normalizedVersion = resetEscapeVersion(pricingVersion);
+  
+  // Handle both Map and plain object (from API responses)
+  if (service.archivedPricings instanceof Map) {
+    return service.archivedPricings.has(normalizedVersion);
   }
-
-  return false;
+  // Handle plain object from API responses
+  return Object.prototype.hasOwnProperty.call(service.archivedPricings, normalizedVersion);
 }
 
 describe('Features API Test Suite', function () {
