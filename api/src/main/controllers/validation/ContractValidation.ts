@@ -3,6 +3,7 @@ import { LeanPricing } from '../../types/models/Pricing';
 import { Subscription } from '../../types/models/Contract';
 import ServiceService from '../../services/ServiceService';
 import container from '../../config/container';
+import { convertKeysToLowercase } from '../../utils/helpers';
 
 const create = [
   // userContact (required)
@@ -57,16 +58,6 @@ const create = [
     .isInt({ min: 1 })
     .withMessage('billingPeriod.renewalDays must be a positive integer'),
 
-  // OrganizationId (required)
-  check('organizationId')
-    .exists({ checkNull: true })
-    .withMessage('The organizationId field is required')
-    .isString()
-    .withMessage('The organizationId field must be a string')
-    .notEmpty()
-    .withMessage('The organizationId field cannot be empty')
-    .isLength({ min: 24, max: 24 })
-    .withMessage('The organizationId must be a valid MongoDB ObjectId string'),
   // contractedServices (optional)
   check('contractedServices')
     .exists({ checkNull: true })
@@ -307,6 +298,7 @@ function isSubscriptionValidInPricing(
 ): void {  
   const selectedPlan: string | undefined = subscription.subscriptionPlans[serviceName];
   const selectedAddOns = subscription.subscriptionAddOns[serviceName];
+  const pricingPlans = convertKeysToLowercase(pricing.plans || {});
 
   if (!selectedPlan && !selectedAddOns) {
     throw new Error(
@@ -314,7 +306,7 @@ function isSubscriptionValidInPricing(
     );
   }
 
-  if (selectedPlan && !(pricing.plans || {})[selectedPlan]) {
+  if (selectedPlan && !pricingPlans[selectedPlan.toLowerCase()]) {
     throw new Error(
       `Plan ${selectedPlan} for service ${serviceName} not found in the request organization`
     );
@@ -332,9 +324,11 @@ function _validateAddOns(
     return;
   }
 
+  const pricingAddOns = convertKeysToLowercase(pricing.addOns || {});
+
   for (const addOnName in selectedAddOns) {
 
-    if (!pricing.addOns![addOnName]){
+    if (!pricingAddOns[addOnName.toLowerCase()]){
       throw new Error(`Add-on ${addOnName} declared in the subscription not found in pricing version ${pricing.version} in the request organization`);
     }
 
