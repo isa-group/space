@@ -3,28 +3,21 @@ import { LeanService } from '../../types/models/Service';
 import { resetEscapeVersion } from '../helpers';
 
 function resetEscapeVersionInService(service: LeanService): void {
-  for (const version in service.activePricings) {
+  for (const [version, pricing] of service.activePricings.entries()) {
     const formattedVersion = resetEscapeVersion(version);
 
-    if (formattedVersion !== version && service.activePricings[version]) {
-      service.activePricings[formattedVersion] = {
-        ...service.activePricings[version],
-      };
-  
-      delete service.activePricings[version];
+    if (formattedVersion !== version) {
+      service.activePricings.set(formattedVersion, pricing);
+      service.activePricings.delete(version);
     }
-
   }
 
-  for (const version in service.archivedPricings) {
+  for (const [version, pricing] of (service.archivedPricings?.entries() ?? [])) {
     const formattedVersion = resetEscapeVersion(version);
 
-    if (formattedVersion !== version && service.archivedPricings[version]) {
-      service.archivedPricings[formattedVersion] = {
-        ...service.archivedPricings[version],
-      };
-  
-      delete service.archivedPricings[version];
+    if (formattedVersion !== version) {
+      service.archivedPricings!.set(formattedVersion, pricing);
+      service.archivedPricings!.delete(version);
     }
   }
 }

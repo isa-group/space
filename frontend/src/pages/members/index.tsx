@@ -280,7 +280,7 @@ export default function MembersPage() {
     return false;
   };
 
-  const getAssignableRoles = (memberRole: OrganizationMember['role']) => {
+  const getAssignableRoles = () => {
     if (isAdmin || isOwner || currentMemberRole === 'ADMIN') {
       return ['ADMIN', 'MANAGER', 'EVALUATOR'] as const;
     }
@@ -480,7 +480,7 @@ export default function MembersPage() {
                           onChange={(e) => handleChangeRole(member.username, e.target.value as 'ADMIN' | 'MANAGER' | 'EVALUATOR')}
                           className={`cursor-pointer px-2 py-1 text-xs font-medium rounded mt-1 border-0 focus:ring-2 focus:ring-indigo-500 ${getRoleBadgeColor(member.role)}`}
                         >
-                          {getAssignableRoles(member.role).map(role => (
+                          {getAssignableRoles().map(role => (
                             <option key={role} value={role}>{role}</option>
                           ))}
                         </select>
