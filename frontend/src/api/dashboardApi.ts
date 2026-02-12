@@ -2,8 +2,8 @@ import axios from '@/lib/axios';
 import type { Analytic } from '@/types/Analytics';
 
 // Obtiene el número total de contratos gestionados por SPACE
-export async function getContractsCount(apiKey: string): Promise<number> {
-  const response = await axios.get('/contracts', {
+export async function getContractsCount(apiKey: string, organizationId: string): Promise<number> {
+  const response = await axios.get(`/organizations/${organizationId}/contracts`, {
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
@@ -18,8 +18,8 @@ export async function getContractsCount(apiKey: string): Promise<number> {
 }
 
 // Obtiene el número total de servicios configurados
-export async function getServicesCount(apiKey: string): Promise<number> {
-  const response = await axios.get('/services', {
+export async function getServicesCount(apiKey: string, organizationId: string): Promise<number> {
+  const response = await axios.get(`/organizations/${organizationId}/services`, {
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
@@ -33,8 +33,8 @@ export async function getServicesCount(apiKey: string): Promise<number> {
 }
 
 // Obtiene el número total de versiones de pricing activas
-export async function getActivePricingsCount(apiKey: string): Promise<number> {
-  const response = await axios.get('/services', {
+export async function getActivePricingsCount(apiKey: string, organizationId: string): Promise<number> {
+  const response = await axios.get(`/organizations/${organizationId}/services`, {
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,

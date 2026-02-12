@@ -4,9 +4,12 @@ export interface PricingEntry {
 }
 
 export interface LeanService {
+  id?: string;
   name: string;
-  activePricings: Record<string, PricingEntry>;
-  archivedPricings: Record<string, PricingEntry>;
+  disabled: boolean;
+  organizationId: string;
+  activePricings: Map<string, PricingEntry>;
+  archivedPricings?: Map<string, PricingEntry>;
 }
 
 export type ServiceQueryFilters = {

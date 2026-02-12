@@ -26,8 +26,13 @@ class ServiceController {
   async index(req: any, res: any) {
     try {
       const queryParams = this._transformIndexQueryParams(req.query);
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
 
-      const services = await this.serviceService.index(queryParams);
+      if (!organizationId && req.user && req.user.role !== "ADMIN"){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
+      const services = await this.serviceService.index(queryParams, organizationId);
 
       res.json(services);
     } catch (err: any) {
@@ -39,6 +44,11 @@ class ServiceController {
     try {
       let { pricingStatus } = req.query;
       const serviceName = req.params.serviceName;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
 
       if (!pricingStatus) {
         pricingStatus = 'active';
@@ -47,7 +57,7 @@ class ServiceController {
         return;
       }
 
-      const pricings = await this.serviceService.indexPricings(serviceName, pricingStatus);
+      const pricings = await this.serviceService.indexPricings(serviceName, pricingStatus, organizationId);
 
       for (const pricing of pricings) {
         resetEscapePricingVersion(pricing);
@@ -66,7 +76,13 @@ class ServiceController {
   async show(req: any, res: any) {
     try {
       const serviceName = req.params.serviceName;
-      const service = await this.serviceService.show(serviceName);
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+      
+      const service = await this.serviceService.show(serviceName, organizationId);
 
       return res.json(service);
     } catch (err: any) {
@@ -82,8 +98,13 @@ class ServiceController {
     try {
       const serviceName = req.params.serviceName;
       const pricingVersion = req.params.pricingVersion;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
 
-      const pricing = await this.serviceService.showPricing(serviceName, pricingVersion);
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
+      const pricing = await this.serviceService.showPricing(serviceName, pricingVersion, organizationId);
 
       resetEscapePricingVersion(pricing);
 
@@ -100,6 +121,12 @@ class ServiceController {
   async create(req: any, res: any) {
     try {
       const receivedFile = req.file;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
       let service;
 
       if (!receivedFile) {
@@ -107,9 +134,9 @@ class ServiceController {
           res.status(400).send({ error: 'No file or URL provided' });
           return;
         }
-        service = await this.serviceService.create(req.body.pricing, 'url');
+        service = await this.serviceService.create(req.body.pricing, 'url', organizationId);
       } else {
-        service = await this.serviceService.create(req.file, 'file');
+        service = await this.serviceService.create(req.file, 'file', organizationId);
       }
       res.status(201).json(service);
     } catch (err: any) {
@@ -130,6 +157,12 @@ class ServiceController {
   async addPricingToService(req: any, res: any) {
     try {
       const serviceName = req.params.serviceName;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
       const receivedFile = req.file;
       let service;
 
@@ -141,10 +174,11 @@ class ServiceController {
         service = await this.serviceService.addPricingToService(
           serviceName,
           req.body.pricing,
-          'url'
+          'url',
+          organizationId
         );
       } else {
-        service = await this.serviceService.addPricingToService(serviceName, req.file, 'file');
+        service = await this.serviceService.addPricingToService(serviceName, req.file, 'file', organizationId);
       }
 
       res.status(201).json(service);
@@ -165,11 +199,25 @@ class ServiceController {
     try {
       const newServiceData = req.body;
       const serviceName = req.params.serviceName;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
 
-      const service = await this.serviceService.update(serviceName, newServiceData);
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
+      const service = await this.serviceService.update(serviceName, newServiceData, organizationId);
 
       res.json(service);
     } catch (err: any) {
+      if (err.message.toLowerCase().includes('invalid data')) {
+        return res.status(400).send({ error: err.message });
+      }
+      if (err.message.toLowerCase().includes('not found')) {
+        return res.status(404).send({ error: err.message });
+      }
+      if (err.message.toLowerCase().includes('conflict')) {
+        return res.status(409).send({ error: err.message });
+      }
       res.status(500).send({ error: err.message });
     }
   }
@@ -178,6 +226,12 @@ class ServiceController {
     try {
       const serviceName = req.params.serviceName;
       const pricingVersion = req.params.pricingVersion;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
       const newAvailability = req.query.availability ?? 'archived';
       const fallBackSubscription: FallBackSubscription = req.body ?? {};
 
@@ -194,7 +248,8 @@ class ServiceController {
           serviceName,
           pricingVersion,
           newAvailability,
-          fallBackSubscription
+          fallBackSubscription,
+          organizationId
         );
 
         res.json(service);
@@ -214,7 +269,20 @@ class ServiceController {
 
   async prune(req: any, res: any) {
     try {
-      const result = await this.serviceService.prune();
+      let organizationId = req.org ? req.org.id : req.params.organizationId;
+      if (!organizationId && req.user && req.user.role !== "ADMIN"){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
+      if (req.user && req.user.orgRole !== "OWNER" && req.user.orgRole !== "ADMIN" && req.user.role !== "ADMIN"){
+        return res.status(403).send({ error: 'Forbidden: You do not have permission to prune services' });
+      }
+
+      if (req.user && req.user.role === "ADMIN"){
+        organizationId = undefined;        
+      }
+
+      const result = await this.serviceService.prune(organizationId);
       res.json({ message: `Pruned ${result} services` });
     } catch (err: any) {
       res.status(500).send({ error: err.message });
@@ -224,7 +292,13 @@ class ServiceController {
   async disable(req: any, res: any) {
     try {
       const serviceName = req.params.serviceName;
-      const result = await this.serviceService.disable(serviceName);
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
+      const result = await this.serviceService.disable(serviceName, organizationId);
 
       if (result) {
         res.status(204).send();
@@ -244,8 +318,13 @@ class ServiceController {
     try {
       const serviceName = req.params.serviceName;
       const pricingVersion = req.params.pricingVersion;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
 
-      const result = await this.serviceService.destroyPricing(serviceName, pricingVersion);
+      if (!organizationId){
+        return res.status(400).send({ error: 'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths' });
+      }
+
+      const result = await this.serviceService.destroyPricing(serviceName, pricingVersion, organizationId);
 
       if (result) {
         res.status(204).send();
@@ -260,8 +339,8 @@ class ServiceController {
         res.status(404).send({ error: err.message });
       } else if (err.message.toLowerCase().includes('last active pricing')) {
         res.status(400).send({ error: err.message });
-      } else if (err.message.toLowerCase().includes('forbidden')) {
-        res.status(403).send({ error: err.message });
+      } else if (err.message.toLowerCase().includes('conflict')) {
+        res.status(409).send({ error: err.message });
       } else {
         res.status(500).send({ error: err.message });
       }

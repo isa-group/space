@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Subscription } from '@/types/Subscription';
 import { getContracts } from '@/api/contracts/contractsApi';
 
-export default function useContracts(apiKey: string) {
+export default function useContracts(apiKey: string, organizationId?: string) {
   const [contracts, setContracts] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,18 +14,18 @@ export default function useContracts(apiKey: string) {
   // (pricing cache removed) we fetch active pricings via getServices when computing revenue
 
   useEffect(() => {
-    if (!apiKey) return;
+    if (!apiKey || !organizationId) return;
     setLoading(true);
     // Build request body with service filter if present (API supports requestBody)
     const body = serviceFilter ? { services: [serviceFilter] } : undefined;
-    getContracts(apiKey, { limit, page }, body)
+    getContracts(apiKey, organizationId, { limit, page }, body)
       .then(result => {
         setContracts(result.data);
         setTotal(result.total);
       })
       .catch(e => setError(e.message || 'Failed to fetch contracts'))
       .finally(() => setLoading(false));
-  }, [apiKey, page, limit, serviceFilter]);
+  }, [apiKey, organizationId, page, limit, serviceFilter]);
 
   const totalContracts = contracts.length;
 
@@ -74,8 +74,8 @@ export default function useContracts(apiKey: string) {
     let servicesList: any[] = [];
     try {
       // getServices returns an array of Service objects with activePricings map
-      // Note: if apiKey missing, skip
-      if (apiKey) servicesList = await (await import('@/api/services/servicesApi')).getServices(apiKey);
+      // Note: if apiKey or organizationId missing, skip
+      if (apiKey && organizationId) servicesList = await (await import('@/api/services/servicesApi')).getServices(apiKey, organizationId);
     } catch (e) {
       console.warn('Failed to retrieve services/pricings for revenue calc', e);
       servicesList = [];
@@ -99,19 +99,20 @@ export default function useContracts(apiKey: string) {
 
     // debug info
     console.debug('[Revenue] services discovered:', Object.keys(servicesMap).length);
-    if (process.env.NODE_ENV !== 'production') {
+    if (import.meta.env.NODE_ENV !== 'production') {
       console.debug('[Revenue] services list sample:', Object.keys(servicesMap).slice(0, 10));
     }
 
     // Fetch all contracts (paginate) to compute revenue across the whole dataset, not only the current page
     const allContracts: Subscription[] = [];
     try {
+      if (!organizationId) throw new Error('Organization ID required for revenue calculation');
       const pageSize = 200;
       let p = 1;
       while (true) {
         const body = undefined;
   // fetch a page
-  const res = await getContracts(apiKey, { limit: pageSize, page: p }, body);
+  const res = await getContracts(apiKey, organizationId, { limit: pageSize, page: p }, body);
         if (!res || !res.data || res.data.length === 0) break;
         allContracts.push(...res.data);
         if (res.total && allContracts.length >= res.total) break;
@@ -235,9 +236,10 @@ export default function useContracts(apiKey: string) {
     setLimit,
     total,
     refresh: () => {
+      if (!organizationId) return;
       setLoading(true);
       const body = serviceFilter ? { services: [serviceFilter] } : undefined;
-      getContracts(apiKey, { limit, page }, body)
+      getContracts(apiKey, organizationId, { limit, page }, body)
         .then(result => {
           setContracts(result.data);
           setTotal(result.total);

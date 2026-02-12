@@ -6,7 +6,14 @@ const update = [
     .isString()
     .withMessage('The name field must be a string')
     .isLength({ min: 1, max: 255 })
-    .withMessage('The name must have between 1 and 255 characters long')
+    .withMessage('The name must be between 1 and 255 characters long')
+    .trim(),
+  check('organizationId')
+    .optional()
+    .isString()
+    .withMessage('The organizationId field must be a string')
+    .isLength({ min: 24, max: 24 })
+    .withMessage('The organizationId must be 24 characters long')
     .trim()
 ];
 

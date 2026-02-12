@@ -45,7 +45,7 @@ class FeatureEvaluationService {
     this.cacheService = container.resolve('cacheService');
   }
 
-  async index(queryParams: FeatureIndexQueryParams): Promise<LeanFeature[]> {
+  async index(queryParams: FeatureIndexQueryParams, organizationId: string): Promise<LeanFeature[]> {
     const {
       featureName,
       serviceName,
@@ -59,7 +59,7 @@ class FeatureEvaluationService {
     } = queryParams || {};
 
     // Step 1: Generate an object that clasifies pricing details by version and service (i.e. Record<string, Record<string, LeanPricing>>)
-    const pricings = await this._getPricingsToReturn(show);
+    const pricings = await this._getPricingsToReturn(show, organizationId);
 
     // Step 2: Parse pricings to a list of features
     const features: LeanFeature[] = this._parsePricingsToFeatures(
@@ -80,6 +80,7 @@ class FeatureEvaluationService {
 
   async eval(
     userId: string,
+    reqOrg: any,
     options: FeatureEvalQueryParams
   ): Promise<
     | SimpleFeatureEvaluation
@@ -93,7 +94,7 @@ class FeatureEvaluationService {
 
     // Step 1: Retrieve contexts
     const { subscriptionContext, pricingContext, evaluationContext } =
-      await this._retrieveContextsByUserId(userId, options.server);
+      await this._retrieveContextsByUserId(userId, options.server, reqOrg);
 
     // Step 2: Perform the evaluation
     const evaluationResults = await evaluateAllFeatures(
@@ -115,7 +116,7 @@ class FeatureEvaluationService {
       : evaluationResults;
   }
 
-  async generatePricingToken(userId: string, options: { server: boolean }): Promise<string> {
+  async generatePricingToken(userId: string, reqOrg: any, options: { server: boolean }): Promise<string> {
     const cachedToken = await this.cacheService.get(`features.${userId}.pricingToken`);
 
     if (cachedToken) {
@@ -128,7 +129,7 @@ class FeatureEvaluationService {
       throw new Error(`Contract with userId ${userId} not found`);
     }
 
-    const result = (await this.eval(userId, {
+    const result = (await this.eval(userId, reqOrg, {
       details: true,
       server: options.server,
       returnContexts: true,
@@ -154,6 +155,7 @@ class FeatureEvaluationService {
     userId: string,
     featureId: string,
     expectedConsumption: Record<string, number>,
+    reqOrg: any,
     options: SingleFeatureEvalQueryParams
   ): Promise<boolean | FeatureEvaluationResult> {
     let evaluation = await this.cacheService.get(`features.${userId}.eval.${featureId}`);
@@ -166,7 +168,7 @@ class FeatureEvaluationService {
 
     // Step 1: Retrieve contexts
     const { subscriptionContext, pricingContext, evaluationContext } =
-      await this._retrieveContextsByUserId(userId, options.server);
+      await this._retrieveContextsByUserId(userId, options.server, reqOrg);
 
     if (options.revert) {
       await this.contractService._revertExpectedConsumption(userId, featureId, options.latest);
@@ -193,14 +195,19 @@ class FeatureEvaluationService {
     }
   }
 
-  async _getPricingsByContract(contract: LeanContract): Promise<Record<string, LeanPricing>> {
+  async _getPricingsByContract(contract: LeanContract, reqOrg: any): Promise<Record<string, LeanPricing>> {
     const pricingsToReturn: Record<string, LeanPricing> = {};
 
     // Parallelize pricing retrieval per service (showPricing may fetch remote URLs)
     const serviceNames = Object.keys(contract.contractedServices);
     const pricingPromises = serviceNames.map(async (serviceName) => {
       const pricingVersion = escapeVersion(contract.contractedServices[serviceName]);
-      const pricing = await this.serviceService.showPricing(serviceName, pricingVersion);
+      const pricing = await this.serviceService.showPricing(serviceName, pricingVersion, reqOrg.id);
+      if (!pricing) {
+        throw new Error(
+          `Pricing version ${pricingVersion} for service ${serviceName} not found in organization ${reqOrg.name}`
+        );
+      }
       return { serviceName, pricing };
     });
 
@@ -291,12 +298,13 @@ class FeatureEvaluationService {
   }
 
   async _getPricingsToReturn(
-    show: 'active' | 'archived' | 'all'
+    show: 'active' | 'archived' | 'all',
+    organizationId: string
   ): Promise<Record<string, Record<string, LeanPricing>>> {
     const pricingsToReturn: Record<string, Record<string, LeanPricing>> = {};
 
   // Step 1: Return all services (only fields required to build pricings map)
-  const services = await this.serviceRepository.findAllNoQueries(false, { name: 1, activePricings: 1, archivedPricings: 1 });
+  const services = await this.serviceRepository.findAllNoQueries(organizationId, false, { name: 1, activePricings: 1, archivedPricings: 1 });
 
     if (!services) {
       return {};
@@ -311,35 +319,32 @@ class FeatureEvaluationService {
       let pricingsWithUrlToCheck: string[] = [];
 
       if (show === 'active' || show === 'all') {
-        pricingsWithIdToCheck = pricingsWithIdToCheck.concat(
-          Object.entries(service.activePricings)
-            .filter(([_, pricing]) => pricing.id)
-            .map(([version, _]) => version)
-        );
-        pricingsWithUrlToCheck = pricingsWithUrlToCheck.concat(
-          Object.entries(service.activePricings)
-            .filter(([_, pricing]) => pricing.url)
-            .map(([version, _]) => version)
-        );
+        for (const [version, pricing] of service.activePricings) {
+          if (pricing.id) {
+            pricingsWithIdToCheck.push(version);
+          }
+          if (pricing.url) {
+            pricingsWithUrlToCheck.push(version);
+          }
+        }
       }
 
       if ((show === 'archived' || show === 'all') && service.archivedPricings) {
-        pricingsWithIdToCheck = pricingsWithIdToCheck.concat(
-          Object.entries(service.archivedPricings)
-            .filter(([_, pricing]) => pricing.id)
-            .map(([version, _]) => version)
-        );
-        pricingsWithUrlToCheck = pricingsWithUrlToCheck.concat(
-          Object.entries(service.archivedPricings)
-            .filter(([_, pricing]) => pricing.url)
-            .map(([version, _]) => version)
-        );
+        for (const [version, pricing] of service.archivedPricings) {
+          if (pricing.id) {
+            pricingsWithIdToCheck.push(version);
+          }
+          if (pricing.url) {
+            pricingsWithUrlToCheck.push(version);
+          }
+        }
       }
 
       // Step 3: For each group (id and url) parse the versions to actual ExpectedPricingType objects
       let pricingsWithId = await this.serviceRepository.findPricingsByServiceName(
         serviceName,
-        pricingsWithIdToCheck
+        pricingsWithIdToCheck,
+        organizationId
       );
       pricingsWithId ??= [];
 
@@ -350,7 +355,7 @@ class FeatureEvaluationService {
       // Fetch all remote pricings for this service in parallel with limited concurrency
       const urlVersions = pricingsWithUrlToCheck.map((version) => ({
         version,
-        url: (service.activePricings[version] ?? service.archivedPricings[version]).url,
+        url: (service.activePricings.get(version) ?? service.archivedPricings!.get(version))!.url,
       }));
 
       const concurrency = 8;
@@ -385,7 +390,8 @@ class FeatureEvaluationService {
 
   async _retrieveContextsByUserId(
     userId: string,
-    server: boolean = false
+    server: boolean = false,
+    reqOrg: any
   ): Promise<{
     subscriptionContext: SubscriptionContext;
     pricingContext: PricingContext;
@@ -431,7 +437,8 @@ class FeatureEvaluationService {
     if (usageLevelsToRenew.length > 0) {
       contract = await this.contractService._resetRenewableUsageLevels(
         contract,
-        usageLevelsToRenew
+        usageLevelsToRenew,
+        reqOrg.id
       );
     }
 
@@ -441,7 +448,7 @@ class FeatureEvaluationService {
     );
 
     // Step 2.1: Retrieve all pricings to which the user is subscribed
-    const userPricings = await this._getPricingsByContract(contract);
+    const userPricings = await this._getPricingsByContract(contract, reqOrg);
 
     // Step 2.2: Get User Subscriptions
     const userSubscriptionByService: Record<

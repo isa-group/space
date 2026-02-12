@@ -6,24 +6,24 @@
     "username": "testAdmin",
     "password": "$2b$10$zk1.UGu1tPipj1yJAL0QseWoQiShyBgNnDj6bJG8Y0iPV08uYmg0e",
     "role": "ADMIN",
-    "apiKey": "9cedd24632167a021667df44a26362dfb778c1566c3d4564e132cb58770d8c67"
+    "apiKey": "usr_9cedd24632167a021667df44a26362dfb778c1566c3d4564e132cb58770d8c67"
   },
   {
     "_id": {
       "$oid": "63f74bf8eeed64054274b529"
     },
-    "username": "testManager",
-    "password": "$2b$10$WAMkVAo9.QDHmQWdiiIE8uUrKXTWJbDf6BrifHbOplF.lpubtip.W",
-    "role": "MANAGER",
-    "apiKey": "c2b9efdd8d1a42e0b5ef6c3a179438a8d42c6f44fe76e3a0ccabe6cd44cf6d12"
+    "username": "testUser",
+    "password": "$2b$10$K1v8xQ0q2n8s6aZ3h4J7uOWMZbQ2r8s9tU1v2wX3yZ4a5b6c7d8ef",
+    "role": "USER",
+    "apiKey": "usr_c2b9efdd8d1a42e0b5ef6c3a179438a8d42c6f44fe76e3a0ccabe6cd44cf6d12"
   },
   {
     "_id": {
-      "$oid": "682e3157a837d201635360c6"
+      "$oid": "63f74bf8eeed64054274b532"
     },
-    "username": "testEvaluator",
-    "password": "$2b$10$CyoH9BYobjK3TXZqpWhUL.nEbR65xT3hhFFSkH.s6nAO06c.aCSaC",
-    "role": "EVALUATOR",
-    "apiKey": "1f4a8d537f209b1e8cf0d2a76582f9a7b77eb336ce6f4b5a9e9fae20497cfc4b"
+    "username": "testUser2",
+    "password": "$2b$10$K1v8xQ0q2n8s6aZ3h4J7uOWMZbQ2r8s9tU1v2wX3yZ4a5b6c7d8ef",
+    "role": "USER",
+    "apiKey": "usr_c2b9efdd8d1a42e0b5ef6c3a179438a8d42c6f44fe76e3a0ccabe6cd44cf6d09"
   }
 ]

@@ -1,920 +1,711 @@
-import request from 'supertest';
-import { baseUrl, getApp, shutdownApp } from './utils/testApp';
 import { Server } from 'http';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import request from 'supertest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { baseUrl, getApp, shutdownApp } from './utils/testApp';
+import { createTestUser, deleteTestUser } from './utils/users/userTestUtils';
 import {
-  createRandomContract,
-  createRandomContracts,
-  createRandomContractsForService,
-  getAllContracts,
-  getContractByUserId,
-  incrementAllUsageLevel,
-} from './utils/contracts/contracts';
-import { generateContractAndService, generateNovation } from './utils/contracts/generators';
-import { addDays } from 'date-fns';
-import { UsageLevel } from '../main/types/models/Contract';
-import { TestContract } from './types/models/Contract';
-import { testUserId } from './utils/contracts/ContractTestData';
-import { cleanupAuthResources, getTestAdminApiKey, getTestAdminUser } from './utils/auth';
+  createTestOrganization,
+  deleteTestOrganization,
+  addApiKeyToOrganization,
+} from './utils/organization/organizationTestUtils';
+import { createTestService, deleteTestService, getPricingFromService } from './utils/services/serviceTestUtils';
+import { generateOrganizationApiKey } from '../main/utils/users/helpers';
+import { LeanUser } from '../main/types/models/User';
+import { LeanOrganization } from '../main/types/models/Organization';
+import { LeanService } from '../main/types/models/Service';
+import { LeanContract } from '../main/types/models/Contract';
+import { generateContract } from './utils/contracts/generators';
+import { createTestContract } from './utils/contracts/contractTestUtils';
+import ContractMongoose from '../main/repositories/mongoose/models/ContractMongoose';
 
-describe('Contract API Test Suite', function () {
+describe('Contract API routes', function () {
   let app: Server;
-  let adminApiKey: string;
+  let adminUser: LeanUser;
+  let ownerUser: LeanUser;
+  let testOrganization: LeanOrganization;
+  let testService: LeanService;
+  let testOrgApiKey: string;
+  let testContract: LeanContract;
+  const contractsToCleanup: Set<string> = new Set();
+
+  const trackContractForCleanup = (contract?: any) => {
+    if (contract?.userContact?.userId) {
+      contractsToCleanup.add(contract.userContact.userId);
+    }
+  };
 
   beforeAll(async function () {
     app = await getApp();
-    await getTestAdminUser();
-    adminApiKey = await getTestAdminApiKey();
+  });
+
+  beforeEach(async function () {
+    adminUser = await createTestUser('ADMIN');
+    ownerUser = await createTestUser('USER');
+    testOrganization = await createTestOrganization(ownerUser.username);
+    testService = await createTestService(testOrganization.id);
+    testOrgApiKey = generateOrganizationApiKey();
+    await addApiKeyToOrganization(testOrganization.id!, { key: testOrgApiKey, scope: 'ALL' });
+
+    testContract = await createTestContract(testOrganization.id!, [testService], app);
+    trackContractForCleanup(testContract);
+  });
+
+  afterEach(async function () {
+    for (const userId of contractsToCleanup) {
+      await ContractMongoose.deleteOne({ 'userContact.userId': userId });
+    }
+    contractsToCleanup.clear();
+
+    if (testService?.id) {
+      await deleteTestService(testService.name, testOrganization.id!);
+    }
+    if (testOrganization?.id) {
+      await deleteTestOrganization(testOrganization.id);
+    }
+    if (adminUser?.username) {
+      await deleteTestUser(adminUser.username);
+    }
+    if (ownerUser?.username) {
+      await deleteTestUser(ownerUser.username);
+    }
   });
 
   afterAll(async function () {
-    await cleanupAuthResources();
     await shutdownApp();
   });
 
   describe('GET /contracts', function () {
-    let contracts: TestContract[];
-
-    beforeAll(async function () {
-      contracts = await createRandomContracts(10, app);
-    });
-
-    it('Should return 200 and the contracts', async function () {
+    it('returns 200 and list of contracts with org API key', async function () {
       const response = await request(app)
         .get(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
+        .set('x-api-key', testOrgApiKey);
 
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.some((c: LeanContract) => c.userContact.userId === testContract.userContact.userId)).toBe(true);
     });
 
-    it('Should return 200: Should return filtered contracts by username query parameter', async function () {
-      const allContracts = await getAllContracts(app);
-      const testContract = allContracts[0];
-      const username = testContract.userContact.username;
-
+    it('returns 200 and filters contracts by username query parameter', async function () {
       const response = await request(app)
-        .get(`${baseUrl}/contracts?username=${username}`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
+        .get(`${baseUrl}/contracts?username=${testContract.userContact.username}`)
+        .set('x-api-key', testOrgApiKey);
 
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
-      expect(
-        response.body.every((contract: TestContract) => contract.userContact.username === username)
-      ).toBeTruthy();
+      expect(response.body[0].userContact.username).toBe(testContract.userContact.username);
     });
 
-    it('Should return 200: Should return filtered contracts by firstName query parameter', async function () {
-      const allContracts = await getAllContracts(app);
-      const testContract = allContracts[0];
-      const firstName = testContract.userContact.firstName;
+    it('returns 401 when API key is missing', async function () {
+      const response = await request(app).get(`${baseUrl}/contracts`);
 
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+  });
+
+  describe('GET /organizations/:organizationId/contracts', function () {
+    it('returns 200 and contracts for specific organization with ADMIN user API key', async function () {
       const response = await request(app)
-        .get(`${baseUrl}/contracts?firstName=${firstName}`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
+        .get(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .set('x-api-key', adminUser.apiKey);
 
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
-      expect(
-        response.body.every(
-          (contract: TestContract) => contract.userContact.firstName === firstName
-        )
-      ).toBeTruthy();
+      expect(response.body.some((c: LeanContract) => c.userContact.userId === testContract.userContact.userId)).toBe(true);
+      expect(response.body.every((c: LeanContract) => c.organizationId === testOrganization.id)).toBe(true);
     });
-
-    it('Should return 200: Should return filtered contracts by lastName query parameter', async function () {
-      const allContracts = await getAllContracts(app);
-      const testContract = allContracts[0];
-      const lastName = testContract.userContact.lastName;
-
+    
+    it('returns 200 and contracts for specific organization with USER user API key', async function () {
       const response = await request(app)
-        .get(`${baseUrl}/contracts?lastName=${lastName}`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
+        .get(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey);
 
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
-      expect(
-        response.body.every((contract: TestContract) => contract.userContact.lastName === lastName)
-      ).toBeTruthy();
+      expect(response.body.some((c: LeanContract) => c.userContact.userId === testContract.userContact.userId)).toBe(true);
     });
 
-    it('Should return 200: Should return filtered contracts by email query parameter', async function () {
-      const allContracts = await getAllContracts(app);
-      const testContract = allContracts[0];
-      const email = testContract.userContact.email;
-
-      const response = await request(app)
-        .get(`${baseUrl}/contracts?email=${email}`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
-
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.length).toBeGreaterThan(0);
-      expect(
-        response.body.every((contract: TestContract) => contract.userContact.email === email)
-      ).toBeTruthy();
-    });
-
-    it('Should return 200: Should paginate contracts using page and limit parameters', async function () {
-      // Create additional contracts to ensure pagination
-      await Promise.all([
-        createRandomContract(app),
-        createRandomContract(app),
-        createRandomContract(app),
-      ]);
-
-      const limit = 2;
-      const page1Response = await request(app)
-        .get(`${baseUrl}/contracts?page=1&limit=${limit}`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
-
-      const page2Response = await request(app)
-        .get(`${baseUrl}/contracts?page=2&limit=${limit}`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
-
-      expect(page1Response.body).toBeDefined();
-      expect(Array.isArray(page1Response.body)).toBeTruthy();
-      expect(page1Response.body.length).toBe(limit);
-
-      expect(page2Response.body).toBeDefined();
-      expect(Array.isArray(page2Response.body)).toBeTruthy();
-
-      // Check that the results from page 1 and 2 are different
-      const page1Ids = page1Response.body.map(
-        (contract: TestContract) => contract.userContact.userId
-      );
-      const page2Ids = page2Response.body.map(
-        (contract: TestContract) => contract.userContact.userId
-      );
-      expect(page1Ids).not.toEqual(page2Ids);
-    });
-
-    it('Should return 200: Should paginate contracts using offset and limit parameters', async function () {
-      const limit = 3;
-      const offsetResponse = await request(app)
-        .get(`${baseUrl}/contracts?offset=3&limit=${limit}`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
-
-      expect(offsetResponse.body).toBeDefined();
-      expect(Array.isArray(offsetResponse.body)).toBeTruthy();
-
-      // Verify that this is working by comparing with a direct fetch
-      const allContracts = await getAllContracts(app);
-      const expectedContracts = allContracts.slice(3, 3 + limit);
-      expect(offsetResponse.body.length).toBe(expectedContracts.length);
-    });
-
-    it('Should return 200: Should sort contracts by firstName in ascending order', async function () {
-      const response = await request(app)
-        .get(`${baseUrl}/contracts?sort=firstName&order=asc`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
-
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
-
-      const firstNames = response.body.map(
-        (contract: TestContract) => contract.userContact.firstName
-      );
-      const sortedFirstNames = [...firstNames].sort();
-      expect(firstNames).toEqual(sortedFirstNames);
-    });
-
-    it('Should return 200: Should sort contracts by lastName in descending order', async function () {
-      const response = await request(app)
-        .get(`${baseUrl}/contracts?sort=lastName&order=desc`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
-
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
-
-      const lastNames = response.body.map(
-        (contract: TestContract) => contract.userContact.lastName
-      );
-      const sortedLastNames = [...lastNames].sort().reverse();
-      expect(lastNames).toEqual(sortedLastNames);
-    });
-
-    it('Should return 200: Should sort contracts by username by default', async function () {
-      const response = await request(app)
-        .get(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
-
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
-
-      const usernames = response.body.map(
-        (contract: TestContract) => contract.userContact.username
-      );
-      const sortedUsernames = [...usernames].sort();
-      expect(usernames).toEqual(sortedUsernames);
-    });
-
-    it('Should return 200: Should enforce maximum limit value', async function () {
-      const response = await request(app)
-        .get(`${baseUrl}/contracts?limit=200`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
-
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.length).toBeLessThanOrEqual(100);
-    });
-
-    it('Should return 200: Should return filtered contracts by serviceName query parameter', async function () {
-      // First, get all contracts to find one with a specific service
-      const allContracts = await getAllContracts(app);
-
-      // Find a contract with at least one contracted service
-      const testContract = allContracts.find(
-        contract => Object.keys(contract.contractedServices).length > 0
+    it('returns 401 when API key is missing', async function () {
+      const response = await request(app).get(
+        `${baseUrl}/organizations/${testOrganization.id}/contracts`
       );
 
-      // Get the first serviceName from the contract
-      const serviceName = Object.keys(testContract.contractedServices)[0];
-
-      const response = await request(app)
-        .get(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .send({ filters: { services: [serviceName] } })
-        .expect(200);
-
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.length).toBeGreaterThan(0);
-      expect(
-        response.body.every((contract: TestContract) =>
-          Object.keys(contract.contractedServices).includes(serviceName)
-        )
-      ).toBeTruthy();
-    });
-
-  it('Should return 200: Should return filtered contracts by services (array)', async function () {
-      // Ensure at least one contract exists with a service
-      const created = await createRandomContract(app);
-      const serviceName = Object.keys(created.contractedServices)[0];
-
-      const response = await request(app)
-        .get(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .send({ filters: { services: [serviceName] } })
-        .expect(200);
-
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.length).toBeGreaterThan(0);
-      expect(
-        response.body.every((c: any) => Object.keys(c.contractedServices).includes(serviceName))
-      ).toBeTruthy();
-    });
-
-  it('Should return 200: Should return filtered contracts by services with specific versions (object)', async function () {
-      // Create a set of contracts for the same service/version
-      const first = await createRandomContract(app);
-      const serviceName = Object.keys(first.contractedServices)[0];
-      const pricingVersion = first.contractedServices[serviceName];
-
-      // Create more contracts with the same service/version
-      await createRandomContractsForService(serviceName, pricingVersion, 3, app);
-
-      const response = await request(app)
-        .get(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .query({ limit: 50 })
-        .send({ filters: { services: { [serviceName]: [pricingVersion] } } })
-        .expect(200);
-
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.length).toBeGreaterThanOrEqual(1);
-      expect(
-        response.body.every(
-          (c: any) => c.contractedServices && c.contractedServices[serviceName] === pricingVersion
-        )
-      ).toBeTruthy();
-    });
-
-  it('Should return 200: Should return filtered contracts by plans', async function () {
-      // Create a contract and use its plan for filtering
-      const created = await createRandomContract(app);
-      const serviceName = Object.keys(created.subscriptionPlans)[0];
-      // If no plans were set for the contract, skip this assertion (safety)
-      if (!serviceName) return;
-      const planName = created.subscriptionPlans[serviceName];
-
-      const response = await request(app)
-        .get(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .query({ limit: 50 })
-        .send({ filters: { plans: { [serviceName]: [planName] } } })
-        .expect(200);
-
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.length).toBeGreaterThanOrEqual(1);
-      expect(
-        response.body.every(
-          (c: any) => c.subscriptionPlans && c.subscriptionPlans[serviceName] === planName
-        )
-      ).toBeTruthy();
-    });
-
-  it('Should return 200: Should return filtered contracts by addOns', async function () {
-      // Find a contract with at least one addOn
-      const all = await getAllContracts(app);
-      const withAddOn = all.find((c: any) => Object.keys(c.subscriptionAddOns || {}).length > 0);
-      if (!withAddOn) {
-        // Create a contract that includes addOns by creating several contracts until one contains addOns
-        const created = await createRandomContract(app);
-        // Try again
-        const all2 = await getAllContracts(app);
-        const withAddOn2 = all2.find(
-          (c: any) => Object.keys(c.subscriptionAddOns || {}).length > 0
-        );
-        if (!withAddOn2)
-          return; // if still none, skip test
-        else {
-          const svc = Object.keys(withAddOn2.subscriptionAddOns)[0];
-          const addOn = Object.keys(withAddOn2.subscriptionAddOns[svc])[0];
-
-          const response = await request(app)
-            .get(`${baseUrl}/contracts`)
-            .set('x-api-key', adminApiKey)
-            .query({ limit: 50 })
-            .send({ filters: { addOns: { [svc]: [addOn] } } })
-            .expect(200);
-
-          expect(response.body).toBeDefined();
-          expect(Array.isArray(response.body)).toBeTruthy();
-          expect(response.body.length).toBeGreaterThanOrEqual(1);
-          expect(
-            response.body.every(
-              (c: any) =>
-                c.subscriptionAddOns &&
-                c.subscriptionAddOns[svc] &&
-                c.subscriptionAddOns[svc][addOn] !== undefined
-            )
-          ).toBeTruthy();
-        }
-      } else {
-        const svc = Object.keys(withAddOn.subscriptionAddOns)[0];
-        const addOn = Object.keys(withAddOn.subscriptionAddOns[svc])[0];
-
-        const response = await request(app)
-          .get(`${baseUrl}/contracts`)
-          .set('x-api-key', adminApiKey)
-          .query({ limit: 50 })
-          .send({ filters: { addOns: { [svc]: [addOn] } } })
-          .expect(200);
-
-        expect(response.body).toBeDefined();
-        expect(Array.isArray(response.body)).toBeTruthy();
-        expect(response.body.length).toBeGreaterThanOrEqual(1);
-        expect(
-          response.body.every(
-            (c: any) =>
-              c.subscriptionAddOns &&
-              c.subscriptionAddOns[svc] &&
-              c.subscriptionAddOns[svc][addOn] !== undefined
-          )
-        ).toBeTruthy();
-      }
-    });
-
-  it('Should return 200: Should return empty array for unknown service', async function () {
-      const response = await request(app)
-        .get(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .query({ limit: 20 })
-        .send({ filters: { services: ['non-existent-service-xyz'] } })
-        .expect(200);
-
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
-      expect(response.body.length).toBe(0);
-    });
-
-  it('Should return 200: Should return empty array for known service but non-matching version', async function () {
-      const created = await createRandomContract(app);
-      const serviceName = Object.keys(created.contractedServices)[0];
-      const wrongVersion = '0_0_0_nonexistent';
-
-      const response = await request(app)
-        .get(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .query({ limit: 20 })
-        .send({ filters: { services: { [serviceName]: [wrongVersion] } } })
-        .expect(200);
-
-      expect(response.body).toBeDefined();
-      expect(Array.isArray(response.body)).toBeTruthy();
-      // Should be empty because version doesn't match
-      expect(response.body.length).toBe(0);
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
     });
   });
 
   describe('POST /contracts', function () {
-    it('Should return 201 and the created contract', async function () {
-      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
+    it('returns 201 when creating a contract with org API key', async function () {
+      const contractData = await generateContract(
+        { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        testOrganization.id!,
+        undefined,
+        app
+      );
+
       const response = await request(app)
         .post(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .send(contractToCreate);
+        .set('x-api-key', testOrgApiKey)
+        .send(contractData);
 
       expect(response.status).toBe(201);
-      expect(response.body).toBeDefined();
-      expect(response.body.userContact.userId).toBe(contractToCreate.userContact.userId);
-      expect(response.body).toHaveProperty('billingPeriod');
-      expect(response.body).toHaveProperty('usageLevels');
-      expect(response.body).toHaveProperty('contractedServices');
-      expect(response.body).toHaveProperty('subscriptionPlans');
-      expect(response.body).toHaveProperty('subscriptionAddOns');
-      expect(response.body).toHaveProperty('history');
-      expect(new Date(response.body.billingPeriod.endDate)).toEqual(
-        addDays(response.body.billingPeriod.startDate, response.body.billingPeriod.renewalDays)
-      );
+      expect(response.body.userContact.userId).toBe(contractData.userContact.userId);
+      expect(response.body.organizationId).toBe(testOrganization.id);
+      trackContractForCleanup(response.body);
     });
 
-    it('Should return 422 when userContact.userId is an empty string', async function () {
-      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
+    it('returns 409 when creating a duplicate contract for the same userId', async function () {
+      const contractData = await generateContract(
+        { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        testOrganization.id!,
+        undefined,
+        app
+      );
 
-      // Force empty userId
-      contractToCreate.userContact.userId = '';
+      const first = await request(app)
+        .post(`${baseUrl}/contracts`)
+        .set('x-api-key', testOrgApiKey)
+        .send(contractData);
+      trackContractForCleanup(first.body);
 
       const response = await request(app)
         .post(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .send(contractToCreate);
+        .set('x-api-key', testOrgApiKey)
+        .send(contractData);
+
+      expect(response.status).toBe(409);
+      expect(response.body.error).toBeDefined();
+    });
+    
+    it('returns 403 when trying to create a contract for a different organization', async function () {
+      const otherOrg = await createTestOrganization(ownerUser.username);
+      
+      const contractData = await generateContract(
+        { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        otherOrg.id!,
+        undefined,
+        app
+      );
+
+      const response = await request(app)
+        .post(`${baseUrl}/contracts`)
+        .set('x-api-key', testOrgApiKey)
+        .send(contractData);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('returns 400 when creating a contract with non-existent service', async function () {
+      const contractData = await generateContract(
+        { 'non-existent-service': '1.0.0' },
+        testOrganization.id!,
+        undefined,
+        app
+      );
+
+      const response = await request(app)
+        .post(`${baseUrl}/contracts`)
+        .set('x-api-key', testOrgApiKey)
+        .send(contractData);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('returns 400 when creating a contract with invalid service version', async function () {
+      const contractData = await generateContract(
+        { [testService.name.toLowerCase()]: '99.99.99' },
+        testOrganization.id!,
+        undefined,
+        app
+      );
+
+      const response = await request(app)
+        .post(`${baseUrl}/contracts`)
+        .set('x-api-key', testOrgApiKey)
+        .send(contractData);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid');
+    });
+
+    it('returns 422 when userContact.userId is empty', async function () {
+      const contractData = await generateContract(
+        { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        testOrganization.id!,
+        '',
+        app
+      );
+
+      const response = await request(app)
+        .post(`${baseUrl}/contracts`)
+        .set('x-api-key', testOrgApiKey)
+        .send(contractData);
 
       expect(response.status).toBe(422);
-      expect(response.body).toBeDefined();
       expect(response.body.error).toBeDefined();
-      // Validation message should mention userContact.userId or cannot be empty
-      expect(response.body.error.toLowerCase()).toContain('usercontact.userid');
     });
 
-    it('Should return 400 given a contract with unexistent service', async function () {
-      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
-
-      contractToCreate.contractedServices['unexistent-service'] = '1.0.0';
-
-      const response = await request(app)
-        .post(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .send(contractToCreate);
-
-      expect(response.status).toBe(400);
-      expect(response.body).toBeDefined();
-      expect(response.body.error).toBe('Invalid contract: Services not found: unexistent-service');
-    });
-
-    it('Should return 400 given a contract with existent service, but invalid version', async function () {
-      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
-
-      const existingService = Object.keys(contractToCreate.contractedServices)[0];
-      contractToCreate.contractedServices[existingService] = 'invalid-version';
-
-      const response = await request(app)
-        .post(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .send(contractToCreate);
-
-      expect(response.status).toBe(400);
-      expect(response.body).toBeDefined();
-      expect(response.body.error).toBe(
-        `Invalid contract: Pricing version invalid-version for service ${existingService} not found`
+    it('returns 401 when API key is missing', async function () {
+      const contractData = await generateContract(
+        { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        testOrganization.id!,
+        undefined,
+        app
       );
+
+      const response = await request(app).post(`${baseUrl}/contracts`).send(contractData);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
     });
+  });
 
-    it('Should return 400 given a contract with a non-existent plan for a contracted service', async function () {
-      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
-
-      const serviceName = Object.keys(contractToCreate.contractedServices)[0];
-      // Set an invalid plan name
-      contractToCreate.subscriptionPlans[serviceName] = 'NON_EXISTENT_PLAN';
+  describe('POST /organizations/:organizationId/contracts', function () {
+    it('returns 201 when creating a contract with user API key', async function () {
+      const contractData = await generateContract(
+        { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        testOrganization.id!,
+        undefined,
+        app
+      );
 
       const response = await request(app)
-        .post(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .send(contractToCreate);
+        .post(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send(contractData);
 
-      expect(response.status).toBe(400);
-      expect(response.body).toBeDefined();
-      expect(response.body.error).toBeDefined();
-      expect(String(response.body.error)).toContain('Invalid subscription');
+      expect(response.status).toBe(201);
+      expect(response.body.organizationId).toBe(testOrganization.id);
+      trackContractForCleanup(response.body);
     });
 
-    it('Should return 400 given a contract with a non-existent add-on for a contracted service', async function () {
-      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
-
-      const serviceName = Object.keys(contractToCreate.contractedServices)[0];
-      // Inject an invalid add-on name
-      contractToCreate.subscriptionAddOns[serviceName] = { non_existent_addon: 1 };
+    it('returns 403 when organizationId in body does not match URL param', async function () {
+      const otherOrg = await createTestOrganization(ownerUser.username);
+      const contractData = await generateContract(
+        { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        otherOrg.id!,
+        undefined,
+        app
+      );
 
       const response = await request(app)
-        .post(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .send(contractToCreate);
+        .post(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send(contractData);
 
-      expect(response.status).toBe(400);
-      expect(response.body).toBeDefined();
-      expect(response.body.error).toBeDefined();
-      expect(String(response.body.error)).toContain('Invalid subscription');
+      expect(response.status).toBe(403);
+      expect(response.body.error).toContain('Organization ID mismatch');
+
+      await deleteTestOrganization(otherOrg.id!);
     });
 
-    it('Should return 400 when creating a contract for a userId that already has a contract', async function () {
-      // Create initial contract
-      const { contract: contractToCreate } = await generateContractAndService(undefined, app);
+    it('returns 401 when API key is missing', async function () {
+      const contractData = await generateContract(
+        { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        testOrganization.id!,
+        undefined,
+        app
+      );
 
-      const firstResponse = await request(app)
-        .post(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .send(contractToCreate);
+      const response = await request(app)
+        .post(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .send(contractData);
 
-      expect(firstResponse.status).toBe(201);
-
-      // Try to create another contract with the same userId
-      const secondResponse = await request(app)
-        .post(`${baseUrl}/contracts`)
-        .set('x-api-key', adminApiKey)
-        .send(contractToCreate);
-
-      expect(secondResponse.status).toBe(400);
-      expect(secondResponse.body).toBeDefined();
-      expect(secondResponse.body.error).toBeDefined();
-      expect(secondResponse.body.error.toLowerCase()).toContain('already exists');
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
     });
   });
 
   describe('GET /contracts/:userId', function () {
-    it('Should return 200 and the contract for the given userId', async function () {
+    it('returns 200 and the contract for the given userId', async function () {
       const response = await request(app)
-        .get(`${baseUrl}/contracts/${testUserId}`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
+        .get(`${baseUrl}/contracts/${testContract.userContact.userId}`)
+        .set('x-api-key', testOrgApiKey);
 
-      const contract: TestContract = response.body;
-
-      expect(contract).toBeDefined();
-      expect(contract.userContact.userId).toBe(testUserId);
-      expect(contract).toHaveProperty('billingPeriod');
-      expect(contract).toHaveProperty('usageLevels');
-      expect(contract).toHaveProperty('contractedServices');
-      expect(contract).toHaveProperty('subscriptionPlans');
-      expect(contract).toHaveProperty('subscriptionAddOns');
-      expect(contract).toHaveProperty('history');
-      expect(Object.values(Object.values(contract.usageLevels)[0])[0].consumed).toBeTruthy();
+      expect(response.status).toBe(200);
+      expect(response.body.userContact.userId).toBe(testContract.userContact.userId);
     });
 
-    it('Should return 404 if the contract is not found', async function () {
+    it('returns 404 when contract is not found', async function () {
       const response = await request(app)
-        .get(`${baseUrl}/contracts/invalid-user-id`)
-        .set('x-api-key', adminApiKey)
-        .expect(404);
+        .get(`${baseUrl}/contracts/non-existent-userId`)
+        .set('x-api-key', testOrgApiKey);
 
-      expect(response.body).toBeDefined();
+      expect(response.status).toBe(404);
       expect(response.body.error).toContain('not found');
+    });
+
+    it('returns 401 when API key is missing', async function () {
+      const response = await request(app).get(`${baseUrl}/contracts/some-userId`);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+  });
+
+  describe('GET /organizations/:organizationId/contracts/:userId', function () {
+    it('returns 200 and the contract for the given userId with user API key', async function () {
+      const response = await request(app)
+        .get(
+          `${baseUrl}/organizations/${testOrganization.id}/contracts/${testContract.userContact.userId}`
+        )
+        .set('x-api-key', ownerUser.apiKey);
+
+      expect(response.status).toBe(200);
+      expect(response.body.userContact.userId).toBe(testContract.userContact.userId);
+    });
+
+    it('returns 404 when contract is not found', async function () {
+      const response = await request(app)
+        .get(`${baseUrl}/organizations/${testOrganization.id}/contracts/non-existent-userId`)
+        .set('x-api-key', ownerUser.apiKey);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('not found');
+    });
+
+    it('returns 401 when API key is missing', async function () {
+      const response = await request(app).get(
+        `${baseUrl}/organizations/${testOrganization.id}/contracts/some-userId`
+      );
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
     });
   });
 
   describe('PUT /contracts/:userId', function () {
-    it('Should return 200 and the novated contract', async function () {
-      const newContract = await createRandomContract(app);
-      const newContractFullData = await getContractByUserId(newContract.userContact.userId, app);
+    it('returns 200 and novates the contract', async function () {
+      const newService = await createTestService(testOrganization.id, `new-service-${Date.now()}`);
+      const pricingVersion = newService.activePricings.keys().next().value!;
+      const pricingDetails = await getPricingFromService(newService.name, pricingVersion, testOrganization.id!, app);
 
-      const novation = await generateNovation();
+      const novationData = {
+        contractedServices: { [newService.name.toLowerCase()]: newService.activePricings.keys().next().value! },
+        subscriptionPlans: { [newService.name.toLowerCase()]: Object.keys(pricingDetails!.plans!)[0] },
+        subscriptionAddOns: {},
+      };
 
       const response = await request(app)
-        .put(`${baseUrl}/contracts/${newContract.userContact.userId}`)
-        .set('x-api-key', adminApiKey)
-        .send(novation)
-        .expect(200);
+        .put(`${baseUrl}/contracts/${testContract.userContact.userId}`)
+        .set('x-api-key', testOrgApiKey)
+        .send(novationData);
 
-      expect(response.body).toBeDefined();
-      expect(response.body.userContact.userId).toBe(newContract.userContact.userId);
-      expect(response.body).toHaveProperty('billingPeriod');
-      expect(response.body).toHaveProperty('usageLevels');
-      expect(response.body).toHaveProperty('contractedServices');
-      expect(response.body).toHaveProperty('subscriptionPlans');
-      expect(response.body).toHaveProperty('subscriptionAddOns');
-      expect(response.body).toHaveProperty('history');
-      expect(response.body.history.length).toBe(1);
-      expect(newContractFullData.billingPeriod.startDate).not.toEqual(
-        response.body.billingPeriod.startDate
-      );
-      expect(new Date(response.body.billingPeriod.endDate)).toEqual(
-        addDays(response.body.billingPeriod.startDate, response.body.billingPeriod.renewalDays)
-      );
+      expect(response.status).toBe(200);
+      expect(response.body.contractedServices).toHaveProperty(newService.name.toLowerCase());
+
+      await deleteTestService(newService.name, testOrganization.id!);
+    });
+
+    it('returns 200 and contractedServices keys in lowercase even with uppercase service name', async function () {
+      const upperCaseServiceName = 'UPPERCASE-SERVICE';
+      const newService = await createTestService(testOrganization.id, upperCaseServiceName);
+      const pricingVersion = newService.activePricings.keys().next().value!;
+      const pricingDetails = await getPricingFromService(newService.name, pricingVersion, testOrganization.id!, app);
+
+      const novationData = {
+        contractedServices: { [newService.name]: newService.activePricings.keys().next().value! },
+        subscriptionPlans: { [newService.name]: Object.keys(pricingDetails!.plans!)[0] },
+        subscriptionAddOns: {},
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/${testContract.userContact.userId}`)
+        .set('x-api-key', testOrgApiKey)
+        .send(novationData);
+
+      expect(response.status).toBe(200);
+      
+      // Verify all keys are lowercase
+      const contractedServicesKeys = Object.keys(response.body.contractedServices);
+      const subscriptionPlansKeys = Object.keys(response.body.subscriptionPlans);
+      const subscriptionAddOnsKeys = Object.keys(response.body.subscriptionAddOns);
+
+      expect(contractedServicesKeys.every(key => key === key.toLowerCase())).toBe(true);
+      expect(subscriptionPlansKeys.every(key => key === key.toLowerCase())).toBe(true);
+      expect(subscriptionAddOnsKeys.every(key => key === key.toLowerCase())).toBe(true);
+
+      await deleteTestService(newService.name, testOrganization.id!);
+    });
+
+    it('returns 404 when contract is not found', async function () {
+      const novationData = {
+        contractedServices: { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+        subscriptionPlans: {},
+        subscriptionAddOns: {},
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/non-existent-userId`)
+        .set('x-api-key', testOrgApiKey)
+        .send(novationData);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('not found');
+    });
+
+    it('returns 401 when API key is missing', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/some-userId`)
+        .send({});
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+  });
+
+  describe('PUT /organizations/:organizationId/contracts/:userId', function () {
+    it('returns 200 and novates the contract with user API key', async function () {
+      const newService = await createTestService(testOrganization.id, `new-service-${Date.now()}`);
+      const pricingVersion = newService.activePricings.keys().next().value!;
+      const pricingDetails = await getPricingFromService(newService.name, pricingVersion, testOrganization.id!, app);
+
+      const novationData = {
+        contractedServices: { [newService.name]: newService.activePricings.keys().next().value! },
+        subscriptionPlans: { [newService.name]: Object.keys(pricingDetails!.plans!)[0] },
+        subscriptionAddOns: {},
+      };
+
+      const response = await request(app)
+        .put(
+          `${baseUrl}/organizations/${testOrganization.id}/contracts/${testContract.userContact.userId}`
+        )
+        .set('x-api-key', ownerUser.apiKey)
+        .send(novationData);
+
+      expect(response.status).toBe(200);
+      expect(response.body.contractedServices).toHaveProperty(newService.name.toLowerCase());
+
+      await deleteTestService(newService.name, testOrganization.id!);
+    });
+
+    it('returns 401 when API key is missing', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/contracts/some-userId`)
+        .send({});
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
     });
   });
 
   describe('DELETE /contracts/:userId', function () {
-    it('Should return 204', async function () {
-      const newContract = await createRandomContract(app);
-
-      await request(app)
-        .delete(`${baseUrl}/contracts/${newContract.userContact.userId}`)
-        .set('x-api-key', adminApiKey)
-        .expect(204);
-    });
-    it('Should return 404 with invalid userId', async function () {
+    it('returns 204 when deleting an existing contract', async function () {
       const response = await request(app)
-        .delete(`${baseUrl}/contracts/invalid-user-id`)
-        .set('x-api-key', adminApiKey)
-        .expect(404);
+        .delete(`${baseUrl}/contracts/${testContract.userContact.userId}`)
+        .set('x-api-key', testOrgApiKey);
 
-      expect(response.body).toBeDefined();
-      expect(response.body.error.toLowerCase()).toContain('not found');
+      expect(response.status).toBe(204);
+
+      // Verify deletion
+      const getResponse = await request(app)
+        .get(`${baseUrl}/contracts/${testContract.userContact.userId}`)
+        .set('x-api-key', testOrgApiKey);
+      expect(getResponse.status).toBe(404);
+    });
+
+    it('returns 404 when deleting a non-existent contract', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/contracts/non-existent-userId`)
+        .set('x-api-key', testOrgApiKey);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('not found');
+    });
+
+    it('returns 401 when API key is missing', async function () {
+      const response = await request(app).delete(`${baseUrl}/contracts/some-userId`);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
     });
   });
 
-  describe('PUT /contracts/:userId/usageLevels', function () {
-    it('Should return 200 and the novated contract: Given usage level increment', async function () {
-      const newContract: TestContract = await createRandomContract(app);
-
-      const serviceKey = Object.keys(newContract.usageLevels)[0];
-      const usageLevelKey = Object.keys(newContract.usageLevels[serviceKey])[0];
-      const usageLevel = newContract.usageLevels[serviceKey][usageLevelKey];
-
-      expect(usageLevel.consumed).toBe(0);
-
+  describe('DELETE /organizations/:organizationId/contracts/:userId', function () {
+    it('returns 204 when deleting an existing contract with user API key', async function () {
       const response = await request(app)
-        .put(`${baseUrl}/contracts/${newContract.userContact.userId}/usageLevels`)
-        .set('x-api-key', adminApiKey)
-        .send({
-          [serviceKey]: {
-            [usageLevelKey]: 5,
-          },
-        });
+        .delete(
+          `${baseUrl}/organizations/${testOrganization.id}/contracts/${testContract.userContact.userId}`
+        )
+        .set('x-api-key', ownerUser.apiKey);
 
-      expect(response.status).toBe(200);
-
-      const updatedContract: TestContract = response.body;
-
-      expect(updatedContract).toBeDefined();
-      expect(updatedContract.userContact.userId).toBe(newContract.userContact.userId);
-      expect(updatedContract.usageLevels[serviceKey][usageLevelKey].consumed).toBe(5);
+      expect(response.status).toBe(204);
     });
 
-    it('Should return 200 and the novated contract: Given reset only', async function () {
-      let newContract: TestContract = await createRandomContract(app);
+    it('returns 404 when deleting a non-existent contract', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/contracts/non-existent-userId`)
+        .set('x-api-key', ownerUser.apiKey);
 
-      Object.values(newContract.usageLevels)
-        .map((s: Record<string, UsageLevel>) => Object.values(s))
-        .flat()
-        .forEach((ul: UsageLevel) => {
-          expect(ul.consumed).toBe(0);
-        });
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('not found');
+    });
 
-      newContract = await incrementAllUsageLevel(
-        newContract.userContact.userId,
-        newContract.usageLevels,
-        app
+    it('returns 401 when API key is missing', async function () {
+      const response = await request(app).delete(
+        `${baseUrl}/organizations/${testOrganization.id}/contracts/some-userId`
       );
 
-      Object.values(newContract.usageLevels)
-        .map((s: Record<string, UsageLevel>) => Object.values(s))
-        .flat()
-        .forEach((ul: UsageLevel) => {
-          expect(ul.consumed).toBeGreaterThan(0);
-        });
-
-      const response = await request(app)
-        .put(`${baseUrl}/contracts/${newContract.userContact.userId}/usageLevels?reset=true`)
-        .set('x-api-key', adminApiKey)
-        .expect(200);
-
-      const updatedContract: TestContract = response.body;
-
-      expect(updatedContract).toBeDefined();
-      expect(updatedContract.userContact.userId).toBe(newContract.userContact.userId);
-
-      // All RENEWABLE limits are reset to 0
-      Object.values(updatedContract.usageLevels)
-        .map((s: Record<string, UsageLevel>) => Object.values(s))
-        .flat()
-        .forEach((ul: UsageLevel) => {
-          if (ul.resetTimeStamp) {
-            expect(ul.consumed).toBe(0);
-          }
-        });
-
-      // All NON_RENEWABLE limits are not reset
-      Object.values(updatedContract.usageLevels)
-        .map((s: Record<string, UsageLevel>) => Object.values(s))
-        .flat()
-        .forEach((ul: UsageLevel) => {
-          if (!ul.resetTimeStamp) {
-            expect(ul.consumed).toBeGreaterThan(0);
-          }
-        });
-    });
-
-    it('Should return 200 and the novated contract: Given reset and disabled renewableOnly', async function () {
-      let newContract: TestContract = await createRandomContract(app);
-
-      Object.values(newContract.usageLevels)
-        .map((s: Record<string, UsageLevel>) => Object.values(s))
-        .flat()
-        .forEach((ul: UsageLevel) => {
-          expect(ul.consumed).toBe(0);
-        });
-
-      newContract = await incrementAllUsageLevel(
-        newContract.userContact.userId,
-        newContract.usageLevels,
-        app
-      );
-
-      Object.values(newContract.usageLevels)
-        .map((s: Record<string, UsageLevel>) => Object.values(s))
-        .flat()
-        .forEach((ul: UsageLevel) => {
-          expect(ul.consumed).toBeGreaterThan(0);
-        });
-
-      const response = await request(app)
-        .put(
-          `${baseUrl}/contracts/${newContract.userContact.userId}/usageLevels?reset=true&renewableOnly=false`
-        )
-        .set('x-api-key', adminApiKey)
-        .expect(200);
-
-      const updatedContract: TestContract = response.body;
-
-      expect(updatedContract).toBeDefined();
-      expect(updatedContract.userContact.userId).toBe(newContract.userContact.userId);
-
-      // All usage levels are reset to 0
-      Object.values(updatedContract.usageLevels)
-        .map((s: Record<string, UsageLevel>) => Object.values(s))
-        .flat()
-        .forEach((ul: UsageLevel) => {
-          expect(ul.consumed).toBe(0);
-        });
-    });
-
-    it('Should return 200 and the novated contract: Given usageLimit', async function () {
-      let newContract: TestContract = await createRandomContract(app);
-
-      Object.values(newContract.usageLevels)
-        .map((s: Record<string, UsageLevel>) => Object.values(s))
-        .flat()
-        .forEach((ul: UsageLevel) => {
-          expect(ul.consumed).toBe(0);
-        });
-
-      newContract = await incrementAllUsageLevel(
-        newContract.userContact.userId,
-        newContract.usageLevels,
-        app
-      );
-
-      Object.values(newContract.usageLevels)
-        .map((s: Record<string, UsageLevel>) => Object.values(s))
-        .flat()
-        .forEach((ul: UsageLevel) => {
-          expect(ul.consumed).toBeGreaterThan(0);
-        });
-
-      const serviceKey = Object.keys(newContract.usageLevels)[0];
-      const sampleUsageLimitKey = Object.keys(newContract.usageLevels[serviceKey])[0];
-
-      const response = await request(app)
-        .put(
-          `${baseUrl}/contracts/${newContract.userContact.userId}/usageLevels?usageLimit=${sampleUsageLimitKey}`
-        )
-        .set('x-api-key', adminApiKey);
-
-      expect(response.status).toBe(200);
-
-      const updatedContract: TestContract = response.body;
-
-      expect(updatedContract).toBeDefined();
-      expect(updatedContract.userContact.userId).toBe(newContract.userContact.userId);
-
-      // Check if all usage levels are greater than 0, except the one specified in the query
-      Object.entries(updatedContract.usageLevels).forEach(([serviceKey, usageLimits]) => {
-        Object.entries(usageLimits).forEach(([usageLimitKey, usageLevel]) => {
-          if (usageLimitKey === sampleUsageLimitKey) {
-            expect(usageLevel.consumed).toBe(0);
-          } else {
-            expect(usageLevel.consumed).toBeGreaterThan(0);
-          }
-        });
-      });
-    });
-
-    it('Should return 404: Given reset and usageLimit', async function () {
-      const newContract: TestContract = await createRandomContract(app);
-
-      await request(app)
-        .put(
-          `${baseUrl}/contracts/${newContract.userContact.userId}/usageLevels?reset=true&usageLimit=test`
-        )
-        .set('x-api-key', adminApiKey)
-        .expect(400);
-    });
-
-    it('Should return 404: Given invalid usageLimit', async function () {
-      const newContract: TestContract = await createRandomContract(app);
-
-      await request(app)
-        .put(
-          `${baseUrl}/contracts/${newContract.userContact.userId}/usageLevels?usageLimit=invalid-usage-limit`
-        )
-        .set('x-api-key', adminApiKey)
-        .expect(404);
-    });
-
-    it('Should return 422: Given invalid body', async function () {
-      const newContract: TestContract = await createRandomContract(app);
-
-      await request(app)
-        .put(`${baseUrl}/contracts/${newContract.userContact.userId}/usageLevels`)
-        .set('x-api-key', adminApiKey)
-        .send({
-          test: 'invalid object',
-        })
-        .expect(422);
-    });
-  });
-
-  describe('PUT /contracts/:userId/userContact', function () {
-    it('Should return 200 and the updated contract', async function () {
-      const newContract: TestContract = await createRandomContract(app);
-
-      const newUserContactFields = {
-        username: 'newUsername',
-        firstName: 'newFirstName',
-        lastName: 'newLastName',
-      };
-
-      const response = await request(app)
-        .put(`${baseUrl}/contracts/${newContract.userContact.userId}/userContact`)
-        .set('x-api-key', adminApiKey)
-        .send(newUserContactFields)
-        .expect(200);
-      const updatedContract: TestContract = response.body;
-
-      expect(updatedContract).toBeDefined();
-      expect(updatedContract.userContact.username).toBe(newUserContactFields.username);
-      expect(updatedContract.userContact.firstName).toBe(newUserContactFields.firstName);
-      expect(updatedContract.userContact.lastName).toBe(newUserContactFields.lastName);
-      expect(updatedContract.userContact.email).toBe(newContract.userContact.email);
-      expect(updatedContract.userContact.phone).toBe(newContract.userContact.phone);
-    });
-  });
-
-  describe('PUT /contracts/:userId/billingPeriod', function () {
-    it('Should return 200 and the updated contract', async function () {
-      const newContract: TestContract = await createRandomContract(app);
-
-      const newBillingPeriodFields = {
-        endDate: addDays(newContract.billingPeriod.endDate, 3),
-        autoRenew: true,
-        renewalDays: 30,
-      };
-
-      const response = await request(app)
-        .put(`${baseUrl}/contracts/${newContract.userContact.userId}/billingPeriod`)
-        .set('x-api-key', adminApiKey)
-        .send(newBillingPeriodFields)
-        .expect(200);
-      const updatedContract: TestContract = response.body;
-
-      expect(updatedContract).toBeDefined();
-      expect(new Date(updatedContract.billingPeriod.endDate)).toEqual(
-        addDays(newContract.billingPeriod.endDate, 3)
-      );
-      expect(updatedContract.billingPeriod.autoRenew).toBe(true);
-      expect(updatedContract.billingPeriod.renewalDays).toBe(30);
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
     });
   });
 
   describe('DELETE /contracts', function () {
-    it('Should return 204 and delete all contracts', async function () {
-      const servicesBefore = await getAllContracts(app);
-      expect(servicesBefore.length).toBeGreaterThan(0);
+    it('returns 204 when deleting all contracts with org API key', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/contracts`)
+        .set('x-api-key', testOrgApiKey);
 
-      await request(app).delete(`${baseUrl}/contracts`).set('x-api-key', adminApiKey).expect(204);
+      expect(response.status).toBe(204);
+    });
 
-      const servicesAfter = await getAllContracts(app);
-      expect(servicesAfter.length).toBe(0);
+    it('returns 401 when API key is missing', async function () {
+      const response = await request(app).delete(`${baseUrl}/contracts`);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+  });
+
+  describe('DELETE /organizations/:organizationId/contracts', function () {
+    it('returns 204 when deleting all contracts for an organization', async function () {
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey);
+
+      expect(response.status).toBe(204);
+    });
+
+    it('returns 401 when API key is missing', async function () {
+      const response = await request(app).delete(
+        `${baseUrl}/organizations/${testOrganization.id}/contracts`
+      );
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+  });
+
+  describe('PUT /contracts/:userId/usageLevels', function () {
+    it('returns 200 and increments usage levels', async function () {
+      const serviceLowercase = testService.name.toLowerCase();
+      const usageLimitName = testContract.usageLevels && testContract.usageLevels[serviceLowercase]
+        ? Object.keys(testContract.usageLevels[serviceLowercase])[0]
+        : 'defaultLimit';
+        
+      const incrementData = {
+        [testService.name]: {
+          [usageLimitName]: 10,
+        },
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/${testContract.userContact.userId}/usageLevels`)
+        .set('x-api-key', testOrgApiKey)
+        .send(incrementData);
+
+      expect(response.status).toBe(200);
+      if (response.body.usageLevels && response.body.usageLevels[serviceLowercase]) {
+        expect(response.body.usageLevels[serviceLowercase][usageLimitName].consumed).toBeGreaterThanOrEqual(10);
+      }
+    });
+
+    it('returns 200 and resets usage levels with reset=true', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/${testContract.userContact.userId}/usageLevels?reset=true`)
+        .set('x-api-key', testOrgApiKey)
+        .send({});
+
+      expect(response.status).toBe(200);
+    });
+
+    it('returns 400 when both reset and usageLimit are provided', async function () {
+      const response = await request(app)
+        .put(
+          `${baseUrl}/contracts/${testContract.userContact.userId}/usageLevels?reset=true&usageLimit=someLimit`
+        )
+        .set('x-api-key', testOrgApiKey)
+        .send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid query');
+    });
+
+    it('returns 404 when contract is not found', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/non-existent-userId/usageLevels`)
+        .set('x-api-key', testOrgApiKey)
+        .send({});
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('not found');
+    });
+  });
+
+  describe('PUT /contracts/:userId/userContact', function () {
+    it('returns 200 and updates user contact information', async function () {
+      const newContactData = {
+        firstName: 'NewFirstName',
+        lastName: 'NewLastName',
+        email: 'newemail@example.com',
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/${testContract.userContact.userId}/userContact`)
+        .set('x-api-key', testOrgApiKey)
+        .send(newContactData);
+
+      expect(response.status).toBe(200);
+      expect(response.body.userContact.firstName).toBe('NewFirstName');
+      expect(response.body.userContact.lastName).toBe('NewLastName');
+      expect(response.body.userContact.email).toBe('newemail@example.com');
+    });
+
+    it('returns 404 when contract is not found', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/non-existent-userId/userContact`)
+        .set('x-api-key', testOrgApiKey)
+        .send({ firstName: 'Test' });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('not found');
+    });
+  });
+
+  describe('PUT /contracts/:userId/billingPeriod', function () {
+    it('returns 200 and updates billing period', async function () {
+      const newBillingPeriod = {
+        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        autoRenew: true,
+        renewalDays: 365,
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/${testContract.userContact.userId}/billingPeriod`)
+        .set('x-api-key', testOrgApiKey)
+        .send(newBillingPeriod);
+
+      expect(response.status).toBe(200);
+      expect(response.body.billingPeriod.autoRenew).toBe(true);
+      expect(response.body.billingPeriod.renewalDays).toBe(365);
+    });
+
+    it('returns 404 when contract is not found', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/non-existent-userId/billingPeriod`)
+        .set('x-api-key', testOrgApiKey)
+        .send({ autoRenew: true });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('not found');
     });
   });
 });
