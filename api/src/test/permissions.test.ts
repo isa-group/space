@@ -134,12 +134,20 @@ describe('Permissions Test Suite', function () {
         expect(response.status).toBe(200);
       });
 
-      it('Should return 200 with valid USER user API key', async function () {
+      it('Should return 200 with valid USER user API key with q parameter', async function () {
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=${regularUser.username}`)
+          .set('x-api-key', regularUserApiKey);
+
+        expect(response.status).toBe(200);
+      });
+
+      it('Should return 403 with valid USER user API key without q parameter', async function () {
         const response = await request(app)
           .get(`${baseUrl}/users`)
           .set('x-api-key', regularUserApiKey);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(403);
       });
 
       it('Should return 401 without API key', async function () {
