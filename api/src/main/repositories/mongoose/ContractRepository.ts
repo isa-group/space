@@ -1,6 +1,6 @@
 import RepositoryBase from '../RepositoryBase';
 import ContractMongoose from './models/ContractMongoose';
-import { ContractQueryFilters, ContractToCreate, LeanContract } from '../../types/models/Contract';
+import { ContractToCreate, LeanContract } from '../../types/models/Contract';
 import { toPlainObject } from '../../utils/mongoose';
 
 class ContractRepository extends RepositoryBase {
@@ -23,6 +23,7 @@ class ContractRepository extends RepositoryBase {
       sort,
       order = 'asc',
       filters,
+      organizationId,
     } = queryFilters || {};
 
     const matchConditions: any[] = [];
@@ -38,6 +39,9 @@ class ContractRepository extends RepositoryBase {
     }
     if (email) {
       matchConditions.push({ 'userContact.email': { $regex: email, $options: 'i' } });
+    }
+    if (organizationId) {
+      matchConditions.push({ organizationId: organizationId });
     }
 
     // We'll convert contractedServices object to array to ease matching
@@ -145,9 +149,65 @@ class ContractRepository extends RepositoryBase {
     return contract ? toPlainObject<LeanContract>(contract.toJSON()) : null;
   }
 
-  async bulkUpdate(contracts: LeanContract[], disable = false): Promise<boolean> {
+  async changeServiceName(oldServiceName: string, newServiceName: string, organizationId: string): Promise<number> {
+    const oldServiceKey = oldServiceName.toLowerCase();
+    const newServiceKey = newServiceName.toLowerCase();
+
+    const result = await ContractMongoose.updateMany(
+      {
+        organizationId,
+        [`contractedServices.${oldServiceKey}`]: { $exists: true }
+      },
+      [
+        {
+          $set: {
+            contractedServices: {
+              $arrayToObject: {
+                $map: {
+                  input: { $objectToArray: '$contractedServices' },
+                  as: 'item',
+                  in: {
+                    k: { $cond: [{ $eq: ['$$item.k', oldServiceKey] }, newServiceKey, '$$item.k'] },
+                    v: '$$item.v'
+                  }
+                }
+              }
+            },
+            subscriptionPlans: {
+              $arrayToObject: {
+                $map: {
+                  input: { $objectToArray: '$subscriptionPlans' },
+                  as: 'item',
+                  in: {
+                    k: { $cond: [{ $eq: ['$$item.k', oldServiceKey] }, newServiceKey, '$$item.k'] },
+                    v: '$$item.v'
+                  }
+                }
+              }
+            },
+            subscriptionAddOns: {
+              $arrayToObject: {
+                $map: {
+                  input: { $objectToArray: '$subscriptionAddOns' },
+                  as: 'item',
+                  in: {
+                    k: { $cond: [{ $eq: ['$$item.k', oldServiceKey] }, newServiceKey, '$$item.k'] },
+                    v: '$$item.v'
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    );
+
+    return result.modifiedCount;
+  }
+
+  async bulkUpdate(contracts: LeanContract[], disable = false): Promise<number> {
     if (contracts.length === 0) {
-      return true;
+      return 0;
     }
 
     const bulkOps = contracts.map(contract => ({
@@ -165,18 +225,13 @@ class ContractRepository extends RepositoryBase {
 
     const result = await ContractMongoose.bulkWrite(bulkOps);
 
-    if (result.modifiedCount === 0 && result.upsertedCount === 0) {
-      throw new Error('No contracts were updated or inserted');
-    }
-
-    return true;
+    return result.modifiedCount;
   }
 
-  async prune(): Promise<number> {
-    const result = await ContractMongoose.deleteMany({});
-    if (result.deletedCount === 0) {
-      throw new Error('No contracts found to delete');
-    }
+  async prune(organizationId?: string): Promise<number> {
+    const filter = organizationId ? { organizationId } : {};
+    const result = await ContractMongoose.deleteMany(filter);
+
     return result.deletedCount;
   }
 
@@ -185,6 +240,11 @@ class ContractRepository extends RepositoryBase {
     if (result.deletedCount === 0) {
       throw new Error(`Contract with userId ${userId} not found`);
     }
+  }
+
+  async bulkDestroy(userIds: string[]): Promise<number> {
+    const result = await ContractMongoose.deleteMany({ 'userContact.userId': { $in: userIds } });
+    return result.deletedCount || 0;
   }
 }
 

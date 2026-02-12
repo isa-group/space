@@ -4,16 +4,14 @@ import useAuth from '@/hooks/useAuth';
 import { createUser } from '@/api/users/usersApi';
 import { FiChevronDown, FiChevronUp } from 'react-icons/fi';
 
-const ROLES = ['ADMIN', 'MANAGER', 'EVALUATOR'];
+const ROLES = ['ADMIN', 'USER'];
 const ROLE_COLORS: Record<string, string> = {
   ADMIN: 'text-red-700',
-  MANAGER: 'text-yellow-700',
-  EVALUATOR: 'text-indigo-700',
+  USER: 'text-blue-700',
 };
 const ROLE_BG_HOVER: Record<string, string> = {
   ADMIN: 'hover:bg-red-100',
-  MANAGER: 'hover:bg-yellow-100',
-  EVALUATOR: 'hover:bg-indigo-100',
+  USER: 'hover:bg-blue-100',
 };
 
 export default function AddUserModal({ open, onClose, onUserCreated }: { open: boolean; onClose: () => void; onUserCreated: () => void }) {
@@ -21,12 +19,12 @@ export default function AddUserModal({ open, onClose, onUserCreated }: { open: b
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
-  const [role, setRole] = useState(user.role === 'ADMIN' ? 'MANAGER' : 'EVALUATOR');
+  const [role, setRole] = useState('USER');
   const [roleDropdown, setRoleDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const availableRoles = user.role === 'ADMIN' ? ROLES : ROLES.slice(1);
+  const availableRoles = ROLES;
 
   const validate = async () => {
     if (!username || !password || !password2) {
@@ -64,7 +62,7 @@ export default function AddUserModal({ open, onClose, onUserCreated }: { open: b
       setUsername('');
       setPassword('');
       setPassword2('');
-      setRole(user.role === 'ADMIN' ? 'MANAGER' : 'EVALUATOR');
+      setRole('USER');
       onUserCreated();
       onClose();
     } catch (e: any) {

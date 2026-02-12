@@ -2,25 +2,96 @@ import fs from 'fs';
 import request from 'supertest';
 import { baseUrl, getApp, useApp } from '../testApp';
 import { clockifyPricingPath, githubPricingPath, zoomPricingPath } from './ServiceTestData';
-import { generatePricingFile } from './pricing';
+import { generatePricingFile } from './pricingTestUtils';
 import { v4 as uuidv4 } from 'uuid';
 import { TestService } from '../../types/models/Service';
 import { TestPricing } from '../../types/models/Pricing';
 import { getTestAdminApiKey } from '../auth';
+import { createTestOrganization } from '../organization/organizationTestUtils';
+import { LeanService } from '../../../main/types/models/Service';
+import container from '../../../main/config/container';
+import { createTestUser } from '../users/userTestUtils';
+import { LeanUser } from '../../../main/types/models/User';
 
 function getRandomPricingFile(name?: string) {
   return generatePricingFile(name);
 }
 
-async function getAllServices(app?: any): Promise<TestService[]> {
+async function createMultipleTestServices(amount: number, organizationId?: string): Promise<LeanService[]> {
+  const services: LeanService[] = [];
+
+  for (let i = 0; i < amount; i++) {
+    const service = await createTestService(organizationId);
+    services.push(service);
+  }
+
+  return services;
+
+}
+
+async function createTestService(organizationId?: string, serviceName?: string): Promise<LeanService> {
+
+  if (!serviceName){
+    serviceName = `test-service-${Date.now()}`;
+  }
+
+  if (!organizationId){
+    const testOrganization = await createTestOrganization();
+    organizationId = testOrganization.id!;
+  }
+
+  const enabledPricingPath = await generatePricingFile(serviceName);
+  const serviceService = container.resolve('serviceService');
+
+  const service = await serviceService.create({path: enabledPricingPath}, "file", organizationId);
+  
+  return service as unknown as LeanService;
+}
+
+async function addArchivedPricingToService(organizationId: string, serviceName: string, version?: string,returnContent: boolean = false): Promise<string> {
+  const pricingPath = await generatePricingFile(serviceName, version);
+  const pricingContent = fs.readFileSync(pricingPath, 'utf-8');
+  const regex = /plans:\s*(?:\r\n|\n|\r)\s+([^\s:]+)/;
+  const fallbackPlan = pricingContent.match(regex)?.[1];
+
+  const serviceService = container.resolve('serviceService');
+  const updatedService = await serviceService.addPricingToService(serviceName!, {path: pricingPath}, "file", organizationId!);
+  
+  const pricingToArchive = pricingPath.split('/').pop()!.replace('.yaml', '');
+
+  if (!pricingToArchive) {
+    throw new Error('No pricing found to archive');
+  }
+
+  await serviceService.updatePricingAvailability(serviceName, pricingToArchive, "archived", {subscriptionPlan: fallbackPlan}, organizationId);
+
+  return returnContent ? pricingContent : pricingToArchive;
+}
+
+async function addPricingToService(organizationId?: string, serviceName?: string, version?: string, returnContent: boolean = false): Promise<string> {
+  const pricingPath = await generatePricingFile(serviceName, version);
+  const pricingContent = fs.readFileSync(pricingPath, 'utf-8');
+  const serviceService = container.resolve('serviceService');
+  await serviceService.addPricingToService(serviceName!, {path: pricingPath}, "file", organizationId!);
+  
+  return returnContent ? pricingContent : pricingPath.split('/').pop()!.replace('.yaml', '');
+}
+
+async function deleteTestService(serviceName: string, organizationId: string): Promise<void> {
+  const serviceService = container.resolve('serviceService');
+  await serviceService.disable(serviceName, organizationId);
+}
+
+async function getAllServices(organizationId: string, app?: any): Promise<TestService[]> {
   let appCopy = app;
 
   if (!app) {
     appCopy = getApp();
   }
 
-  const apiKey = await getTestAdminApiKey();
-  const services = await request(appCopy).get(`${baseUrl}/services`).set('x-api-key', apiKey);
+  const adminUser: LeanUser = await createTestUser('ADMIN');
+  const apiKey = adminUser.apiKey;
+  const services = await request(appCopy).get(`${baseUrl}/organizations/${organizationId}/services`).set('x-api-key', apiKey);
 
   return services.body;
 }
@@ -28,6 +99,7 @@ async function getAllServices(app?: any): Promise<TestService[]> {
 async function getPricingFromService(
   serviceName: string,
   pricingVersion: string,
+  organizationId: string,
   app?: any
 ): Promise<TestPricing> {
   let appCopy = app;
@@ -36,9 +108,10 @@ async function getPricingFromService(
     appCopy = getApp();
   }
 
-  const apiKey = await getTestAdminApiKey();
+  const adminUser: LeanUser = await createTestUser('ADMIN');
+  const apiKey = adminUser.apiKey;
   const pricing = await request(appCopy)
-    .get(`${baseUrl}/services/${serviceName}/pricings/${pricingVersion}`)
+    .get(`${baseUrl}/organizations/${organizationId}/services/${serviceName}/pricings/${pricingVersion}`)
     .set('x-api-key', apiKey);
 
   return pricing.body;
@@ -74,16 +147,17 @@ async function getRandomService(app?: any): Promise<TestService> {
   return randomService;
 }
 
-async function getService(serviceName: string, app?: any): Promise<TestService> {
+async function getService(organizationId: string, serviceName: string, app?: any): Promise<TestService> {
   let appCopy = app;
 
   if (!app) {
     appCopy = await getApp();
   }
 
-  const apiKey = await getTestAdminApiKey();
+  const adminUser: LeanUser = await createTestUser('ADMIN');
+  const apiKey = adminUser.apiKey;
   const response = await request(appCopy)
-    .get(`${baseUrl}/services/${serviceName}`)
+    .get(`${baseUrl}/organizations/${organizationId}/services/${serviceName}`)
     .set('x-api-key', apiKey);
 
   if (response.status !== 200) {
@@ -153,7 +227,7 @@ async function createService(testService?: string) {
   }
 }
 
-async function createRandomService(app?: any) {
+async function createRandomService(organizationId: string,app?: any) {
   let appCopy = app;
 
   if (!app) {
@@ -164,9 +238,10 @@ async function createRandomService(app?: any) {
     uuidv4()
   );
 
-  const apiKey = await getTestAdminApiKey();
+  const adminUser: LeanUser = await createTestUser('ADMIN');
+  const apiKey = adminUser.apiKey;
   const response = await request(appCopy)
-    .post(`${baseUrl}/services`)
+    .post(`${baseUrl}/organizations/${organizationId}/services`)
     .set('x-api-key', apiKey)
     .attach('pricing', pricingFilePath);
 
@@ -179,6 +254,7 @@ async function createRandomService(app?: any) {
 }
 
 async function archivePricingFromService(
+  organizationId: string,
   serviceName: string,
   pricingVersion: string,
   app?: any
@@ -187,7 +263,7 @@ async function archivePricingFromService(
 
   const apiKey = await getTestAdminApiKey();
   const response = await request(appCopy)
-    .put(`${baseUrl}/services/${serviceName}/pricings/${pricingVersion}?availability=archived`)
+    .put(`${baseUrl}/organizations/${organizationId}/services/${serviceName}/pricings/${pricingVersion}?availability=archived`)
     .set('x-api-key', apiKey)
     .send({
       subscriptionPlan: "BASIC"
@@ -204,6 +280,7 @@ async function archivePricingFromService(
 }
 
 async function deletePricingFromService(
+  organizationId: string,
   serviceName: string,
   pricingVersion: string,
   app?: any
@@ -216,7 +293,7 @@ async function deletePricingFromService(
 
   const apiKey = await getTestAdminApiKey();
   const response = await request(appCopy)
-    .delete(`${baseUrl}/services/${serviceName}/pricings/${pricingVersion}`)
+    .delete(`${baseUrl}/organizations/${organizationId}/services/${serviceName}/pricings/${pricingVersion}`)
     .set('x-api-key', apiKey);
 
   if (response.status !== 204 && response.status !== 404) {
@@ -225,13 +302,18 @@ async function deletePricingFromService(
 }
 
 export {
+  addPricingToService,
+  addArchivedPricingToService,
   getAllServices,
   getRandomPricingFile,
   getService,
   getPricingFromService,
   getRandomService,
   createService,
+  createTestService,
+  createMultipleTestServices,
   createRandomService,
   archivePricingFromService,
   deletePricingFromService,
+  deleteTestService,
 };

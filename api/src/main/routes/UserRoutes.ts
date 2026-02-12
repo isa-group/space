@@ -18,6 +18,11 @@ const loadFileRoutes = function (app: express.Application) {
       userController.authenticate
     );
 
+  // Get current user info (requires API Key)
+  app
+    .route(`${baseUrl}/users/me`)
+    .get(userController.getCurrentUser);
+
   // Protected routes (require API Key and appropriate permissions)
   app
     .route(`${baseUrl}/users`)

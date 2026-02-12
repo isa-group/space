@@ -2,6 +2,7 @@ import { getServices } from "@/api/services/servicesApi";
 import { useEffect, useState } from "react";
 import type { Service, ServiceQueryFilters } from "@/types/Services";
 import useAuth from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
 import ServicesLoader from "../../components/services-loader";
 import ServicesFilters from "../../components/services-filters";
 import { useNavigate } from "react-router";
@@ -31,6 +32,7 @@ export default function ServicesPage() {
   const [addModalOpen, setAddModalOpen] = useState(false);
 
   const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
   const navigate = useNavigate();
 
   function handleCreateClose(service?: Service) {
@@ -43,15 +45,17 @@ export default function ServicesPage() {
   }
 
   useEffect(() => {
+    if (!currentOrganization) return;
+    
     setLoading(true);
-    getServices(user.apiKey, { page: 1, limit: 1000, order: 'asc' }).then((data: Service[]) => {
+    getServices(user.apiKey, currentOrganization.id, { page: 1, limit: 1000, order: 'asc' }).then((data: Service[]) => {
       setTotal(data.length);
     });
-    getServices(user.apiKey, filters).then((data: Service[]) => {
+    getServices(user.apiKey, currentOrganization.id, filters).then((data: Service[]) => {
       setServices(data);
       setLoading(false);
     });
-  }, [filters, user.apiKey]);
+  }, [filters, user.apiKey, currentOrganization]);
 
   const totalPages = Math.max(1, Math.ceil(total / (filters.limit ?? 10)));
   const currentPage = filters.page ?? 1;

@@ -9,6 +9,7 @@ import MongooseUserRepository from "../repositories/mongoose/UserRepository";
 import MongoosePricingRepository from "../repositories/mongoose/PricingRepository";
 import MongooseContractRepository from "../repositories/mongoose/ContractRepository";
 import MongooseAnalyticsRepository from "../repositories/mongoose/AnalyticsRepository";
+import MongooseOrganizationRepository from "../repositories/mongoose/OrganizationRepository";
 
 import CacheService from "../services/CacheService";
 import ServiceService from "../services/ServiceService";
@@ -17,18 +18,20 @@ import ContractService from "../services/ContractService";
 import FeatureEvaluationService from "../services/FeatureEvaluationService";
 import EventService from "../services/EventService";
 import AnalyticsService from "../services/AnalyticsService";
+import OrganizationService from "../services/OrganizationService";
 
 dotenv.config();
 
 function initContainer(databaseType: string): AwilixContainer {
   const container: AwilixContainer = createContainer();
-  let userRepository, serviceRepository, pricingRepository, contractRepository, analyticsRepository;
+  let userRepository, serviceRepository, pricingRepository, contractRepository, organizationRepository, analyticsRepository;
   switch (databaseType) {
     case "mongoDB":
       userRepository = new MongooseUserRepository();
       serviceRepository = new MongooseServiceRepository();
       pricingRepository = new MongoosePricingRepository();
       contractRepository = new MongooseContractRepository();
+      organizationRepository = new MongooseOrganizationRepository();
       analyticsRepository = new MongooseAnalyticsRepository();
       break;
     default:
@@ -39,6 +42,7 @@ function initContainer(databaseType: string): AwilixContainer {
     serviceRepository: asValue(serviceRepository),
     pricingRepository: asValue(pricingRepository),
     contractRepository: asValue(contractRepository),
+    organizationRepository: asValue(organizationRepository),
     analyticsRepository: asValue(analyticsRepository),
     userService: asClass(UserService).singleton(),
     serviceService: asClass(ServiceService).singleton(),
@@ -47,6 +51,7 @@ function initContainer(databaseType: string): AwilixContainer {
     analyticsService: asClass(AnalyticsService).singleton(),
     featureEvaluationService: asClass(FeatureEvaluationService).singleton(),
     eventService: asClass(EventService).singleton(),
+    organizationService: asClass(OrganizationService).singleton(),
   });
   return container;
 }

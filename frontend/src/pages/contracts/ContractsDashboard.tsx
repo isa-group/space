@@ -1,5 +1,6 @@
 // React import not required with the new JSX transform
 import useAuth from '@/hooks/useAuth';
+import { useOrganization } from '@/hooks/useOrganization';
 import useContracts from '@/hooks/useContracts';
 import { useEffect, useState, useMemo } from 'react';
 import { getServices, getPricingsFromService } from '@/api/services/servicesApi';
@@ -11,6 +12,7 @@ import ContractsTable from '@/components/contracts/ContractsTable';
 
 export default function ContractsDashboard() {
   const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
   const apiKey = user?.apiKey ?? '';
   const {
     contracts,
@@ -22,16 +24,24 @@ export default function ContractsDashboard() {
     total,
     serviceFilter,
     setServiceFilter,
-  } = useContracts(apiKey);
+  } = useContracts(apiKey, currentOrganization?.id);
 
   const [availableServices, setAvailableServices] = useState<string[]>([]);
   const [selectedService, setSelectedService] = useState<string | undefined>(serviceFilter);
   const [availableVersions, setAvailableVersions] = useState<string[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<string | undefined>(undefined);
 
+  // Reset all states when organization changes
   useEffect(() => {
-    if (!apiKey) return;
-    getServices(apiKey).then(list => {
+    setAvailableServices([]);
+    setSelectedService(undefined);
+    setAvailableVersions([]);
+    setSelectedVersion(undefined);
+  }, [currentOrganization?.id]);
+
+  useEffect(() => {
+    if (!apiKey || !currentOrganization) return;
+    getServices(apiKey, currentOrganization.id).then(list => {
       const names = (list || []).map((s: any) => s.name).filter(Boolean);
       setAvailableServices(names);
       // auto-select the first service by default (do not provide an "All services" option)
@@ -40,22 +50,25 @@ export default function ContractsDashboard() {
       } else {
         setSelectedService(undefined);
       }
-    }).catch(() => setAvailableServices([]));
-  }, [apiKey]);
+    }).catch(() => {
+      setAvailableServices([]);
+      setSelectedService(undefined);
+    });
+  }, [apiKey, currentOrganization]);
 
   useEffect(() => {
     // when selectedService changes, fetch its pricing versions
-    if (!apiKey || !selectedService) {
+    if (!apiKey || !currentOrganization || !selectedService) {
       setAvailableVersions([]);
       setSelectedVersion(undefined);
       return;
     }
-    getPricingsFromService(apiKey, selectedService, 'active')
+    getPricingsFromService(apiKey, currentOrganization.id, selectedService, 'active')
       .then(pricings => {
         setAvailableVersions(pricings.map(p => p.version));
       })
       .catch(() => setAvailableVersions([]));
-  }, [apiKey, selectedService]);
+  }, [apiKey, currentOrganization, selectedService]);
 
   // keep hook filter in sync with selectedService
   useEffect(() => {
@@ -150,9 +163,14 @@ export default function ContractsDashboard() {
               aria-label="Select service"
               value={selectedService ?? ''}
               onChange={e => setSelectedService(e.target.value)}
-              className="appearance-none px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm text-sm w-56 pr-8"
+              disabled={availableServices.length === 0}
+              className="cursor-pointer appearance-none px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm text-sm w-56 pr-8 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {availableServices.map(s => <option key={s} value={s}>{s}</option>)}
+              {availableServices.length === 0 ? (
+                <option value="">No services available</option>
+              ) : (
+                availableServices.map(s => <option key={s} value={s}>{s}</option>)
+              )}
             </select>
             <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
               <svg className="w-4 h-4 text-gray-400" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -163,43 +181,75 @@ export default function ContractsDashboard() {
         </div>
       </div>
 
-  <SummaryCards totalContracts={filteredTotalContracts} totalPlans={distinctPlans} distinctAddOnsCount={distinctAddOnsCount} />
-
-      <div className="flex">
-        <div className="flex-grow">
-          <PlansDistributionChart data={localPlansDistribution} />
+      {availableServices.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 px-4">
+          <div className="max-w-md text-center">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+              <svg className="w-10 h-10 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-3">No data to display</h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              To view contract metrics and analytics, you need to create a service and add contracts for it first.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <a
+                href="/services"
+                className="inline-flex items-center justify-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors cursor-pointer"
+              >
+                Create Service
+              </a>
+              <a
+                href="/contracts"
+                className="inline-flex items-center justify-center px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-lg border border-gray-300 dark:border-gray-600 transition-colors cursor-pointer"
+              >
+                View Contracts
+              </a>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <>
+          <SummaryCards totalContracts={filteredTotalContracts} totalPlans={distinctPlans} distinctAddOnsCount={distinctAddOnsCount} />
 
-      <div className="mt-8">
-          <div className="mt-6">
-            {/* Add-on breakdown charts */}
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200">Add-ons by plan</h3>
-              <div className="text-sm text-gray-500">Shows how many times each add-on was contracted per plan</div>
-            </div>
-            <div className="flex justify-center gap-4">
-              <AddonsByPlanCharts addonsByPlan={localAddonsByPlan} plansOrder={Object.keys(localPlansDistribution)} />
+          <div className="flex">
+            <div className="flex-grow">
+              <PlansDistributionChart data={localPlansDistribution} />
             </div>
           </div>
-          <div className='flex justify-evenly items-center my-8'>
-            <div className='h-0.5 bg-gray-400 w-[45%]'></div>
-            <div className='w-4 h-4 rounded-full border-2 border-gray-500'></div>
-            <div className='h-0.5 bg-gray-400 w-[45%]'></div>
+
+          <div className="mt-8">
+            <div className="mt-6">
+              {/* Add-on breakdown charts */}
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200">Add-ons by plan</h3>
+                <div className="text-sm text-gray-500">Shows how many times each add-on was contracted per plan</div>
+              </div>
+              <div className="flex justify-center gap-4">
+                <AddonsByPlanCharts addonsByPlan={localAddonsByPlan} plansOrder={Object.keys(localPlansDistribution)} />
+              </div>
+            </div>
+            <div className='flex justify-evenly items-center my-8'>
+              <div className='h-0.5 bg-gray-400 w-[45%]'></div>
+              <div className='w-4 h-4 rounded-full border-2 border-gray-500'></div>
+              <div className='h-0.5 bg-gray-400 w-[45%]'></div>
+            </div>
+            <ContractsTable
+              contracts={filteredContracts}
+              page={page}
+              setPage={setPage}
+              limit={limit}
+              setLimit={setLimit}
+              total={total}
+              selectedService={selectedService}
+              availableVersions={availableVersions}
+              selectedVersion={selectedVersion}
+              setSelectedVersion={setSelectedVersion}
+            />
           </div>
-        <ContractsTable
-          contracts={filteredContracts}
-          page={page}
-          setPage={setPage}
-          limit={limit}
-          setLimit={setLimit}
-          total={total}
-          selectedService={selectedService}
-          availableVersions={availableVersions}
-          selectedVersion={selectedVersion}
-          setSelectedVersion={setSelectedVersion}
-        />
-      </div>
+        </>
+      )}
     </div>
   );
 }

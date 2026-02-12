@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiEdit2, FiCopy, FiKey, FiChevronDown, FiChevronUp, FiCheck } from 'react-icons/fi';
 import useAuth from '@/hooks/useAuth';
@@ -16,23 +16,19 @@ import ChangePasswordForm from './ChangePasswordForm';
 const ROLE_COLORS: Record<string, string> = {
   ADMIN:
     'bg-red-100 text-red-700 border-red-300 dark:bg-red-900 dark:text-red-200 dark:border-red-700',
-  MANAGER:
-    'bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-900 dark:text-yellow-200 dark:border-yellow-700',
-  EVALUATOR:
-    'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900 dark:text-indigo-200 dark:border-indigo-700',
+  USER:
+    'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700',
 };
 const ROLE_TEXT_COLORS: Record<string, string> = {
   ADMIN: 'text-red-700 dark:text-red-200',
-  MANAGER: 'text-yellow-700 dark:text-yellow-200',
-  EVALUATOR: 'text-indigo-700 dark:text-indigo-200',
+  USER: 'text-blue-700 dark:text-blue-200',
 };
 const ROLE_BG_HOVER: Record<string, string> = {
   ADMIN: 'hover:bg-red-100 dark:hover:bg-red-900',
-  MANAGER: 'hover:bg-yellow-100 dark:hover:bg-yellow-900',
-  EVALUATOR: 'hover:bg-indigo-100 dark:hover:bg-indigo-900',
+  USER: 'hover:bg-blue-100 dark:hover:bg-blue-900',
 };
 
-const ROLES = ['ADMIN', 'MANAGER', 'EVALUATOR'];
+const ROLES = ['ADMIN', 'USER'];
 
 function censorApiKey(apiKey: string) {
   if (!apiKey) return '';
@@ -54,14 +50,31 @@ export default function UsersList({
   totalPages: number;
   onUserChanged?: () => void;
 }) {
-  const { user: loggedUser, updateUser, logout } = useAuth();
+  const { user: loggedUser, updateUser, logout, refreshOrganizations } = useAuth();
   const [editing, setEditing] = useState<string | null>(null);
   const [usernameDraft, setUsernameDraft] = useState('');
   const [roleDropdown, setRoleDropdown] = useState<string | null>(null);
   const [passwordModal, setPasswordModal] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
-  const [showAlert, alertElement] = useCustomAlert();
-  const [showConfirm, confirmElement] = useCustomConfirm();
+  const {showAlert, alertElement} = useCustomAlert();
+  const {showConfirm, confirmElement} = useCustomConfirm();
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setRoleDropdown(null);
+      }
+    }
+
+    if (roleDropdown !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [roleDropdown]);
 
   async function handleEditUsername(username: string) {
     setEditing(username);
@@ -105,7 +118,8 @@ export default function UsersList({
           showAlert('Role updated successfully', 'info');
           setRoleDropdown(null);
           if (username === loggedUser.username) {
-            if (updated.role === 'EVALUATOR') {
+            if (updated.role === 'USER') {
+              // If admin degrades themselves to USER, logout (they lose access to this page)
               logout();
             } else {
               updateUser({ role: updated.role });
@@ -136,6 +150,8 @@ export default function UsersList({
         if (confirmed) {
           await deleteUser(loggedUser.apiKey, username);
           showAlert('User deleted successfully', 'info');
+          // Refresh organizations in case the deleted user's organization was removed
+          await refreshOrganizations();
           if (onUserChanged) onUserChanged();
         }
       })
@@ -243,7 +259,7 @@ export default function UsersList({
                 </td>
                 {/* Rol with tag and dropdown */}
                 <td className="px-4 py-3">
-                  <div className="relative inline-block">
+                  <div className="relative inline-block" ref={roleDropdown === u.username ? dropdownRef : null}>
                     <button
                       className={`px-3 py-1 rounded-full border text-xs font-semibold flex items-center gap-1 ${
                         ROLE_COLORS[u.role]
@@ -269,14 +285,7 @@ export default function UsersList({
                           className="absolute left-0 mt-2 w-32 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden"
                         >
                           {ROLES.filter(r => {
-                            if (loggedUser?.role === 'MANAGER') {
-                              // A manager can only switch between MANAGER and EVALUATOR, never to ADMIN nor demote an ADMIN
-                              if (u.role === 'ADMIN' || r === 'ADMIN') return false;
-                              if (u.role === 'MANAGER' && r === 'EVALUATOR') return true;
-                              if (u.role === 'EVALUATOR' && r === 'MANAGER') return true;
-                              return false;
-                            }
-                            // Admins can change any role
+                            // Only show roles different from current role
                             return r !== u.role;
                           }).map(r => (
                             <button

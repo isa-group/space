@@ -5,7 +5,7 @@
   "main": "src/main/index.ts",
   "type": "module",
   "scripts": {
-    "dev": "tsx src/main/index.ts",
+    "dev": "tsx --watch src/main/index.ts",
     "dev:setup": "cd docker/dev && docker compose up -d --build",
     "dev:setup:test": "pnpm run generate-test-env && pnpm run dev:setup && tsx scripts/seedMongodb.ts",
     "test": "chmod +x run-tests.sh && ./run-tests.sh",
@@ -56,6 +56,7 @@
     "mongo-seeding": "^4.0.2",
     "mongoose": "^8.14.0",
     "multer": "1.4.5-lts.2",
+    "nock": "^14.0.10",
     "node-fetch": "^3.3.2",
     "pricing4ts": "^0.10.3",
     "redis": "^4.7.0",

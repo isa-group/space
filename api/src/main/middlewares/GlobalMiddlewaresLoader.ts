@@ -1,8 +1,8 @@
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import { apiKeyAuthMiddleware } from './ApiKeyAuthMiddleware';
 import { analyticsTrackerMiddleware } from './AnalyticsMiddleware';
+import { authenticateApiKeyMiddleware } from './AuthMiddleware';
 
 interface OriginValidatorCallback {
   (err: Error | null, allow?: boolean): void;
@@ -27,6 +27,15 @@ const corsOptions: cors.CorsOptions = {
 const loadGlobalMiddlewares = (app: express.Application) => {
   app.use(express.json({limit: '2mb'}));
   app.use(express.urlencoded({limit: '2mb', extended: true}));
+  
+  // This replacer will convert Maps to plain objects in JSON responses
+  app.set('json replacer', (key: any, value: any) => {
+    if (value instanceof Map) {
+      return Object.fromEntries(value);
+    }
+    return value;
+  });
+  
   app.use(cors(corsOptions));
   app.options("*", cors(corsOptions)); // maneja todas las preflight
 
@@ -43,9 +52,8 @@ const loadGlobalMiddlewares = (app: express.Application) => {
   ));
   app.use(express.static('public'));
   
-  // Apply API Key authentication middleware to all routes
-  // except those defined as public
-  app.use(apiKeyAuthMiddleware);
+  // Populate request with user info based on API key
+  app.use(authenticateApiKeyMiddleware);
 
   // Apply analytics tracking middleware
   app.use(analyticsTrackerMiddleware);

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 
-export type CustomAlertType = 'info' | 'warning' | 'danger';
+export type CustomAlertType = 'success' | 'info' | 'warning' | 'danger';
 
 interface CustomAlertProps {
   message: string;
@@ -27,6 +27,28 @@ export default function CustomAlert({ message, onClose, type = 'info' }: CustomA
   let bg = '';
   let hover = '';
   switch (type) {
+    case 'success':
+      icon = (
+        <svg
+          className="w-10 h-10 text-green-400 dark:text-green-300 mb-2"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          viewBox="0 0 24 24"
+        >
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+      );
+      color = 'text-green-700 dark:text-green-200';
+      border = 'border-green-200 dark:border-green-500';
+      bg = 'bg-green-500 dark:bg-green-600';
+      hover = 'hover:bg-green-600 dark:hover:bg-green-700';
+      break;
     case 'danger':
       icon = (
         <svg

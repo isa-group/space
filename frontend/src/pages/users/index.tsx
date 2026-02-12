@@ -10,26 +10,23 @@ import { getUsers } from '@/api/users/usersApi';
 interface UserEntry {
   username: string;
   apiKey: string;
-  role: 'ADMIN' | 'MANAGER' | 'EVALUATOR';
+  role: 'ADMIN' | 'USER';
 }
 
 export default function UsersPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState<UserEntry[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<{
     search: string;
     pageSize: number;
-    sortBy: 'username' | 'role';
-    sortOrder: 'asc' | 'desc';
   }>({
     search: '',
     pageSize: 10,
-    sortBy: 'username',
-    sortOrder: 'asc',
   });
   const [page, setPage] = useState(1);
-  const [showAlert, alertElement] = useCustomAlert();
+  const {showAlert, alertElement} = useCustomAlert();
   const [refreshKey, setRefreshKey] = useState(0);
   const [addUserOpen, setAddUserOpen] = useState(false);
 
@@ -39,42 +36,34 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
+    if (!user?.apiKey) return;
+    
     setLoading(true);
-    getUsers(user.apiKey)
-      .then((data: UserEntry[]) => setUsers(data))
-      .catch((e) => showAlert(e.message ?? 'Failed to fetch users', 'danger'))
+    const offset = (page - 1) * filters.pageSize;
+    getUsers(user.apiKey, offset, filters.pageSize)
+      .then((response) => {
+        const data = Array.isArray(response.data) ? response.data : [];
+        setUsers(data);
+        setTotalUsers(response.pagination?.total ?? 0);
+      })
+      .catch((e) => {
+        showAlert(e.message ?? 'Failed to fetch users', 'danger');
+        setUsers([]);
+        setTotalUsers(0);
+      })
       .finally(() => setLoading(false));
-  }, [user.apiKey, filters, refreshKey]);
+  }, [user?.apiKey, filters, page, refreshKey]);
 
-  // Filtros y ordenación en cliente
+  // Cliente-side filtering por búsqueda
   const filteredUsers = useMemo(() => {
-    let filtered = users;
-    if (filters.search) {
-      filtered = filtered.filter(u =>
-        u.username.toLowerCase().includes(filters.search.toLowerCase())
-      );
-    }
-    filtered = [...filtered].sort((a, b) => {
-      let vA = a[filters.sortBy as 'username' | 'role'];
-      let vB = b[filters.sortBy as 'username' | 'role'];
-      if (typeof vA === 'string' && typeof vB === 'string') {
-        vA = vA.toLowerCase();
-        vB = vB.toLowerCase();
-      }
-      if (vA < vB) return filters.sortOrder === 'asc' ? -1 : 1;
-      if (vA > vB) return filters.sortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
-    return filtered;
-  }, [users, filters]);
+    if (!Array.isArray(users)) return [];
+    if (!filters.search) return users;
+    return users.filter(u =>
+      u.username.toLowerCase().includes(filters.search.toLowerCase())
+    );
+  }, [users, filters.search]);
 
-  // Paginación en cliente
-  const pagedUsers = useMemo(() => {
-    const start = (page - 1) * filters.pageSize;
-    return filteredUsers.slice(start, start + filters.pageSize);
-  }, [filteredUsers, page, filters.pageSize]);
-
-  const totalPages = Math.ceil(filteredUsers.length / filters.pageSize) || 1;
+  const totalPages = Math.ceil(totalUsers / filters.pageSize) || 1;
 
   return (
     <div className="max-w-3xl mx-auto py-10 px-2 md:px-0">
@@ -102,7 +91,7 @@ export default function UsersPage() {
         setFilters={setFilters}
       />
       <UsersList
-        users={pagedUsers}
+        users={filteredUsers}
         loading={loading}
         page={page}
         setPage={setPage}

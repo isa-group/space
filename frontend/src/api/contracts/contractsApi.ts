@@ -9,12 +9,13 @@ const DEFAULT_TIMEOUT = 8000;
  */
 export async function getContracts(
   apiKey: string,
+  organizationId: string,
   params: Record<string, any> = {},
   body: any = undefined
 ): Promise<{ data: Subscription[]; total?: number }> {
   try {
     const response = await axios.request({
-      url: '/contracts',
+      url: `/organizations/${organizationId}/contracts`,
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

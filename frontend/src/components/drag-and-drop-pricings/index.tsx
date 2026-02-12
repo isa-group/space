@@ -5,6 +5,7 @@ import { FiZap, FiArchive } from 'react-icons/fi';
 import { useCustomConfirm } from '@/hooks/useCustomConfirm';
 import { deletePricingVersion } from '@/api/services/servicesApi';
 import useAuth from '@/hooks/useAuth';
+import { useOrganization } from '@/hooks/useOrganization';
 import { useCustomAlert } from '@/hooks/useCustomAlert';
 
 interface DragDropPricingsProps {
@@ -25,10 +26,11 @@ export default function DragDropPricings({
     null
   );
   const [overDelete, setOverDelete] = useState(false);
-  const [showConfirm, confirmElement] = useCustomConfirm();
-  const [showAlert, alertElement] = useCustomAlert();
+  const {showConfirm, confirmElement} = useCustomConfirm();
+  const {showAlert, alertElement} = useCustomAlert();
 
   const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
   const serviceName = window.location.pathname.split('/').pop() || '';
 
   function handleDragStart(e: React.DragEvent, pricing: Pricing, from: 'active' | 'archived') {
@@ -70,13 +72,13 @@ export default function DragDropPricings({
   // Zona de eliminación
   function handleDeleteDrop(e: React.DragEvent) {
     e.preventDefault();
-    if (dragged) {
+    if (dragged && currentOrganization?.id) {
       showConfirm(
         `Are you sure you want to delete version ${dragged.pricing.version}?`,
         'danger'
       ).then(confirmed => {
-        if (confirmed) {
-          deletePricingVersion(user.apiKey, serviceName, dragged.pricing.version)
+        if (confirmed && currentOrganization?.id) {
+          deletePricingVersion(user.apiKey, currentOrganization.id, serviceName, dragged.pricing.version)
             .then(isDeleted => {
               if (isDeleted) {
                 onMove(dragged.pricing, 'deleted');

@@ -1,0 +1,287 @@
+@startuml Domain Model
+
+' Styles
+skinparam classAttributeIconSize 0
+skinparam class {
+    BackgroundColor<<Entity>> LightBlue
+    BackgroundColor<<ValueObject>> LightYellow
+    BackgroundColor<<Enum>> LightGreen
+}
+
+' Enumerations
+enum UserRole <<Enum>> {
+    ADMIN
+    USER
+}
+
+enum OrganizationApiKeyRole <<Enum>> {
+    ALL
+    MANAGEMENT
+    EVALUATION
+}
+
+enum OrganizationUserRole <<Enum>> {
+    ADMIN
+    MANAGER
+    EVALUATOR
+}
+
+enum ValueType <<Enum>> {
+    BOOLEAN
+    TEXT
+    NUMERIC
+}
+
+enum FeatureType <<Enum>> {
+    INFORMATION
+    INTEGRATION
+    DOMAIN
+    AUTOMATION
+    MANAGEMENT
+    GUARANTEE
+    SUPPORT
+    PAYMENT
+}
+
+enum UsageLimitType <<Enum>> {
+    RENEWABLE
+    NON_RENEWABLE
+}
+
+enum PeriodUnit <<Enum>> {
+    SEC
+    MIN
+    HOUR
+    DAY
+    MONTH
+    YEAR
+}
+
+' Main Entities
+class User <<Entity>> {
+    - username: String
+    - password: String
+    - role: UserRole
+    - createdAt: Date
+    - updatedAt: Date
+    --
+    + verifyPassword(password: String): Boolean
+}
+
+class Organization <<Entity>>{
+    - id: String
+    - name: String
+    - owner: User
+    - apiKeys: OrganizationApiKey[]
+    - members: OrganizationUser[]
+    - createdAt: Date
+    - updatedAt: Date
+}
+
+class Service <<Entity>> {
+    - name: String
+    - disabled: Boolean
+    - activePricings: Map<String, PricingData>
+    - archivedPricings: Map<String, PricingData>
+}
+
+class Pricing <<Entity>> {
+    - version: String
+    - currency: String
+    - createdAt: Date
+    - features: Map<String, Feature>
+    - usageLimits: Map<String, UsageLimit>
+    - plans: Map<String, Plan>
+    - addOns: Map<String, AddOn>
+}
+
+class Contract <<Entity>> {
+    - userContact: UserContact
+    - billingPeriod: BillingPeriod
+    - usageLevels: Map<String, Map<String, UsageLevel>>
+    - contractedServices: Map<String, String>
+    - subscriptionPlans: Map<String, String>
+    - subscriptionAddOns: Map<String, Map<String, Number>>
+    - history: ContractHistory[]
+}
+
+class AnalyticsDay <<Entity>> {
+    - date: String
+    - apiCalls: Number
+    - evaluations: Number
+}
+
+' Value Objects
+class UserContact <<ValueObject>> {
+    - userId: String
+    - username: String
+    - firstName: String
+    - lastName: String
+    - email: String
+    - phone: String
+}
+
+class OrganizationUser <<ValueObject>> {
+    - userId: String
+    - role: OrganizationUserRole
+}
+
+class OrganizationApiKey <<ValueObject>> {
+    - key: String
+    - scope: OrganizationApiKeyRole
+    - createdAt: Date
+}
+
+class BillingPeriod <<ValueObject>> {
+    - startDate: Date
+    - endDate: Date
+    - autoRenew: Boolean
+    - renewalDays: Number
+}
+
+class UsageLevel <<ValueObject>> {
+    - resetTimeStamp: Date
+    - consumed: Number
+}
+
+class ContractHistory <<ValueObject>> {
+    - startDate: Date
+    - endDate: Date
+    - contractedServices: Map<String, String>
+    - subscriptionPlans: Map<String, String>
+    - subscriptionAddOns: Map<String, Map<String, Number>>
+}
+
+class PricingData <<ValueObject>> {
+    - id: ObjectId
+    - url: String
+}
+
+class Feature <<ValueObject>> {
+    - name: String
+    - description: String
+    - valueType: ValueType
+    - defaultValue: Mixed
+    - value: Mixed
+    - type: FeatureType
+    - integrationType: String
+    - pricingUrls: String[]
+    - automationType: String
+    - paymentType: String
+    - docUrl: String
+    - expression: String
+    - serverExpression: String
+    - render: String
+    - tag: String
+}
+
+class UsageLimit <<ValueObject>> {
+    - name: String
+    - description: String
+    - valueType: ValueType
+    - defaultValue: Mixed
+    - value: Mixed
+    - type: UsageLimitType
+    - trackable: Boolean
+    - period: Period
+    - linkedFeatures: String[]
+}
+
+class Period <<ValueObject>> {
+    - value: Number
+    - unit: PeriodUnit
+}
+
+class Plan <<ValueObject>> {
+    - name: String
+    - description: String
+    - price: Mixed
+    - private: Boolean
+    - features: Map<String, Mixed>
+    - usageLimits: Map<String, Mixed>
+}
+
+class AddOn <<ValueObject>> {
+    - name: String
+    - description: String
+    - private: Boolean
+    - price: Mixed
+    - availableFor: String[]
+    - dependsOn: String[]
+    - excludes: String[]
+    - features: Map<String, Mixed>
+    - usageLimits: Map<String, Mixed>
+    - usageLimitsExtensions: Map<String, Number>
+    - subscriptionConstraints: SubscriptionConstraint
+}
+
+class SubscriptionConstraint <<ValueObject>> {
+    - minQuantity: Number
+    - maxQuantity: Number
+    - quantityStep: Number
+}
+
+' Relationships
+User "1" <-- "0..*" OrganizationUser: is
+User "1" --> "0..*" Organization: owns
+
+Contract *-- "1" UserContact : contains
+Contract *-- "1" BillingPeriod : contains
+Contract *-- "0..*" UsageLevel : tracks
+Contract *-- "0..*" ContractHistory : history
+
+Organization "1" <-- "0..*" OrganizationUser : has
+Organization *-- "0..*" OrganizationApiKey : has
+Organization *-- "0..*" Service
+
+OrganizationUser -- OrganizationUserRole : has
+
+Service *-- "1..*" PricingData : activePricings
+Service *-- "0..*" PricingData : archivedPricings
+Service "0..*" <-- "0..*" ContractHistory : records
+Service "1..*" <-- "0..*" Contract : subscribes to
+
+PricingData "0..*" --> "1" Pricing : references
+
+Pricing *-- "0..*" Feature : defines
+Pricing *-- "0..*" UsageLimit : defines
+Pricing *-- "0..*" Plan : offers
+Pricing *-- "0..*" AddOn : offers
+
+UsageLimit *-- "0..1" Period : has
+AddOn *-- "0..1" SubscriptionConstraint : has
+
+Feature -- ValueType : uses
+Feature -- FeatureType : classified by
+UsageLimit -- UsageLimitType : classified by
+UsageLimit -- ValueType : uses
+Period -- PeriodUnit : uses
+
+User -- UserRole : has
+OrganizationApiKey -- OrganizationApiKeyRole : has
+
+' Notes
+note right of Service
+    A service can have multiple
+    active pricings (one per version)
+    and archived pricings
+end note
+
+note right of Contract
+    Tracks resource consumption
+    per service and usage limit
+end note
+
+note right of Pricing
+    Defines the pricing structure
+    for a specific version
+    of a service
+end note
+
+note bottom of AddOn
+    Add-ons can have
+    dependencies and exclusions
+    between each other
+end note
+
+@enduml
