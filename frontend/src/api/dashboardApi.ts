@@ -10,7 +10,10 @@ export async function getContractsCount(apiKey: string, organizationId: string):
     },
     params: { limit: 1 }, // Solo necesitamos el total
   });
-  // El total se puede inferir del header X-Total-Count si está disponible, o del length
+  const totalHeader = response.headers?.['x-total-count'] ?? response.headers?.['X-Total-Count'];
+  if (totalHeader) {
+    return Number(totalHeader);
+  }
   if (Array.isArray(response.data)) {
     return response.data.length;
   }

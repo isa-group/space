@@ -28,21 +28,19 @@ class ContractController {
     try {
       const queryParams = this._transformIndexQueryParams(req.query);
       const filters = req.body?.filters;
+      const merged = filters ? { ...queryParams, filters } : queryParams;
       let organizationId = req.org?.id ?? req.params.organizationId;
-      
-      if (req.user && req.user.role === 'ADMIN' && !req.org?.id) {
+
+      if (!req.params.organizationId && req.user && req.user.role === 'ADMIN' && !req.org?.id) {
         organizationId = undefined;
       }
 
-      if (filters) {
-        // merge filters into top-level params and delegate to index which will call repository.findByFilters
-        const merged = { ...queryParams, filters };
-        const contracts = await this.contractService.index(merged, organizationId);
-        res.json(contracts);
-        return;
-      }
+      const [contracts, total] = await Promise.all([
+        this.contractService.index(merged, organizationId),
+        this.contractService.count(merged, organizationId),
+      ]);
 
-      const contracts = await this.contractService.index(queryParams, organizationId);
+      res.set('X-Total-Count', total.toString());
       res.json(contracts);
     } catch (err: any) {
       if (err.message.toLowerCase().includes('validation of query params')) {
@@ -71,19 +69,8 @@ class ContractController {
     try {
       const contractData: ContractToCreate = req.body;
       const authOrganizationId = req.org?.id ?? req.params.organizationId;
-      
-      if (req.user?.role !== 'ADMIN') {
-        if (!contractData.organizationId || contractData.organizationId !== authOrganizationId) {
-          res.status(403).send({ error: 'PERMISSION ERROR: Organization ID mismatch' });
-          return;
-        }
-      }else{
-        if (!contractData.organizationId) {
-          res.status(400).send({ error: 'INVALID DATA: organizationId is required in the contract' });
-          return;
-        }
-      }
 
+      contractData.organizationId = authOrganizationId;
 
       const contract = await this.contractService.create(contractData);
       res.status(201).json(contract);

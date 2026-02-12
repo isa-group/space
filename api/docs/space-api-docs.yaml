@@ -105,7 +105,7 @@ tags:
 paths:
   /users/authenticate:
     post:
-      summary: Authenticate user and get User API Key
+      summary: Authenticate user and obtain API Key
       description: |
         Authenticates a user with username and password and returns a User API Key 
         that can be used for subsequent authenticated requests.
@@ -122,58 +122,43 @@ paths:
           application/json:
             schema:
               type: object
+              description: User credentials
+              properties:
+                username:
+                  $ref: '#/components/schemas/Username'
+                password:
+                  $ref: '#/components/schemas/Password'
               required:
                 - username
                 - password
-              properties:
-                username:
-                  type: string
-                  minLength: 3
-                  maxLength: 30
-                  example: john_doe
-                password:
-                  type: string
-                  minLength: 5
-                  example: securePassword123
       responses:
         '200':
-          description: Successfully authenticated
+          description: Successful authentication
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   username:
-                    type: string
+                    $ref: '#/components/schemas/Username'
                   apiKey:
-                    type: string
-                    description: User API Key for subsequent authenticated requests
+                    $ref: '#/components/schemas/ApiKey'
                   role:
-                    type: string
-                    enum: [ADMIN, USER]
+                    $ref: '#/components/schemas/Role'
         '401':
           description: Invalid credentials
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: Invalid credentials
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Invalid credentials
         '422':
-          description: Request validation error
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+          $ref: '#/components/responses/UnprocessableEntity'
 
   /users:
     get:
-      summary: List all users with optional filtering and pagination
+      summary: Get all users
       description: |
         Retrieves a paginated list of users, with optional filtering by username and search offset/limit.
 
@@ -304,18 +289,20 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: "INVALID DATA: Limit must be between 1 and 50"
+                $ref: '#/components/schemas/Error'
         '401':
-          description: Unauthorized or missing API key
+          description: Authentication required
         '403':
-          description: Forbidden - ADMIN role required to list all users (when not searching)
+          description: Insufficient permissions
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     post:
-      summary: Create new user
+      summary: Create a new user
       description: |
         Creates a new user account with the specified credentials and role.
 
@@ -336,28 +323,10 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - username
-                - password
-              properties:
-                username:
-                  type: string
-                  minLength: 3
-                  maxLength: 30
-                  example: alice_smith
-                password:
-                  type: string
-                  minLength: 5
-                  example: password456
-                role:
-                  type: string
-                  enum: [ADMIN, USER]
-                  default: USER
-                  example: USER
+              $ref: '#/components/schemas/UserInput'
       responses:
         '201':
-          description: User created successfully
+          description: User created
           content:
             application/json:
               schema:
@@ -365,16 +334,17 @@ paths:
         '400':
           description: Invalid user data or username already exists
         '403':
-          description: Forbidden - cannot create ADMIN user (requires ADMIN API key)
+          description: Insufficient permissions
+        '404':
+          description: User already exists or not found
         '422':
-          description: Validation error
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          description: Unexpected error
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+                $ref: '#/components/schemas/Error'
 
   /users/me:
     get:
@@ -396,7 +366,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                type: object
+                properties:
+                  username:
+                    $ref: '#/components/schemas/Username'
+                  role:
+                    $ref: '#/components/schemas/Role'
         '401':
           description: Unauthorized or missing API key
 
@@ -417,25 +392,26 @@ paths:
       security:
         - ApiKeyAuth: []
       parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-          example: john_doe
+        - $ref: '#/components/parameters/Username'
       responses:
         '200':
-          description: User details
+          description: Operation Completed
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
         '401':
-          description: Unauthorized
+          description: Authentication required
         '403':
-          description: Forbidden - ADMIN role required
+          description: Insufficient permissions
         '404':
           description: User not found
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     put:
       summary: Update user
@@ -453,32 +429,16 @@ paths:
       security:
         - ApiKeyAuth: []
       parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/Username'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                username:
-                  type: string
-                  example: new_username
-                password:
-                  type: string
-                  minLength: 5
-                  example: newPassword456
-                role:
-                  type: string
-                  enum: [ADMIN, USER]
-                  example: USER
+              $ref: '#/components/schemas/UserUpdate'
       responses:
         '200':
-          description: User updated successfully
+          description: Operation Completed
           content:
             application/json:
               schema:
@@ -486,11 +446,17 @@ paths:
         '400':
           description: Invalid update data
         '403':
-          description: Forbidden - insufficient permissions (ADMIN required to change role)
+          description: Insufficient permissions
         '404':
           description: User not found
-        '409':
-          description: Username already taken
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     delete:
       summary: Delete user
@@ -516,24 +482,26 @@ paths:
       security:
         - ApiKeyAuth: []
       parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/Username'
       responses:
         '204':
-          description: User deleted successfully
+          description: User deleted
         '401':
-          description: Unauthorized
+          description: Authentication required
         '403':
-          description: Forbidden - cannot delete last ADMIN or insufficient permissions
+          description: Insufficient permissions
         '404':
           description: User not found
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /users/{username}/api-key:
     put:
-      summary: Regenerate user API Key
+      summary: Regenerate user's API Key
       description: |
         Generates a new User API Key for the specified user. This immediately invalidates 
         any previous API key for that user.
@@ -547,32 +515,33 @@ paths:
       security:
         - ApiKeyAuth: []
       parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/Username'
       responses:
         '200':
-          description: New API Key generated
+          description: API Key regenerated
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   apiKey:
-                    type: string
-                    example: usr_random1234567890abcdef
+                    $ref: '#/components/schemas/ApiKey'
         '401':
-          description: Unauthorized
+          description: Authentication required
         '403':
-          description: Forbidden - ADMIN role required
+          description: Insufficient permissions
         '404':
           description: User not found
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /users/{username}/role:
     put:
-      summary: Change user role
+      summary: Change user's role
       description: |
         Changes a user's role between ADMIN and USER.
 
@@ -591,11 +560,7 @@ paths:
       security:
         - ApiKeyAuth: []
       parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/Username'
       requestBody:
         required: true
         content:
@@ -606,12 +571,10 @@ paths:
                 - role
               properties:
                 role:
-                  type: string
-                  enum: [ADMIN, USER]
-                  example: ADMIN
+                  $ref: '#/components/schemas/Role'
       responses:
         '200':
-          description: User role updated
+          description: Role updated
           content:
             application/json:
               schema:
@@ -619,9 +582,17 @@ paths:
         '400':
           description: Invalid role value
         '403':
-          description: Forbidden - cannot demote last ADMIN user
+          description: Insufficient permissions
         '404':
           description: User not found
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /organizations:
     get:
@@ -2291,13 +2262,22 @@ paths:
     get:
       summary: List contracts in organization
       description: |
-        Lists all contracts in the organization.
+        Lists all contracts in the organization with optional filtering and pagination.
 
         **Authentication**: User API Key
 
         **Permission**: 
         - USER user: must be an organization member with any role (OWNER/ADMIN/MANAGER/EVALUATOR)
         - ADMIN user: can view contracts in any organization
+
+        **Request Filters**:
+        - Query parameters (`/organizations/{id}/contracts?username=john&limit=50`): Basic filters with pagination
+        - Request body (with filters object): Complex/advanced filtering via JSON body
+        - Combined: Both query and body filters are merged (body filters override query filters)
+
+        **Response Format**:
+        - Plain array of Contract objects (not paginated wrapper)
+        - Total count provided via `X-Total-Count` response header
 
       tags:
         - Contracts
@@ -2309,55 +2289,67 @@ paths:
           required: true
           schema:
             type: string
+          description: The organization ID (must be valid MongoDB ObjectId)
+          example: 507f1f77bcf86cd799439011
         - name: username
           in: query
           required: false
           schema:
             type: string
           description: Filter contracts by username (case-insensitive regex match)
+          example: john_doe
         - name: firstName
           in: query
           required: false
           schema:
             type: string
           description: Filter contracts by user's first name (case-insensitive regex match)
+          example: John
         - name: lastName
           in: query
           required: false
           schema:
             type: string
           description: Filter contracts by user's last name (case-insensitive regex match)
+          example: Doe
         - name: email
           in: query
           required: false
           schema:
             type: string
           description: Filter contracts by user email (case-insensitive regex match)
+          example: john@example.com
         - name: page
           in: query
           required: false
           schema:
             type: integer
             default: 1
+            minimum: 1
           description: |
             Page number for pagination (1-based). 
             **Note**: Ignored when `offset > 0`.
+          example: 1
         - name: offset
           in: query
           required: false
           schema:
             type: integer
             default: 0
+            minimum: 0
           description: |
             Number of contracts to skip (0-based offset). 
             **Precedence**: When `offset > 0`, it overrides the `page` parameter.
+          example: 0
         - name: limit
           in: query
           required: false
           schema:
             type: integer
             default: 20
+            minimum: 1
           description: Maximum number of contracts to return per page
+          example: 20
         - name: sort
           in: query
           required: false
@@ -2365,6 +2357,7 @@ paths:
             type: string
             enum: [firstName, lastName, username, email]
           description: Field to sort contracts by
+          example: firstName
         - name: order
           in: query
           required: false
@@ -2373,17 +2366,52 @@ paths:
             enum: [asc, desc]
             default: asc
           description: Sort order (ascending or descending)
+          example: asc
       responses:
         '200':
-          description: List of contracts
+          description: List of contracts (plain array with total count in header)
+          headers:
+            X-Total-Count:
+              schema:
+                type: integer
+              description: Total number of contracts matching the filters
+              example: 25
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Contract'
+              examples:
+                contractsList:
+                  summary: List of contracts for organization
+                  value:
+                    - id: 507f1f77bcf86cd799439011
+                      userId: user123
+                      organizationId: org456
+                      userContact:
+                        username: john_doe
+                        firstName: John
+                        lastName: Doe
+                        email: john@example.com
+                      billingPeriod:
+                        startDate: "2024-01-01"
+                        endDate: "2024-12-31"
+                      contractedServices: []
+                      subscriptionPlans: []
+                      subscriptionAddons: []
+                      subscriptionSnapshot: {}
+                      usageLevels: []
+        '400':
+          description: Invalid query parameters or request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - missing or invalid API key
         '403':
-          description: Forbidden
+          description: Forbidden - not a member of this organization
 
     post:
       summary: Create contract in organization
@@ -2407,11 +2435,7 @@ paths:
           schema:
             type: string
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
+        $ref: '#/components/requestBodies/SubscriptionCreation'
       responses:
         '201':
           description: Contract created
@@ -2513,11 +2537,7 @@ paths:
           schema:
             type: string
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
+        $ref: '#/components/requestBodies/SubscriptionCompositionNovation'
       responses:
         '200':
           description: Contract updated
@@ -2564,16 +2584,25 @@ paths:
     get:
       summary: List all contracts
       description: |
-        Lists all contracts in the organization.
+        Lists all contracts with optional filtering and pagination.
 
         **Authentication**: User API Key (ADMIN) | Organization API Key
 
         **User Permission**: 
-        - ADMIN user: can view all contracts from any organization
+        - ADMIN user: can view all contracts from any organization (without organizationId filter)
 
         **Organization Permission**:
         - ALL scope: can view all contracts from the organization
         - MANAGEMENT scope: can view all contracts from the organization
+
+        **Request Filters**:
+        - Query parameters (`/contracts?username=john&limit=50`): Basic filters with pagination
+        - Request body (`POST` with filters object): Complex/advanced filtering via JSON body
+        - Combined: Both query and body filters are merged (body filters override query filters)
+
+        **Response Format**:
+        - Plain array of Contract objects (not paginated wrapper)
+        - Total count provided via `X-Total-Count` response header
 
       tags:
         - Contracts
@@ -2586,49 +2615,59 @@ paths:
           schema:
             type: string
           description: Filter contracts by username (case-insensitive regex match)
+          example: john_doe
         - name: firstName
           in: query
           required: false
           schema:
             type: string
           description: Filter contracts by user's first name (case-insensitive regex match)
+          example: John
         - name: lastName
           in: query
           required: false
           schema:
             type: string
           description: Filter contracts by user's last name (case-insensitive regex match)
+          example: Doe
         - name: email
           in: query
           required: false
           schema:
             type: string
           description: Filter contracts by user email (case-insensitive regex match)
+          example: john@example.com
         - name: page
           in: query
           required: false
           schema:
             type: integer
             default: 1
+            minimum: 1
           description: |
             Page number for pagination (1-based). 
             **Note**: Ignored when `offset > 0`.
+          example: 1
         - name: offset
           in: query
           required: false
           schema:
             type: integer
             default: 0
+            minimum: 0
           description: |
             Number of contracts to skip (0-based offset). 
             **Precedence**: When `offset > 0`, it overrides the `page` parameter.
+          example: 0
         - name: limit
           in: query
           required: false
           schema:
             type: integer
             default: 20
+            minimum: 1
           description: Maximum number of contracts to return per page
+          example: 20
         - name: sort
           in: query
           required: false
@@ -2636,6 +2675,7 @@ paths:
             type: string
             enum: [firstName, lastName, username, email]
           description: Field to sort contracts by
+          example: firstName
         - name: order
           in: query
           required: false
@@ -2644,15 +2684,68 @@ paths:
             enum: [asc, desc]
             default: asc
           description: Sort order (ascending or descending)
+          example: asc
       responses:
         '200':
-          description: List of all contracts
+          description: List of contracts (plain array with total count in header)
+          headers:
+            X-Total-Count:
+              schema:
+                type: integer
+              description: Total number of contracts matching the filters
+              example: 42
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Contract'
+              examples:
+                withFilters:
+                  summary: Contracts filtered by username and sorted by firstName
+                  value:
+                    - id: 507f1f77bcf86cd799439011
+                      userId: user123
+                      organizationId: org456
+                      userContact:
+                        username: john_doe
+                        firstName: John
+                        lastName: Doe
+                        email: john@example.com
+                      billingPeriod:
+                        startDate: "2024-01-01"
+                        endDate: "2024-12-31"
+                      contractedServices: []
+                      subscriptionPlans: []
+                      subscriptionAddons: []
+                      subscriptionSnapshot: {}
+                      usageLevels: []
+                    - id: 507f1f77bcf86cd799439012
+                      userId: user124
+                      organizationId: org456
+                      userContact:
+                        username: johnny_test
+                        firstName: Johnny
+                        lastName: Test
+                        email: johnny@example.com
+                      billingPeriod:
+                        startDate: "2024-01-01"
+                        endDate: "2024-12-31"
+                      contractedServices: []
+                      subscriptionPlans: []
+                      subscriptionAddons: []
+                      subscriptionSnapshot: {}
+                      usageLevels: []
+        '400':
+          description: Invalid query parameters or request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - missing or invalid API key
+        '403':
+          description: Forbidden - insufficient permissions
 
     post:
       summary: Create contract
@@ -2673,11 +2766,7 @@ paths:
       security:
         - ApiKeyAuth: []
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
+        $ref: '#/components/requestBodies/SubscriptionCreation'
       responses:
         '201':
           description: Contract created
@@ -2765,11 +2854,7 @@ paths:
           schema:
             type: string
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
+        $ref: '#/components/requestBodies/SubscriptionCompositionNovation'
       responses:
         '200':
           description: Contract updated
@@ -2831,11 +2916,7 @@ paths:
           schema:
             type: string
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
+        $ref: '#/components/requestBodies/SubscriptionUsageLevelsUpdate'
       responses:
         '200':
           description: Usage levels reset
@@ -2870,11 +2951,7 @@ paths:
           schema:
             type: string
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
+        $ref: '#/components/requestBodies/SubscriptionUserContactNovation'
       responses:
         '200':
           description: Contact updated
@@ -2909,11 +2986,7 @@ paths:
           schema:
             type: string
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
+        $ref: '#/components/requestBodies/SubscriptionBillingNovation'
       responses:
         '200':
           description: Billing period updated
@@ -3414,19 +3487,94 @@ paths:
 
 components:
   schemas:
+    Username:
+      type: string
+      description: Username of the user
+      example: johndoe
+      minLength: 3
+      maxLength: 30
+
+    Password:
+      type: string
+      description: Password of the user
+      example: j0hnD03
+      minLength: 5
+
+    Role:
+      type: string
+      description: Role of the user
+      enum: [ADMIN, USER]
+      example: USER
+
+    ApiKey:
+      type: string
+      description: Random 32 byte string encoded in hexadecimal
+      example: usr_9cedd24632167a021667df44a26362dfb778c1566c3d4564e132cb58770d8c67
+      pattern: '^usr_[a-f0-9]{64}$'
+      readOnly: true
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    FieldValidationError:
+      type: object
+      properties:
+        type:
+          type: string
+          example: field
+        msg:
+          type: string
+          example: Password must be a string
+        path:
+          type: string
+          example: password
+        location:
+          type: string
+          example: body
+        value:
+          example: invalid
+      required:
+        - type
+        - msg
+        - path
+        - location
+
+    UserInput:
+      type: object
+      properties:
+        username:
+          $ref: '#/components/schemas/Username'
+        password:
+          $ref: '#/components/schemas/Password'
+        role:
+          $ref: '#/components/schemas/Role'
+      required:
+        - username
+        - password
+
+    UserUpdate:
+      type: object
+      properties:
+        username:
+          $ref: '#/components/schemas/Username'
+        password:
+          $ref: '#/components/schemas/Password'
+        role:
+          $ref: '#/components/schemas/Role'
     User:
       type: object
       properties:
         username:
-          type: string
-          example: john_doe
+          $ref: '#/components/schemas/Username'
         apiKey:
-          type: string
-          example: usr_abc123def456ghi789
+          $ref: '#/components/schemas/ApiKey'
         role:
-          type: string
-          enum: [ADMIN, USER]
-          example: ADMIN
+          $ref: '#/components/schemas/Role'
         createdAt:
           type: string
           format: date-time
@@ -3515,29 +3663,193 @@ components:
 
     Contract:
       type: object
+      description: |
+        Contract representation compatible with iSubscription.
+      required:
+        - billingPeriod
+        - organizationId
+        - usageLevels
+        - contractedServices
+        - subscriptionPlans
+        - history
       properties:
         id:
+          $ref: '#/components/schemas/ObjectId'
+        organizationId:
           type: string
-        userId:
-          type: string
-        organization:
-          type: string
-        services:
+          description: Organization identifier owning the contract
+          example: 507f1f77bcf86cd799439012
+        userContact:
+          $ref: '#/components/schemas/UserContact'
+        billingPeriod:
+          $ref: '#/components/schemas/BillingPeriod'
+        usageLevels:
+          $ref: '#/components/schemas/UsageLevels'
+        contractedServices:
+          $ref: '#/components/schemas/ContractedService'
+        subscriptionPlans:
+          $ref: '#/components/schemas/SubscriptionPlans'
+        subscriptionAddOns:
+          $ref: '#/components/schemas/SubscriptionAddons'
+        history:
           type: array
           items:
-            type: object
-        billingPeriod:
-          type: object
-        usageLevels:
-          type: object
-        userContact:
-          type: object
-        createdAt:
+            $ref: '#/components/schemas/SubscriptionSnapshot'
+
+    UserContact:
+      type: object
+      required:
+        - userId
+        - username
+      properties:
+        userId:
           type: string
-          format: date-time
-        updatedAt:
+          description: The id of the contract of the user
+          example: 01c36d29-0d6a-4b41-83e9-8c6d9310c508
+        username:
           type: string
-          format: date-time
+          description: Username of the user
+          example: johndoe
+        firstName:
+          type: string
+          description: The first name of the user
+          example: John
+        lastName:
+          type: string
+          description: The last name of the user
+          example: Doe
+        email:
+          type: string
+          description: The email of the user
+          example: john.doe@my-domain.com
+        phone:
+          type: string
+          description: The phone number of the user, with international code
+          example: +34 666 666 666
+
+    BillingPeriod:
+      type: object
+      required:
+        - startDate
+        - endDate
+      properties:
+        startDate:
+          description: The date on which the current billing period started
+          $ref: '#/components/schemas/Date'
+          example: '2025-04-18T00:00:00Z'
+        endDate:
+          description: The date on which the current billing period is expected to end or to be renewed
+          $ref: '#/components/schemas/Date'
+          example: '2025-12-31T00:00:00Z'
+        autoRenew:
+          type: boolean
+          description: Determines whether the current billing period will be extended renewalDays days once it ends
+          example: true
+          default: true
+        renewalDays:
+          $ref: '#/components/schemas/RenewalDays'
+
+    ContractedService:
+      type: object
+      description: Map where keys are service names and values are pricing versions
+      additionalProperties:
+        type: string
+        format: path
+        description: Pricing version to which the user is subscribed
+      example:
+        zoom: "2025"
+        petclinic: "2024"
+
+    SubscriptionPlans:
+      type: object
+      description: Map of service name to plan name
+      additionalProperties:
+        type: string
+        minLength: 1
+      example:
+        zoom: ENTERPRISE
+        petclinic: GOLD
+
+    SubscriptionAddons:
+      type: object
+      description: Map of service name to add-ons and quantities
+      additionalProperties:
+        type: object
+        additionalProperties:
+          type: integer
+          minimum: 0
+      example:
+        zoom:
+          extraSeats: 2
+          hugeMeetings: 1
+        petclinic:
+          petsAdoptionCentre: 1
+
+    UsageLevels:
+      type: object
+      description: Usage levels for contracted services
+      additionalProperties:
+        type: object
+        additionalProperties:
+          type: object
+          required:
+            - consumed
+          properties:
+            resetTimestamp:
+              description: Reset timestamp (only for renewable usage limits)
+              $ref: '#/components/schemas/Date'
+            consumed:
+              type: number
+              description: Consumed quota for the usage limit
+              example: 5
+      example:
+        zoom:
+          maxSeats:
+            consumed: 10
+        petclinic:
+          maxPets:
+            consumed: 2
+          maxVisits:
+            consumed: 5
+            resetTimestamp: "2025-07-31T00:00:00Z"
+
+    SubscriptionSnapshot:
+      type: object
+      properties:
+        startDate:
+          description: The date on which the user started using the snapshot
+          $ref: '#/components/schemas/Date'
+          example: '2024-04-18T00:00:00Z'
+        endDate:
+          description: The date on which the user finished using the snapshot
+          $ref: '#/components/schemas/Date'
+          example: '2024-04-17T00:00:00Z'
+        contractedServices:
+          $ref: '#/components/schemas/ContractedService'
+        subscriptionPlans:
+          $ref: '#/components/schemas/SubscriptionPlans'
+        subscriptionAddOns:
+          $ref: '#/components/schemas/SubscriptionAddons'
+
+    Date:
+      type: string
+      format: date-time
+      description: Date in UTC
+      example: '2025-12-31T00:00:00Z'
+
+    ObjectId:
+      type: string
+      description: ObjectId of the corresponding MongoDB document
+      example: 68050bd09890322c57842f6f
+      pattern: '^[a-f0-9]{24}$'
+      readOnly: true
+
+    RenewalDays:
+      type: integer
+      description: Number of days by which the billing period will be extended
+      example: 365
+      default: 30
+      minimum: 1
 
     Feature:
       type: object
@@ -3551,6 +3863,172 @@ components:
           type: string
         service:
           type: string
+
+  requestBodies:
+    SubscriptionCreation:
+      description: Creates a new subscription within SPACE
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - userContact
+              - contractedServices
+              - subscriptionPlans
+              - subscriptionAddOns
+            properties:
+              userContact:
+                $ref: '#/components/schemas/UserContact'
+              billingPeriod:
+                type: object
+                properties:
+                  autoRenew:
+                    type: boolean
+                    description: Whether the billing period auto-renews
+                    example: true
+                    default: true
+                  renewalDays:
+                    $ref: '#/components/schemas/RenewalDays'
+              contractedServices:
+                $ref: '#/components/schemas/ContractedService'
+              subscriptionPlans:
+                $ref: '#/components/schemas/SubscriptionPlans'
+              subscriptionAddOns:
+                $ref: '#/components/schemas/SubscriptionAddons'
+          example:
+            userContact:
+              userId: 01c36d29-0d6a-4b41-83e9-8c6d9310c508
+              username: johndoe
+              firstName: John
+              lastName: Doe
+              email: john.doe@my-domain.com
+            billingPeriod:
+              autoRenew: true
+              renewalDays: 30
+            contractedServices:
+              zoom: "2025"
+              petclinic: "2024"
+            subscriptionPlans:
+              zoom: ENTERPRISE
+              petclinic: GOLD
+            subscriptionAddOns:
+              zoom:
+                extraSeats: 2
+              petclinic:
+                petsAdoptionCentre: 1
+
+    SubscriptionCompositionNovation:
+      description: Novates the composition of an existent contract
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - subscriptionPlans
+              - subscriptionAddOns
+            properties:
+              contractedServices:
+                $ref: '#/components/schemas/ContractedService'
+              subscriptionPlans:
+                $ref: '#/components/schemas/SubscriptionPlans'
+              subscriptionAddOns:
+                $ref: '#/components/schemas/SubscriptionAddons'
+          example:
+            contractedServices:
+              zoom: "2025"
+              petclinic: "2024"
+            subscriptionPlans:
+              zoom: PRO
+              petclinic: GOLD
+            subscriptionAddOns:
+              zoom:
+                extraSeats: 1
+
+    SubscriptionUserContactNovation:
+      description: Updates the contact information of a user from their contract
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              firstName:
+                type: string
+                example: John
+              lastName:
+                type: string
+                example: Doe
+              email:
+                type: string
+                example: john.doe@my-domain.com
+              username:
+                type: string
+                example: johndoe
+              phone:
+                type: string
+                example: +34 666 666 666
+
+    SubscriptionBillingNovation:
+      description: Updates the billing information from a contract
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              endDate:
+                $ref: '#/components/schemas/Date'
+              autoRenew:
+                type: boolean
+                example: true
+                default: true
+              renewalDays:
+                $ref: '#/components/schemas/RenewalDays'
+          example:
+            endDate: '2025-12-31T00:00:00Z'
+            autoRenew: true
+            renewalDays: 30
+
+    SubscriptionUsageLevelsUpdate:
+      description: Updates usage levels for a contract
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties:
+              type: object
+              additionalProperties:
+                type: number
+          example:
+            zoom:
+              maxSeats: 10
+            petclinic:
+              maxPets: 2
+              maxVisits: 5
+
+  responses:
+    UnprocessableEntity:
+      description: Request sent could not be processed properly
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              errors:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FieldValidationError'
+
+  parameters:
+    Username:
+      name: username
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Username'
 
   securitySchemes:
     ApiKeyAuth:

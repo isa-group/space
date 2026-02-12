@@ -60,6 +60,20 @@ class ContractService {
     return contracts;
   }
 
+  async count(queryParams: any, organizationId?: string): Promise<number> {
+    const errors = validateContractQueryFilters(queryParams);
+
+    if (errors.length > 0) {
+      throw new Error(
+        'Errors where found during validation of query params: ' + errors.join(' | ')
+      );
+    }
+
+    queryParams.organizationId = organizationId;
+
+    return this.contractRepository.countByFilters(queryParams);
+  }
+
   async show(userId: string): Promise<LeanContract> {
     let contract = await this.cacheService.get(`contracts.${userId}`);
 
