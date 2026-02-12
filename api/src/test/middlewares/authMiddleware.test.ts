@@ -104,7 +104,7 @@ describe('Authentication Middleware Test Suite', function () {
         .set('x-api-key', adminUser.apiKey);
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     it('Should return 401 with non-existent user API key', async function () {

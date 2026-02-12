@@ -595,6 +595,8 @@ describe('User API routes', function () {
 
       expect(response.status).toBe(403);
       expect(response.body.error).toBe('PERMISSION ERROR: Only admins can update admin users.');
+
+      await deleteTestUser(adminTarget.username);
     });
 
     it('returns 401 when api key is missing', async function () {
@@ -703,6 +705,8 @@ describe('User API routes', function () {
 
       expect(response.status).toBe(403);
       expect(response.body.error).toBe('PERMISSION ERROR: Only admins can change roles for other users.');
+
+      await deleteTestUser(adminTarget.username);
     });
 
     it('returns 403 when trying to demote the last admin', async function () {
@@ -909,6 +913,8 @@ describe('User API routes', function () {
 
       expect(response.status).toBe(403);
       expect(response.body.error).toBe('PERMISSION ERROR: Only admins can delete admin users.');
+
+      await deleteTestUser(targetAdmin.username);
     });
 
     it('returns 401 when api key is missing', async function () {
