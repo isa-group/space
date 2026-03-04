@@ -114,7 +114,7 @@ function _evaluate(
     if (typeof evalResult !== 'boolean') {
       return _createErrorResult(
         'TYPE_MISMATCH',
-        `Feature ${featureId} has an expression that does not return a boolean!`
+        `Feature ${featureId} has an expression that does not return a boolean! Returned value: ${evalResult} of type ${typeof evalResult}`
       );
     }
 

@@ -140,6 +140,44 @@ describe('Services API Test Suite', function () {
       // Error message should mention existence/duplication
       expect(['exists', 'already', 'duplicate'].some(k => errMsg.includes(k))).toBeTruthy();
     });
+
+    it('Should return 201 when creating a service with the same name in a different organization', async function () {
+      // Create initial service in first organization
+      const pricingFilePath = await getRandomPricingFile(new Date().getTime().toString());
+      const first = await request(app)
+        .post(`${baseUrl}/services`)
+        .set('x-api-key', testApiKey)
+        .attach('pricing', pricingFilePath);
+
+      expect(first.status).toEqual(201);
+      const firstServiceName = first.body.name;
+
+      // Create a new organization
+      const secondOrganization = await createTestOrganization(ownerUser.username);
+      const secondOrgApiKey = generateOrganizationApiKey();
+      await addApiKeyToOrganization(secondOrganization.id!, {
+        key: secondOrgApiKey,
+        scope: 'ALL',
+      });
+
+      // Attempt to create another service with the same name but in a different organization
+      const second = await request(app)
+        .post(`${baseUrl}/services`)
+        .set('x-api-key', secondOrgApiKey)
+        .attach('pricing', pricingFilePath);
+
+      // Should succeed (201) since it's in a different organization
+      expect(second.status).toEqual(201);
+      expect(second.body).toBeDefined();
+      expect(second.body.name).toEqual(firstServiceName);
+      expect(second.body.organizationId).toEqual(secondOrganization.id);
+      expect(first.body.organizationId).not.toEqual(second.body.organizationId);
+
+      // Cleanup
+      await deleteTestService(firstServiceName, testOrganization.id!);
+      await deleteTestService(second.body.name, secondOrganization.id!);
+      await deleteTestOrganization(secondOrganization.id!);
+    });
   });
 
   describe('GET /services/{serviceName}', function () {
