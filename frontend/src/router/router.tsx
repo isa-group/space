@@ -7,6 +7,7 @@ import ServicesPage from "@/pages/services";
 import ServiceDetailPage from "@/pages/services/ServiceDetailPage";
 import SettingsPage from "@/pages/settings";
 import ContractsDashboard from "@/pages/contracts/ContractsDashboard";
+import ContractDetailPage from "@/pages/contracts/ContractDetailPage";
 import InstanceMonitoringPage from "@/pages/instance-monitoring";
 import OrganizationSettingsPage from "@/pages/organization-settings";
 import RegisterPage from "@/pages/register";
@@ -43,6 +44,7 @@ export function SpaceRouter() {
         <Route path="/" element={<MainPage/>}/>
         <Route path="/register" element={<RegisterPage/>}/>
         <Route path="/contracts/dashboard" element={<RequireAuth><LoggedLayout><ContractsDashboard/></LoggedLayout></RequireAuth>} />
+        <Route path="/contracts/:userId" element={<RequireAuth><LoggedLayout><ContractDetailPage/></LoggedLayout></RequireAuth>} />
         <Route path="/instance-monitoring" element={<RequireAuth><RequireRole allowedRoles={['ADMIN']}><LoggedLayout><InstanceMonitoringPage/></LoggedLayout></RequireRole></RequireAuth>} />
         <Route path="/users" element={<RequireAuth><RequireRole allowedRoles={['ADMIN']}><LoggedLayout><UsersPage/></LoggedLayout></RequireRole></RequireAuth>} />
         <Route path="/organizations" element={<RequireAuth><RequireRole allowedRoles={['ADMIN']}><LoggedLayout><OrganizationsPage/></LoggedLayout></RequireRole></RequireAuth>} />

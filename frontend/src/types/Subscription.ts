@@ -1,4 +1,5 @@
 export interface UserContact {
+  userId?: string;
   username: string;
   firstName?: string;
   lastName?: string;
@@ -7,9 +8,19 @@ export interface UserContact {
 
 export interface BillingPeriod {
   autoRenewal: boolean;
+  autoRenew?: boolean;
   startDate?: string; // ISO
   endDate?: string; // ISO
   period?: string;
+  renewalDays?: number;
+}
+
+export interface HistoryEntry {
+  startDate?: string;
+  endDate?: string;
+  contractedServices?: Record<string, string>;
+  subscriptionPlans?: Record<string, string>;
+  subscriptionAddOns?: Record<string, Record<string, number>>;
 }
 
 export interface ServiceSubscription {
@@ -19,6 +30,12 @@ export interface ServiceSubscription {
   subscriptionAddOns?: Record<string, number>;
 }
 
+export interface UsageLevel {
+  resetTimeStamp?: string;
+  consumed?: number;
+  limit?: number;
+}
+
 export interface Subscription {
   userId: string;
   userContact: UserContact;
@@ -26,7 +43,9 @@ export interface Subscription {
   services: ServiceSubscription[];
   subscriptionPlans?: Record<string, string>;
   subscriptionAddOns?: Record<string, Record<string, number>>;
+  usageLevels?: Record<string, Record<string, UsageLevel>>;
   billingPeriod?: BillingPeriod;
+  history?: HistoryEntry[];
   createdAt?: string;
 }
 
