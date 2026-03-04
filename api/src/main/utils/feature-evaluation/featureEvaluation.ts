@@ -104,7 +104,7 @@ function _evaluate(
   const featureExpression: string | undefined = evaluationContext[featureId];
 
   // Validate feature expression
-  const expressionError = validateExpression(featureId, featureExpression);
+  const expressionError = validateExpression(featureId, featureExpression, pricingContext, subscriptionContext);
   if (expressionError) return expressionError;
 
   // Evaluate the expression
@@ -153,7 +153,9 @@ function _createErrorResult(code: string, message: string): FeatureEvaluationRes
 
 function validateExpression(
   featureId: string,
-  expression?: string
+  expression?: string,
+  pricingContext?: PricingContext,
+  subscriptionContext?: SubscriptionContext
 ): FeatureEvaluationResult | null {
   if (!expression) {
     return _createErrorResult('PARSE_ERROR', `Feature ${featureId} has no expression defined!`);
@@ -164,6 +166,37 @@ function validateExpression(
       'PARSE_ERROR',
       `Feature ${featureId} has no expression defined! If an expression is intended, please ensure it only references hard-coded values or variables from "pricingContext" and "subscriptionContext".`
     );
+  }
+
+  const invoquedFeatures = expression.match(/pricingContext\['features'\]\['([^']+)'\]/g)?.map(match => match.match(/pricingContext\['features'\]\['([^']+)'\]/)![1]) || [];
+  const invoquedUsageLimits = expression.match(/subscriptionContext\['([^']+)'\]/g)?.map(match => match.match(/subscriptionContext\['([^']+)'\]/)![1]) || [];
+  const invoquedUsageLevels = expression.match(/pricingContext\['usageLevels'\]\['([^']+)'\]/g)?.map(match => match.match(/pricingContext\['usageLevels'\]\['([^']+)'\]/)![1]) || [];
+
+  for (const feature of invoquedFeatures) {
+    if (pricingContext?.features[feature] === undefined) {
+      return _createErrorResult(
+        'PARSE_ERROR',
+        `Feature ${featureId} expression references feature '${feature}' that was not found in pricingContext.features.`
+      );
+    }
+  }
+
+  for (const limit of invoquedUsageLimits) {
+    if (subscriptionContext && subscriptionContext[limit] === undefined) {
+      return _createErrorResult(
+        'PARSE_ERROR',
+        `Feature ${featureId} expression references usage limit '${limit}' that was not found in subscriptionContext.`
+      );
+    }
+  }
+
+  for (const limit of invoquedUsageLevels) {
+    if (pricingContext?.usageLimits[limit] === undefined) {
+      return _createErrorResult(
+        'PARSE_ERROR',
+        `Feature ${featureId} expression references usage level '${limit}' that was not found in pricingContext.usageLimits.`
+      );
+    }
   }
 
   return null;
