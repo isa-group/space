@@ -68,6 +68,26 @@ function getUserSubscriptionsFromContract(
   return subscriptionsByService;
 }
 
+function findPlanCaseInsensitive(
+  planName: string,
+  plans: Record<string, LeanPlan>
+): LeanPlan | undefined {
+  // First try exact match
+  if (plans[planName]) {
+    return plans[planName];
+  }
+  
+  // Then try case-insensitive match
+  const normalizedPlanName = planName.toLowerCase();
+  for (const [key, plan] of Object.entries(plans)) {
+    if (key.toLowerCase() === normalizedPlanName) {
+      return plan;
+    }
+  }
+  
+  return undefined;
+}
+
 function mapSubscriptionsToConfigurationsByService(
   userSubscriptionsByService: Record<string, { plan?: string; addOns?: Record<string, number> }>,
   userPricings: Record<string, LeanPricing>
@@ -83,13 +103,14 @@ function mapSubscriptionsToConfigurationsByService(
       );
     }
 
-    if (subscription.plan && pricing.plans && Object.keys(pricing.plans).length > 0 && !pricing.plans[subscription.plan!]) {
+    const plan = findPlanCaseInsensitive(subscription.plan ?? '', pricing.plans ?? {});
+
+    if (subscription.plan && pricing.plans && Object.keys(pricing.plans).length > 0 && !plan) {
       throw new Error(
         `Plan ${subscription.plan} not found in pricing for service ${serviceName}, whose pricing do have plans.`
       );
     }
 
-    const plan = pricing.plans && subscription.plan ? pricing.plans[subscription.plan] : undefined;
     const addOns = pricing.addOns
       ? Object.fromEntries(
           Object.entries(pricing.addOns).filter(

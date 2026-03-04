@@ -396,6 +396,51 @@ describe('Features API Test Suite', function () {
       });
     });
 
+    it('Should return 200 and evaluation for a user with plan case mismatch', async function () {
+      const contractData = {
+        userContact: {
+          userId: uuidv4(),
+          username: 'tUserCaseTest',
+        },
+        billingPeriod: {
+          autoRenew: true,
+          renewalDays: 365,
+        },
+        organizationId: testOrganization.id!,
+        contractedServices: {
+          [testService.name]: Object.keys(testService.activePricings)[0],
+        },
+        subscriptionPlans: {
+          [testService.name]: 'platinum', // Use lowercase while pricing has PLATINUM
+        },
+        subscriptionAddOns: {
+          [testService.name]: {
+            petAdoptionCentre: 1,
+            extraPets: 2,
+            extraVisits: 6,
+          },
+        },
+      };
+
+      const createContractResponse = await request(app)
+        .post(`${baseUrl}/contracts`)
+        .set('x-api-key', testOrganizationApiKey)
+        .send(contractData);
+
+      expect(createContractResponse.status).toEqual(201);
+
+      const response = await request(app)
+        .post(`${baseUrl}/features/${contractData.userContact.userId}`)
+        .set('x-api-key', testOrganizationApiKey);
+
+      expect(response.status).toEqual(200);
+      expect(response.body).toBeDefined();
+      expect(Object.keys(response.body).length).toBeGreaterThan(0);
+      // Verify that the features are evaluated correctly despite the plan case mismatch
+      expect(response.body['petclinic-pets']).toBeTruthy();
+      expect(response.body['petclinic-visits']).toBeTruthy();
+    });
+
     it('Should return 200 and visits as false since its limit has been reached', async function () {
       const testUserId = uuidv4();
       await createPetclinicTestContract(testUserId);

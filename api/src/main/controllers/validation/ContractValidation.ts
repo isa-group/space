@@ -346,7 +346,7 @@ function _validateAddOnAvailability(
 ): void {
   if (
     selectedPlan && pricing.addOns![addOnName] &&
-    !(pricing.addOns![addOnName].availableFor ?? Object.keys(pricing.plans!))?.includes(selectedPlan)
+    !(pricing.addOns![addOnName].availableFor ?? Object.keys(pricing.plans!))?.map(p => p.toLowerCase()).includes(selectedPlan.toLowerCase())
   ) {
     throw new Error(
       `Add-on ${addOnName} is not available for plan ${selectedPlan} in the request organization`
