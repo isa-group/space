@@ -15,7 +15,7 @@ const ROLE_BG_HOVER: Record<string, string> = {
 };
 
 export default function AddUserModal({ open, onClose, onUserCreated }: { open: boolean; onClose: () => void; onUserCreated: () => void }) {
-  const { user } = useAuth();
+  const { user, refreshOrganizations } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
@@ -63,6 +63,12 @@ export default function AddUserModal({ open, onClose, onUserCreated }: { open: b
       setPassword('');
       setPassword2('');
       setRole('USER');
+      
+      // Refresh organizations list to include the new user's default organization
+      if (refreshOrganizations) {
+        await refreshOrganizations();
+      }
+      
       onUserCreated();
       onClose();
     } catch (e: any) {

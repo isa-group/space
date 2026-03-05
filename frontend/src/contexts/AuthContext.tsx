@@ -29,12 +29,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const isDevelopmentEnvironment: boolean = import.meta.env.VITE_ENVIRONMENT === "development"
 
-  const [isAuthenticated, setIsAuthenticated] = useState(isDevelopmentEnvironment);
-  const [user, setUser] = useState<UserData>({
-    username: isDevelopmentEnvironment ? "devUser" : "",
-    apiKey: isDevelopmentEnvironment ? import.meta.env.VITE_SPACE_ADMIN_API_KEY : "",
-    role: "", // Will be loaded from API
-  });
+  // Load user from localStorage if exists
+  const loadStoredUser = (): UserData => {
+    if (isDevelopmentEnvironment) {
+      return {
+        username: "devUser",
+        apiKey: import.meta.env.VITE_SPACE_ADMIN_API_KEY,
+        role: "",
+      };
+    }
+    
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        return JSON.parse(storedUser) as UserData;
+      } catch (error) {
+        console.error('[AuthContext] Failed to parse stored user:', error);
+      }
+    }
+    
+    return { username: "", apiKey: "", role: "" };
+  };
+
+  const storedUser = loadStoredUser();
+  const [isAuthenticated, setIsAuthenticated] = useState(isDevelopmentEnvironment || !!storedUser.apiKey);
+  const [user, setUser] = useState<UserData>(storedUser);
 
   // Load user role from API in development mode
   useEffect(() => {
@@ -134,6 +153,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         role: userData.role,
       };
 
+      // Persist user to localStorage
+      localStorage.setItem('user', JSON.stringify(userInfo));
+
       setUser(userInfo);
       setIsAuthenticated(true);
       // Organizations will be loaded by the useEffect above
@@ -159,6 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     
     // Clear localStorage
+    localStorage.removeItem('user');
     localStorage.removeItem('currentOrganizationId');
     localStorage.removeItem('organizations');
   };
