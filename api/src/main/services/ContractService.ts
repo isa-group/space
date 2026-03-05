@@ -223,7 +223,7 @@ class ContractService {
   }
   
   async novateByGroupId(groupId: string, organizationId: string, newSubscription: any): Promise<LeanContract[]> {
-    const contracts = await this.index({groupId, organizationId});
+    const contracts = await this.index({ groupId }, organizationId);
 
     if (!contracts || contracts.length === 0) {
       throw new Error(`INVALID DATA: No contracts found with groupId ${groupId} within organization ${organizationId}`);
@@ -243,7 +243,7 @@ class ContractService {
       throw new Error(`Failed to update contracts for groupId ${groupId} within organization ${organizationId}`);
     }
 
-    const contractsToReturn = await this.index({groupId, organizationId});
+    const contractsToReturn = await this.index({ groupId }, organizationId);
 
     for (const contract of contractsToReturn) {
       contract.contractedServices = resetEscapeContractedServiceVersions(contract.contractedServices);
@@ -365,7 +365,7 @@ class ContractService {
     newBillingPeriod: { endDate: Date; autoRenew: boolean; renewalDays: number }
   ): Promise<LeanContract[]> {
 
-    const contracts = await this.index({ groupId: groupId, organizationId: organizationId });
+    const contracts = await this.index({ groupId: groupId }, organizationId);
 
     if (!contracts || contracts.length === 0) {
       throw new Error(`INVALID DATA: Contract with groupId ${groupId} not found within organization ${organizationId}`);
@@ -391,7 +391,7 @@ class ContractService {
       throw new Error(`Failed to update contracts for groupId ${groupId} within organization ${organizationId}`);
     }
 
-    const contractsToReturn = await this.index({ groupId: groupId, organizationId: organizationId });
+    const contractsToReturn = await this.index({ groupId: groupId }, organizationId);
 
     for (const contract of contractsToReturn) {
       contract.contractedServices = resetEscapeContractedServiceVersions(contract.contractedServices);

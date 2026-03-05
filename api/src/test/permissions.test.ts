@@ -1904,13 +1904,18 @@ describe('Permissions Test Suite', function () {
         const testOrg = await createTestOrganization(ownerUser.username);
         const testService = await createTestService(testOrg.id!)
         
-        const contractData = await generateContract(
+        let contractData = await generateContract(
                 { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
                 testOrg.id!,
                 undefined,
                 app
               );
         
+        contractData = {
+          ...contractData,
+          organizationId: testOrg.id!,
+        };
+
         const response = await request(app)
           .post(`${baseUrl}/contracts`)
           .set('x-api-key', adminApiKey)

@@ -97,11 +97,62 @@ describe('Contract API routes', function () {
       expect(response.body[0].userContact.username).toBe(testContract.userContact.username);
     });
 
+    it('returns 200 and filters contracts by groupId within the request organization only', async function () {
+      const sharedGroupId = `shared-group-${Date.now()}`;
+
+      const orgContract = await createTestContract(testOrganization.id!, [testService], app, sharedGroupId);
+      trackContractForCleanup(orgContract);
+
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+      const foreignContract = await createTestContract(
+        foreignOrganization.id!,
+        [foreignService],
+        app,
+        sharedGroupId
+      );
+      trackContractForCleanup(foreignContract);
+
+      const response = await request(app)
+        .get(`${baseUrl}/contracts?groupId=${sharedGroupId}`)
+        .set('x-api-key', testOrgApiKey);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.every((c: LeanContract) => c.groupId === sharedGroupId)).toBe(true);
+      expect(response.body.every((c: LeanContract) => c.organizationId === testOrganization.id)).toBe(true);
+      expect(
+        response.body.some((c: LeanContract) => c.userContact.userId === orgContract.userContact.userId)
+      ).toBe(true);
+      expect(
+        response.body.some((c: LeanContract) => c.userContact.userId === foreignContract.userContact.userId)
+      ).toBe(false);
+
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
+    });
+
     it('returns 401 when API key is missing', async function () {
       const response = await request(app).get(`${baseUrl}/contracts`);
 
       expect(response.status).toBe(401);
       expect(response.body.error).toContain('API Key');
+    });
+
+    it('returns 200 and ADMIN user can list contracts from any organization', async function () {
+      const response = await request(app)
+        .get(`${baseUrl}/contracts`)
+        .set('x-api-key', adminUser.apiKey);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+      expect(
+        response.body.some((c: LeanContract) => c.userContact.userId === testContract.userContact.userId)
+      ).toBe(true);
     });
   });
 
@@ -136,6 +187,43 @@ describe('Contract API routes', function () {
 
       expect(response.status).toBe(401);
       expect(response.body.error).toContain('API Key');
+    });
+
+    it('returns 403 when non-ADMIN user tries to list contracts from another organization', async function () {
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+
+      const response = await request(app)
+        .get(`${baseUrl}/organizations/${foreignOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey);
+
+      expect(response.status).toBe(403);
+
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
+    });
+
+    it('returns 200 when ADMIN user lists contracts from another organization', async function () {
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+      const foreignContract = await createTestContract(foreignOrganization.id!, [foreignService], app);
+      trackContractForCleanup(foreignContract);
+
+      const response = await request(app)
+        .get(`${baseUrl}/organizations/${foreignOrganization.id}/contracts`)
+        .set('x-api-key', adminUser.apiKey);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(
+        response.body.some((c: LeanContract) => c.userContact.userId === foreignContract.userContact.userId)
+      ).toBe(true);
+      expect(response.body.every((c: LeanContract) => c.organizationId === foreignOrganization.id)).toBe(true);
+
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
     });
   });
 
@@ -321,6 +409,223 @@ describe('Contract API routes', function () {
       expect(response.status).toBe(401);
       expect(response.body.error).toContain('API Key');
     });
+
+    it('returns 403 when non-ADMIN user tries to create a contract in another organization', async function () {
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+
+      const contractData = await generateContract(
+        { [foreignService.name.toLowerCase()]: foreignService.activePricings.keys().next().value! },
+        foreignOrganization.id!,
+        undefined,
+        app
+      );
+
+      const response = await request(app)
+        .post(`${baseUrl}/organizations/${foreignOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send(contractData);
+
+      expect(response.status).toBe(403);
+
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
+    });
+
+    it('returns 201 when ADMIN user creates a contract in another organization (org endpoint)', async function () {
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+
+      const contractData = await generateContract(
+        { [foreignService.name.toLowerCase()]: foreignService.activePricings.keys().next().value! },
+        foreignOrganization.id!,
+        undefined,
+        app
+      );
+
+      const response = await request(app)
+        .post(`${baseUrl}/organizations/${foreignOrganization.id}/contracts`)
+        .set('x-api-key', adminUser.apiKey)
+        .send(contractData);
+
+      expect(response.status).toBe(201);
+      expect(response.body.organizationId).toBe(foreignOrganization.id);
+      trackContractForCleanup(response.body);
+
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
+    });
+  });
+
+  describe('PUT /organizations/:organizationId/contracts', function () {
+    it('returns 200 and novates contracts filtered by groupId for that organization only', async function () {
+      const sharedGroupId = `bulk-org-group-${Date.now()}`;
+      const unaffectedGroupId = `bulk-org-unaffected-${Date.now()}`;
+
+      const targetContract = await createTestContract(testOrganization.id!, [testService], app, sharedGroupId);
+      trackContractForCleanup(targetContract);
+
+      const unaffectedContract = await createTestContract(
+        testOrganization.id!,
+        [testService],
+        app,
+        unaffectedGroupId
+      );
+      trackContractForCleanup(unaffectedContract);
+
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+      const foreignContract = await createTestContract(
+        foreignOrganization.id!,
+        [foreignService],
+        app,
+        sharedGroupId
+      );
+      trackContractForCleanup(foreignContract);
+
+      const novationService = await createTestService(testOrganization.id, `bulk-org-service-${Date.now()}`);
+      const pricingVersion = novationService.activePricings.keys().next().value!;
+      const pricingDetails = await getPricingFromService(
+        novationService.name,
+        pricingVersion,
+        testOrganization.id!,
+        app
+      );
+
+      const novationData = {
+        contractedServices: { [novationService.name.toLowerCase()]: pricingVersion },
+        subscriptionPlans: { [novationService.name.toLowerCase()]: Object.keys(pricingDetails!.plans!)[0] },
+        subscriptionAddOns: {},
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/contracts?groupId=${sharedGroupId}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send(novationData);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.every((c: LeanContract) => c.groupId === sharedGroupId)).toBe(true);
+      expect(response.body.every((c: LeanContract) => c.organizationId === testOrganization.id)).toBe(true);
+      expect(
+        response.body.every(
+          (c: LeanContract) => c.contractedServices[novationService.name.toLowerCase()] === pricingVersion
+        )
+      ).toBe(true);
+
+      const unaffectedResponse = await request(app)
+        .get(`${baseUrl}/organizations/${testOrganization.id}/contracts/${unaffectedContract.userContact.userId}`)
+        .set('x-api-key', ownerUser.apiKey);
+
+      expect(unaffectedResponse.status).toBe(200);
+      expect(unaffectedResponse.body.groupId).toBe(unaffectedGroupId);
+      expect(unaffectedResponse.body.contractedServices[novationService.name.toLowerCase()]).toBeUndefined();
+
+      const foreignContractResponse = await request(app)
+        .get(`${baseUrl}/organizations/${foreignOrganization.id}/contracts/${foreignContract.userContact.userId}`)
+        .set('x-api-key', adminUser.apiKey);
+
+      expect(foreignContractResponse.status).toBe(200);
+      expect(foreignContractResponse.body.organizationId).toBe(foreignOrganization.id);
+      expect(
+        foreignContractResponse.body.contractedServices[novationService.name.toLowerCase()]
+      ).toBeUndefined();
+
+      await deleteTestService(novationService.name, testOrganization.id!);
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
+    });
+
+    it('returns 400 when groupId query parameter is missing', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrganization.id}/contracts`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({
+          contractedServices: { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+          subscriptionPlans: {},
+          subscriptionAddOns: {},
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Missing groupId');
+    });
+
+    it('returns 403 when non-ADMIN user tries to update contracts in another organization', async function () {
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+      const foreignContract = await createTestContract(
+        foreignOrganization.id!,
+        [foreignService],
+        app,
+        `foreign-group-${Date.now()}`
+      );
+      trackContractForCleanup(foreignContract);
+
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${foreignOrganization.id}/contracts?groupId=${foreignContract.groupId}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({
+          contractedServices: { [foreignService.name.toLowerCase()]: foreignService.activePricings.keys().next().value! },
+          subscriptionPlans: {},
+          subscriptionAddOns: {},
+        });
+
+      expect(response.status).toBe(403);
+
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
+    });
+
+    it('returns 200 when ADMIN user updates contracts in another organization by groupId', async function () {
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+      const foreignGroupId = `admin-bulk-${Date.now()}`;
+      const foreignContract = await createTestContract(
+        foreignOrganization.id!,
+        [foreignService],
+        app,
+        foreignGroupId
+      );
+      trackContractForCleanup(foreignContract);
+
+      const newService = await createTestService(foreignOrganization.id, `admin-service-${Date.now()}`);
+      const pricingVersion = newService.activePricings.keys().next().value!;
+      const pricingDetails = await getPricingFromService(
+        newService.name,
+        pricingVersion,
+        foreignOrganization.id!,
+        app
+      );
+
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${foreignOrganization.id}/contracts?groupId=${foreignGroupId}`)
+        .set('x-api-key', adminUser.apiKey)
+        .send({
+          contractedServices: { [newService.name.toLowerCase()]: pricingVersion },
+          subscriptionPlans: { [newService.name.toLowerCase()]: Object.keys(pricingDetails!.plans!)[0] },
+          subscriptionAddOns: {},
+        });
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.every((c: LeanContract) => c.organizationId === foreignOrganization.id)).toBe(true);
+      expect(response.body.every((c: LeanContract) => c.groupId === foreignGroupId)).toBe(true);
+
+      await deleteTestService(newService.name, foreignOrganization.id!);
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
+    });
   });
 
   describe('GET /contracts/:userId', function () {
@@ -494,6 +799,429 @@ describe('Contract API routes', function () {
       expect(response.status).toBe(401);
       expect(response.body.error).toContain('API Key');
     });
+
+    it('returns 403 when non-ADMIN user tries to modify contract in another organization', async function () {
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+      const foreignContract = await createTestContract(foreignOrganization.id!, [foreignService], app);
+      trackContractForCleanup(foreignContract);
+
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${foreignOrganization.id}/contracts/${foreignContract.userContact.userId}`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({
+          contractedServices: { [foreignService.name.toLowerCase()]: foreignService.activePricings.keys().next().value! },
+          subscriptionPlans: {},
+          subscriptionAddOns: {},
+        });
+
+      expect(response.status).toBe(403);
+
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
+    });
+
+    it('returns 200 when ADMIN user modifies contract in another organization', async function () {
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+      const foreignContract = await createTestContract(foreignOrganization.id!, [foreignService], app);
+      trackContractForCleanup(foreignContract);
+
+      const newService = await createTestService(foreignOrganization.id, `admin-mod-service-${Date.now()}`);
+      const pricingVersion = newService.activePricings.keys().next().value!;
+      const pricingDetails = await getPricingFromService(
+        newService.name,
+        pricingVersion,
+        foreignOrganization.id!,
+        app
+      );
+
+      const novationData = {
+        contractedServices: { [newService.name.toLowerCase()]: pricingVersion },
+        subscriptionPlans: { [newService.name.toLowerCase()]: Object.keys(pricingDetails!.plans!)[0] },
+        subscriptionAddOns: {},
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${foreignOrganization.id}/contracts/${foreignContract.userContact.userId}`)
+        .set('x-api-key', adminUser.apiKey)
+        .send(novationData);
+
+      expect(response.status).toBe(200);
+      expect(response.body.contractedServices).toHaveProperty(newService.name.toLowerCase());
+
+      await deleteTestService(newService.name, foreignOrganization.id!);
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
+    });
+  });
+
+  describe('PUT /contracts', function () {
+    it('returns 200 and novates all contracts in a group from the requesting organization only', async function () {
+      const sharedGroupId = `bulk-global-group-${Date.now()}`;
+      const unaffectedGroupId = `bulk-global-unaffected-${Date.now()}`;
+
+      const targetContract = await createTestContract(testOrganization.id!, [testService], app, sharedGroupId);
+      trackContractForCleanup(targetContract);
+
+      const unaffectedContract = await createTestContract(
+        testOrganization.id!,
+        [testService],
+        app,
+        unaffectedGroupId
+      );
+      trackContractForCleanup(unaffectedContract);
+
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+      const foreignOrgApiKey = generateOrganizationApiKey();
+      await addApiKeyToOrganization(foreignOrganization.id!, { key: foreignOrgApiKey, scope: 'ALL' });
+
+      const foreignContract = await createTestContract(
+        foreignOrganization.id!,
+        [foreignService],
+        app,
+        sharedGroupId
+      );
+      trackContractForCleanup(foreignContract);
+
+      const novationService = await createTestService(testOrganization.id, `bulk-global-service-${Date.now()}`);
+      const pricingVersion = novationService.activePricings.keys().next().value!;
+      const pricingDetails = await getPricingFromService(
+        novationService.name,
+        pricingVersion,
+        testOrganization.id!,
+        app
+      );
+
+      const novationData = {
+        contractedServices: { [novationService.name.toLowerCase()]: pricingVersion },
+        subscriptionPlans: { [novationService.name.toLowerCase()]: Object.keys(pricingDetails!.plans!)[0] },
+        subscriptionAddOns: {},
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/contracts?groupId=${sharedGroupId}`)
+        .set('x-api-key', testOrgApiKey)
+        .send(novationData);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.every((c: LeanContract) => c.groupId === sharedGroupId)).toBe(true);
+      expect(response.body.every((c: LeanContract) => c.organizationId === testOrganization.id)).toBe(true);
+      expect(
+        response.body.every(
+          (c: LeanContract) => c.contractedServices[novationService.name.toLowerCase()] === pricingVersion
+        )
+      ).toBe(true);
+
+      const unaffectedResponse = await request(app)
+        .get(`${baseUrl}/contracts/${unaffectedContract.userContact.userId}`)
+        .set('x-api-key', testOrgApiKey);
+      expect(unaffectedResponse.status).toBe(200);
+      expect(unaffectedResponse.body.contractedServices[novationService.name.toLowerCase()]).toBeUndefined();
+
+      const foreignContractResponse = await request(app)
+        .get(`${baseUrl}/contracts/${foreignContract.userContact.userId}`)
+        .set('x-api-key', foreignOrgApiKey);
+      expect(foreignContractResponse.status).toBe(200);
+      expect(foreignContractResponse.body.organizationId).toBe(foreignOrganization.id);
+      expect(
+        foreignContractResponse.body.contractedServices[novationService.name.toLowerCase()]
+      ).toBeUndefined();
+
+      await deleteTestService(novationService.name, testOrganization.id!);
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
+    });
+
+    it('returns 400 when groupId query parameter is missing', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts`)
+        .set('x-api-key', testOrgApiKey)
+        .send({
+          contractedServices: { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+          subscriptionPlans: {},
+          subscriptionAddOns: {},
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Missing groupId');
+    });
+
+    it('returns 404 when no contracts are found for groupId in the requesting organization', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts?groupId=group-does-not-exist`)
+        .set('x-api-key', testOrgApiKey)
+        .send({
+          contractedServices: { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+          subscriptionPlans: {},
+          subscriptionAddOns: {},
+        });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.toLowerCase()).toContain('no contracts found');
+    });
+
+    it('returns 403 when non-ADMIN user API key is used', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts?groupId=any-group`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({
+          contractedServices: { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+          subscriptionPlans: {},
+          subscriptionAddOns: {},
+        });
+
+      expect(response.status).toBe(403);
+    });
+
+    it('returns 422 when payload is invalid', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts?groupId=any-group`)
+        .set('x-api-key', testOrgApiKey)
+        .send({ contractedServices: { [testService.name.toLowerCase()]: '1.0.0' } });
+
+      expect(response.status).toBe(422);
+    });
+
+    it('returns 200 when ADMIN user novates contracts by groupId globally', async function () {
+      const adminGroupId = `admin-global-${Date.now()}`;
+      const adminContract = await createTestContract(testOrganization.id!, [testService], app, adminGroupId);
+      trackContractForCleanup(adminContract);
+
+      const adminService = await createTestService(testOrganization.id, `admin-global-service-${Date.now()}`);
+      const pricingVersion = adminService.activePricings.keys().next().value!;
+      const pricingDetails = await getPricingFromService(
+        adminService.name,
+        pricingVersion,
+        testOrganization.id!,
+        app
+      );
+
+      const response = await request(app)
+        .put(`${baseUrl}/contracts?groupId=${adminGroupId}`)
+        .set('x-api-key', adminUser.apiKey)
+        .send({
+          contractedServices: { [adminService.name.toLowerCase()]: pricingVersion },
+          subscriptionPlans: { [adminService.name.toLowerCase()]: Object.keys(pricingDetails!.plans!)[0] },
+          subscriptionAddOns: {},
+        });
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.every((c: LeanContract) => c.groupId === adminGroupId)).toBe(true);
+
+      await deleteTestService(adminService.name, testOrganization.id!);
+    });
+
+    it('returns 401 when API key is missing', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts?groupId=any-group`)
+        .send({
+          contractedServices: { [testService.name.toLowerCase()]: testService.activePricings.keys().next().value! },
+          subscriptionPlans: {},
+          subscriptionAddOns: {},
+        });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+  });
+
+  describe('PUT /contracts/billingPeriod', function () {
+    it('returns 200 and updates billing period by groupId for contracts in the request organization only', async function () {
+      const sharedGroupId = `billing-group-${Date.now()}`;
+      const unaffectedGroupId = `billing-unaffected-${Date.now()}`;
+
+      const targetContract = await createTestContract(testOrganization.id!, [testService], app, sharedGroupId);
+      trackContractForCleanup(targetContract);
+
+      const unaffectedContract = await createTestContract(
+        testOrganization.id!,
+        [testService],
+        app,
+        unaffectedGroupId
+      );
+      trackContractForCleanup(unaffectedContract);
+
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+      const foreignOrgApiKey = generateOrganizationApiKey();
+      await addApiKeyToOrganization(foreignOrganization.id!, { key: foreignOrgApiKey, scope: 'ALL' });
+
+      const foreignContract = await createTestContract(
+        foreignOrganization.id!,
+        [foreignService],
+        app,
+        sharedGroupId
+      );
+      trackContractForCleanup(foreignContract);
+
+      const billingData = {
+        autoRenew: !targetContract.billingPeriod.autoRenew,
+        renewalDays: targetContract.billingPeriod.renewalDays === 30 ? 365 : 30,
+      };
+
+      const foreignContractBefore = await request(app)
+        .get(`${baseUrl}/contracts/${foreignContract.userContact.userId}`)
+        .set('x-api-key', foreignOrgApiKey);
+
+      expect(foreignContractBefore.status).toBe(200);
+
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/billingPeriod?groupId=${sharedGroupId}`)
+        .set('x-api-key', testOrgApiKey)
+        .send(billingData);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.every((c: LeanContract) => c.groupId === sharedGroupId)).toBe(true);
+      expect(response.body.every((c: LeanContract) => c.organizationId === testOrganization.id)).toBe(true);
+      expect(
+        response.body.every((c: LeanContract) => c.billingPeriod.autoRenew === billingData.autoRenew)
+      ).toBe(true);
+      expect(
+        response.body.every((c: LeanContract) => c.billingPeriod.renewalDays === billingData.renewalDays)
+      ).toBe(true);
+
+      const unaffectedResponse = await request(app)
+        .get(`${baseUrl}/contracts/${unaffectedContract.userContact.userId}`)
+        .set('x-api-key', testOrgApiKey);
+      expect(unaffectedResponse.status).toBe(200);
+      expect(unaffectedResponse.body.groupId).toBe(unaffectedGroupId);
+
+      const foreignContractResponse = await request(app)
+        .get(`${baseUrl}/contracts/${foreignContract.userContact.userId}`)
+        .set('x-api-key', foreignOrgApiKey);
+      expect(foreignContractResponse.status).toBe(200);
+      expect(foreignContractResponse.body.organizationId).toBe(foreignOrganization.id);
+      expect(foreignContractResponse.body.billingPeriod.autoRenew).toBe(
+        foreignContractBefore.body.billingPeriod.autoRenew
+      );
+      expect(foreignContractResponse.body.billingPeriod.renewalDays).toBe(
+        foreignContractBefore.body.billingPeriod.renewalDays
+      );
+
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
+    });
+
+    it('returns 400 when groupId query parameter is missing', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/billingPeriod`)
+        .set('x-api-key', testOrgApiKey)
+        .send({ autoRenew: true, renewalDays: 30 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Missing groupId');
+    });
+
+    it('returns 404 when no contracts are found for groupId in the requesting organization', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/billingPeriod?groupId=group-does-not-exist`)
+        .set('x-api-key', testOrgApiKey)
+        .send({ autoRenew: true, renewalDays: 30 });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.toLowerCase()).toContain('not found');
+    });
+
+    it('returns 403 when non-ADMIN user API key is used', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/billingPeriod?groupId=any-group`)
+        .set('x-api-key', ownerUser.apiKey)
+        .send({ autoRenew: true, renewalDays: 30 });
+
+      expect(response.status).toBe(403);
+    });
+
+    it('returns 422 when payload is invalid', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/billingPeriod?groupId=any-group`)
+        .set('x-api-key', testOrgApiKey)
+        .send({ autoRenew: 'invalid-boolean' });
+
+      expect(response.status).toBe(422);
+    });
+
+    it('returns 200 when ADMIN user updates billing period by groupId globally', async function () {
+      const adminBillingGroupId = `admin-billing-${Date.now()}`;
+      const adminBillingContract = await createTestContract(
+        testOrganization.id!,
+        [testService],
+        app,
+        adminBillingGroupId
+      );
+      trackContractForCleanup(adminBillingContract);
+
+      const billingData = {
+        autoRenew: !adminBillingContract.billingPeriod.autoRenew,
+        renewalDays: adminBillingContract.billingPeriod.renewalDays === 30 ? 365 : 30,
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/billingPeriod?groupId=${adminBillingGroupId}`)
+        .set('x-api-key', adminUser.apiKey)
+        .send(billingData);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.every((c: LeanContract) => c.groupId === adminBillingGroupId)).toBe(true);
+      expect(
+        response.body.every((c: LeanContract) => c.billingPeriod.autoRenew === billingData.autoRenew)
+      ).toBe(true);
+    });
+
+    it('returns 401 when API key is missing', async function () {
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/billingPeriod?groupId=any-group`)
+        .send({ autoRenew: true, renewalDays: 30 });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('API Key');
+    });
+
+    it('returns 200 when ADMIN user updates billing period by groupId globally', async function () {
+      const adminBillingGroupId = `admin-billing-${Date.now()}`;
+      const adminBillingContract = await createTestContract(
+        testOrganization.id!,
+        [testService],
+        app,
+        adminBillingGroupId
+      );
+      trackContractForCleanup(adminBillingContract);
+
+      const billingData = {
+        autoRenew: !adminBillingContract.billingPeriod.autoRenew,
+        renewalDays: adminBillingContract.billingPeriod.renewalDays === 30 ? 365 : 30,
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/contracts/billingPeriod?groupId=${adminBillingGroupId}`)
+        .set('x-api-key', adminUser.apiKey)
+        .send(billingData);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.every((c: LeanContract) => c.groupId === adminBillingGroupId)).toBe(true);
+      expect(
+        response.body.every((c: LeanContract) => c.billingPeriod.autoRenew === billingData.autoRenew)
+      ).toBe(true);
+    });
   });
 
   describe('DELETE /contracts/:userId', function () {
@@ -555,6 +1283,46 @@ describe('Contract API routes', function () {
 
       expect(response.status).toBe(401);
       expect(response.body.error).toContain('API Key');
+    });
+
+    it('returns 403 when non-ADMIN user tries to delete a contract in another organization', async function () {
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+      const foreignContract = await createTestContract(foreignOrganization.id!, [foreignService], app);
+      trackContractForCleanup(foreignContract);
+
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${foreignOrganization.id}/contracts/${foreignContract.userContact.userId}`)
+        .set('x-api-key', ownerUser.apiKey);
+
+      expect(response.status).toBe(403);
+
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
+    });
+
+    it('returns 204 when ADMIN user deletes a contract in another organization', async function () {
+      const foreignOrgOwner = await createTestUser('USER');
+      const foreignOrganization = await createTestOrganization(foreignOrgOwner.username);
+      const foreignService = await createTestService(foreignOrganization.id);
+      const foreignContract = await createTestContract(foreignOrganization.id!, [foreignService], app);
+
+      const response = await request(app)
+        .delete(`${baseUrl}/organizations/${foreignOrganization.id}/contracts/${foreignContract.userContact.userId}`)
+        .set('x-api-key', adminUser.apiKey);
+
+      expect(response.status).toBe(204);
+
+      const getResponse = await request(app)
+        .get(`${baseUrl}/organizations/${foreignOrganization.id}/contracts/${foreignContract.userContact.userId}`)
+        .set('x-api-key', adminUser.apiKey);
+      expect(getResponse.status).toBe(404);
+
+      await deleteTestService(foreignService.name, foreignOrganization.id!);
+      await deleteTestOrganization(foreignOrganization.id!);
+      await deleteTestUser(foreignOrgOwner.username);
     });
   });
 
