@@ -57,7 +57,7 @@ class UserService {
     const createdUser: LeanUser = await this.userRepository.create(userData);
 
     await this.organizationService.create(
-      { name: `${createdUser.username}'s Organization`, owner: createdUser.username },
+      { name: `${createdUser.username}'s Organization`, owner: createdUser.username, default: true },
       createdUser
     );
     

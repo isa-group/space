@@ -443,6 +443,28 @@ describe('User API routes', function () {
       expect(organizations[0].name).toBe(`${userData.username}'s Organization`);
     });
 
+    it('returns 201 and creates a default organization for the new user', async function () {
+      const userData = {
+        username: `test_user_${Date.now()}`,
+        password: 'password123',
+        role: USER_ROLES[USER_ROLES.length - 1],
+      };
+
+      const response = await request(app).post(`${baseUrl}/users`).send(userData);
+
+      expect(response.status).toBe(201);
+      expect(response.body.username).toBe(userData.username);
+      expect(response.body.apiKey).toBeDefined();
+      trackUserForCleanup(response.body);
+
+      const organizations = await organizationService.findByOwner(userData.username);
+
+      expect(organizations.length).toBe(1);
+      expect(organizations[0].name).toBe(`${userData.username}'s Organization`);
+      expect(organizations[0].owner).toBe(userData.username);
+      expect(organizations[0].default).toBe(true);
+    });
+
     it('returns 403 when non-admin tries to create an admin', async function () {
       const creator = await createTestUser('USER');
       trackUserForCleanup(creator);
