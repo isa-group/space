@@ -222,11 +222,11 @@ class ContractService {
     return result;
   }
   
-  async novateByGroupId(groupId: string, newSubscription: any): Promise<LeanContract[]> {
-    const contracts = await this.index({groupId})
+  async novateByGroupId(groupId: string, organizationId: string, newSubscription: any): Promise<LeanContract[]> {
+    const contracts = await this.index({groupId, organizationId});
 
     if (!contracts || contracts.length === 0) {
-      throw new Error(`INVALID DATA: No contracts found with groupId ${groupId}`);
+      throw new Error(`INVALID DATA: No contracts found with groupId ${groupId} within organization ${organizationId}`);
     }
 
     const updatedContracts: LeanContract[] = [];
@@ -240,10 +240,10 @@ class ContractService {
     const result = await this.contractRepository.bulkUpdate(updatedContracts);
 
     if (!result) {
-      throw new Error(`Failed to update contracts for groupId ${groupId}`);
+      throw new Error(`Failed to update contracts for groupId ${groupId} within organization ${organizationId}`);
     }
 
-    const contractsToReturn = await this.index({groupId})
+    const contractsToReturn = await this.index({groupId, organizationId});
 
     for (const contract of contractsToReturn) {
       contract.contractedServices = resetEscapeContractedServiceVersions(contract.contractedServices);
@@ -361,13 +361,14 @@ class ContractService {
   
   async novateBillingPeriodByGroupId(
     groupId: string,
+    organizationId: string,
     newBillingPeriod: { endDate: Date; autoRenew: boolean; renewalDays: number }
   ): Promise<LeanContract[]> {
 
-    const contracts = await this.index({ groupId: groupId });
+    const contracts = await this.index({ groupId: groupId, organizationId: organizationId });
 
     if (!contracts || contracts.length === 0) {
-      throw new Error(`INVALID DATA: Contract with groupId ${groupId} not found`);
+      throw new Error(`INVALID DATA: Contract with groupId ${groupId} not found within organization ${organizationId}`);
     }
 
     const updatedContracts: LeanContract[] = [];
@@ -387,10 +388,10 @@ class ContractService {
     const result = await this.contractRepository.bulkUpdate(updatedContracts);
 
     if (!result) {
-      throw new Error(`Failed to update contracts for groupId ${groupId}`);
+      throw new Error(`Failed to update contracts for groupId ${groupId} within organization ${organizationId}`);
     }
 
-    const contractsToReturn = await this.index({ groupId: groupId });
+    const contractsToReturn = await this.index({ groupId: groupId, organizationId: organizationId });
 
     for (const contract of contractsToReturn) {
       contract.contractedServices = resetEscapeContractedServiceVersions(contract.contractedServices);

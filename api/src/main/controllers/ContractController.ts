@@ -109,12 +109,13 @@ class ContractController {
   async novateByGroupId(req: any, res: any) {
     try {
       const groupId = req.query.groupId;
+      const organizationId = req.org?.id ?? req.params.organizationId;
       if (!groupId) {
         res.status(400).send({ error: 'Missing groupId query parameter' });
         return;
       }
       const newSubscription: Subscription = req.body;
-      const contracts = await this.contractService.novateByGroupId(groupId, newSubscription);
+      const contracts = await this.contractService.novateByGroupId(groupId, organizationId, newSubscription);
       res.status(200).json(contracts);
     } catch (err: any) {
       if (err.message.toLowerCase().includes('not found')) {
@@ -163,6 +164,7 @@ class ContractController {
   async novateBillingPeriodByGroupId(req: any, res: any) {
     try {
       const groupId = req.params.groupId;
+      const organizationId = req.org?.id ?? req.params.organizationId;
       const billingPeriod = req.body;
 
       if (!groupId) {
@@ -170,7 +172,7 @@ class ContractController {
         return;
       }
 
-      const contracts = await this.contractService.novateByGroupId(groupId, billingPeriod);
+      const contracts = await this.contractService.novateByGroupId(groupId, organizationId, billingPeriod);
       res.status(200).json(contracts);
     } catch (err: any) {
       if (err.message.toLowerCase().includes('not found')) {

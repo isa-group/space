@@ -24,6 +24,13 @@ const loadFileRoutes = function (app: express.Application) {
       handleValidation,
       contractController.create
     )
+    .put(
+      memberRole,
+      hasPermission(['OWNER', 'ADMIN', 'MANAGER']),
+      ContractValidator.novate,
+      handleValidation,
+      contractController.novateByGroupId
+    )
     .delete(memberRole, hasPermission(['OWNER', 'ADMIN']), contractController.prune);
 
   app

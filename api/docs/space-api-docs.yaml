@@ -2453,6 +2453,47 @@ paths:
         '403':
           description: Forbidden
 
+    put:
+      summary: Update contracts by group ID
+      description: |
+        Updates the details of all contracts in a group (contract novation - subscription composition change).
+
+        **Authentication**: User API Key (ADMIN) | Organization API Key
+
+        **User Permission**: 
+        - ADMIN user: can update contracts in any organization
+
+        **Organization Permission**:
+        - ALL scope: can update contracts in the organization
+        - MANAGEMENT scope: can update contracts in the organization
+
+      tags:
+        - Contracts
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: groupId
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        $ref: '#/components/requestBodies/SubscriptionCompositionNovation'
+      responses:
+        '200':
+          description: Contracts updated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Contract'
+
     delete:
       summary: Delete all contracts in organization
       description: |
