@@ -150,7 +150,7 @@ export async function registerUser(user: { username: string; password: string })
     });
 }
 
-export async function searchUsers(apiKey: string, query: string, limit: number = 10): Promise<Array<{ username: string; role: string }>> {
+export async function searchUsers(apiKey: string, query: string, limit: number = 10): Promise<{ data: Array<{ username: string; role: string }>; pagination: {offset: number, total: number, limit: number, page: number, pages: number} }> {
   return axios
     .get('/users', {
       params: { q: query, limit },

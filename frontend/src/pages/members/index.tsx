@@ -68,7 +68,7 @@ export default function MembersPage() {
           return;
         }
         // Filter out already selected users and current members
-        const filteredResults = results.filter(
+        const filteredResults = results.data.filter(
           (result) =>
             !selectedUsers.some((selected) => selected.username === result.username) &&
             !members.some((member) => member.username === result.username) &&
