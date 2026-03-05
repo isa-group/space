@@ -330,6 +330,10 @@ class OrganizationService {
         );
       }
 
+      if (organization.default) {
+        throw new Error('CONFLICT: Cannot transfer ownership of a default organization.');
+      }
+
       const proposedOwner = await this.userRepository.findByUsername(updateData.owner);
       if (!proposedOwner) {
         throw new Error(`INVALID DATA: User with username ${updateData.owner} does not exist.`);

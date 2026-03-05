@@ -761,6 +761,54 @@ describe('Organization API Test Suite', function () {
       await deleteTestUser(newOwner.username);
     });
 
+    it('Should return 409 when owner tries to transfer ownership of default organization', async function () {
+      const ownerApiKey = ownerUser.apiKey;
+      const testOrg = await createTestOrganization(ownerUser.username);
+      
+      // Set organization as default
+      await request(app)
+        .put(`${baseUrl}/organizations/${testOrg.id}`)
+        .set('x-api-key', ownerApiKey)
+        .send({ default: true })
+        .expect(200);
+
+      const updateData = {
+        owner: otherUser.username,
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrg.id}`)
+        .set('x-api-key', ownerApiKey)
+        .send(updateData);
+
+      expect(response.status).toBe(409);
+      expect(response.body.error).toContain('Cannot transfer ownership of a default organization');
+    });
+
+    it('Should return 409 when SPACE admin tries to transfer ownership of default organization', async function () {
+      const ownerApiKey = ownerUser.apiKey;
+      const testOrg = await createTestOrganization(ownerUser.username);
+      
+      // Set organization as default
+      await request(app)
+        .put(`${baseUrl}/organizations/${testOrg.id}`)
+        .set('x-api-key', ownerApiKey)
+        .send({ default: true })
+        .expect(200);
+
+      const updateData = {
+        owner: otherUser.username,
+      };
+
+      const response = await request(app)
+        .put(`${baseUrl}/organizations/${testOrg.id}`)
+        .set('x-api-key', adminApiKey)
+        .send(updateData);
+
+      expect(response.status).toBe(409);
+      expect(response.body.error).toContain('Cannot transfer ownership of a default organization');
+    });
+
     it('Should return 403 when neither organization owner or SPACE admin', async function () {
       const notOwnerApiKey = otherUser.apiKey;
       const testOrg = await createTestOrganization(ownerUser.username);
