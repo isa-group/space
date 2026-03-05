@@ -12,7 +12,7 @@ const baseUrl = process.env.BASE_URL_PATH ?? '/api/v1';
 
 const getApp = async (): Promise<Server> => {
   if (!testServer) {
-    const { server, app } = await initializeServer();
+    const { server, app } = await initializeServer(false);
     testServer = server;
     testApp = app;
   }

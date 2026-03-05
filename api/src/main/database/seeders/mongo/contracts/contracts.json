@@ -10,7 +10,7 @@
     },
     "billingPeriod": {
       "startDate": {"$date": "2025-05-01T00:00:00.000Z"},
-      "endDate": {"$date": "2025-06-01T00:00:00.000Z"},
+      "endDate": {"$date": "2026-06-01T00:00:00.000Z"},
       "autoRenew": true,
       "renewalDays": 30
     },
@@ -25,6 +25,7 @@
         }
       }
     },
+    "organizationId": "63f74bf8eeed64054274b60d",
     "contractedServices": {
       "zoom": "2_0_0"
     },
@@ -83,6 +84,7 @@
         }
       }
     },
+    "organizationId": "63f74bf8eeed64054274b60d",
     "contractedServices": {
       "zoom": "2_0_0"
     },
@@ -136,6 +138,7 @@
         }
       }
     },
+    "organizationId": "63f74bf8eeed64054274b60d",
     "contractedServices": {
       "zoom": "2_0_0"
     },

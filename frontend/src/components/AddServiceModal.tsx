@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Service } from '@/types/Services';
 import { createService } from '@/api/services/servicesApi';
 import useAuth from '@/hooks/useAuth';
+import { useOrganization } from '@/hooks/useOrganization';
 import FileOrUrlInput from './FileOrUrlInput';
 
 interface AddServiceModalProps {
@@ -17,12 +18,18 @@ export default function AddServiceModal({ open, onClose }: AddServiceModalProps)
   // drag/drop state and input ref handled inside FileOrUrlInput
 
   const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
 
   // file validation is handled inside FileOrUrlInput; only state updates are used here
 
   // file drag/drop handlers moved to FileOrUrlInput
 
   const handleUpload = () => {
+    if (!currentOrganization) {
+      setError('Please select an organization first.');
+      return;
+    }
+
     // Either a file or a valid URL must be provided
     if (!file && !url) {
       setError('Please select a .yml/.yaml file or provide a valid URL.');
@@ -42,7 +49,7 @@ export default function AddServiceModal({ open, onClose }: AddServiceModalProps)
     setError('');
     const payload: File | string = file ?? url;
 
-    createService(user.apiKey, payload)
+    createService(user.apiKey, currentOrganization.id, payload)
       .then((service: Service) => {
         setFile(null);
         setUrl('');

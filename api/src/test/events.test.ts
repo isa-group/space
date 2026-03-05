@@ -4,42 +4,107 @@ import request from 'supertest';
 import { baseUrl, getApp, shutdownApp } from './utils/testApp';
 import { Server } from 'http';
 import { cleanupAuthResources, getTestAdminApiKey, getTestAdminUser } from './utils/auth';
-import { getRandomPricingFile } from './utils/services/service';
+import { addArchivedPricingToService, addPricingToService, createTestService, deleteTestService, getRandomPricingFile } from './utils/services/serviceTestUtils';
 import { v4 as uuidv4 } from 'uuid';
+import { LeanOrganization } from '../main/types/models/Organization';
+import { LeanUser } from '../main/types/models/User';
+import { createTestUser, deleteTestUser } from './utils/users/userTestUtils';
+import { addApiKeyToOrganization, createTestOrganization, deleteTestOrganization } from './utils/organization/organizationTestUtils';
+import { LeanService } from '../main/types/models/Service';
+import { generateOrganizationApiKey } from '../main/utils/users/helpers';
+import { getFirstPlanFromPricing } from './utils/regex';
+
+// Helper sencillo para esperar mensajes (evita el callback hell)
+const waitForPricingEvent = (socket: Socket, eventCode: string) => {
+  return new Promise<any>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`Timeout waiting for event code: ${eventCode}`));
+    }, 4000); // 4s timeout interno
+
+    const listener = (data: any) => {
+      if (data && data.code === eventCode) {
+        clearTimeout(timeout);
+        socket.off('message', listener); // Limpieza importante
+        resolve(data);
+      }
+    };
+    
+    socket.on('message', listener);
+  });
+};
 
 describe('Events API Test Suite', function () {
   let app: Server;
-  let adminApiKey: string;
   let socketClient: Socket;
   let pricingNamespace: Socket;
+  let testOwner: LeanUser;
+  let testAdmin: LeanUser;
+  let testOrganization: LeanOrganization;
+  let testOrgApiKey: string;
+  let testService: LeanService;
 
   beforeAll(async function () {
     app = await getApp();
-    // Get admin user and api key for testing
-    await getTestAdminUser();
-    adminApiKey = await getTestAdminApiKey();
-
-    // Create a socket.io client for testing
     socketClient = io(`ws://localhost:3000`, {
       path: '/events',
-      autoConnect: false,
+      autoConnect: false, 
       transports: ['websocket'],
     });
-
-    // Create a namespace client for pricing events
     pricingNamespace = socketClient.io.socket('/pricings');
   });
 
-  beforeEach(() => {
-      pricingNamespace.connect();
-    });
+  beforeEach(async () => {
+    // 1. Iniciamos conexión
+    pricingNamespace.connect();
+    
+    // 2. 🛑 ESPERAMOS explícitamente a que conecte antes de soltar el test
+    if (!pricingNamespace.connected) {
+        await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('Connection timeout')), 1000);
+            pricingNamespace.once('connect', () => {
+                clearTimeout(timer);
+                resolve();
+            });
+            pricingNamespace.once('connect_error', (err) => {
+                clearTimeout(timer);
+                reject(err);
+            });
+        });
+    }
 
-    afterEach(() => {
-      if (pricingNamespace.connected) {
-        pricingNamespace.disconnect();
-      }
-      pricingNamespace.removeAllListeners(); // 💡 MUY IMPORTANTE
-    });
+    // 3. Crear datos
+    testOwner = await createTestUser("USER");
+    testAdmin = await createTestUser("ADMIN");
+    testOrganization = await createTestOrganization(testOwner.username);
+    testOrgApiKey = generateOrganizationApiKey();
+    await addApiKeyToOrganization(testOrganization.id!, { key: testOrgApiKey, scope: "ALL"});
+    testService = await createTestService(testOrganization.id);
+  });
+
+  afterEach(async () => {
+    pricingNamespace.removeAllListeners(); // 💡 MUY IMPORTANTE
+    
+    if (pricingNamespace.connected) {
+      pricingNamespace.disconnect();
+    }
+
+    // Cleanup created users and organization
+    if (testService.id) {
+      await deleteTestService(testService.name, testOrganization.id!);
+    }
+
+    if (testOrganization.id) {
+      await deleteTestOrganization(testOrganization.id);
+    }
+
+    if (testOwner.id) {
+      await deleteTestUser(testOwner.id);
+    }
+
+    if (testAdmin.id) {
+      await deleteTestUser(testAdmin.id);
+    }
+  });
 
   afterAll(async function () {
     // Ensure socket disconnection
@@ -54,26 +119,15 @@ describe('Events API Test Suite', function () {
 
   describe('WebSocket Connection', function () {
     it('Should connect to the WebSocket server successfully', async () => {
-      await new Promise((resolve, reject) => {
-        // Set up connection event handler before connecting
-        pricingNamespace.on('connect', () => {
-          expect(pricingNamespace.connected).toBe(true);
-          resolve(true);
-        });
-
-        // Set up error handler
-        pricingNamespace.on('connect_error', err => {
-          reject(err);
-        });
+      expect(pricingNamespace.connected).toBe(true);
       });
     });
-  });
 
   describe('Events API Endpoints', function () {
     it('Should return status 200 when checking event service status', async function () {
       const response = await request(app)
         .get(`${baseUrl}/events/status`)
-        .set('x-api-key', adminApiKey);
+        .set('x-api-key', testOrgApiKey);
 
       expect(response.status).toEqual(200);
       expect(response.body).toBeDefined();
@@ -81,138 +135,58 @@ describe('Events API Test Suite', function () {
     });
 
     it('Should emit test event via API endpoint', async () => {
-      await new Promise<void>((resolve, reject) => {
-        // Set up message event handler
-        pricingNamespace.on('message', data => {
-          try {
-            expect(data).toBeDefined();
-            expect(data.code).toEqual('PRICING_ARCHIVED');
-            expect(data.details).toBeDefined();
-            expect(data.details.serviceName).toEqual('test-service');
-            expect(data.details.pricingVersion).toEqual('2025');
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
-        });
+      // 1. Preparamos la "trampa" (listener) ANTES de disparar la acción
+      const eventPromise = waitForPricingEvent(pricingNamespace, 'PRICING_ARCHIVED');
 
-        // Wait for connection before sending test event
-        pricingNamespace.on('connect', async () => {
-          try {
-            // Send test event via API
-            await request(app)
-              .post(`${baseUrl}/events/test-event`)
-              .set('x-api-key', adminApiKey)
-              .send({
-                serviceName: 'test-service',
-                pricingVersion: '2025',
-              });
-          } catch (error) {
-            reject(error);
-          }
-        });
+      // 2. Disparamos la acción (Ya estamos conectados gracias al beforeEach)
+      await request(app)
+        .post(`${baseUrl}/events/test-event`)
+        .set('x-api-key', testOrgApiKey)
+        .send({
+          serviceName: 'test-service',
+          pricingVersion: '2025',
+        })
+        .expect(200); // Supertest maneja errores http
 
-        // Handle connection errors
-        pricingNamespace.on('connect_error', err => {
-          reject(err);
-        });
-      });
+      // 3. Esperamos a que caiga la presa
+      const data = await eventPromise;
+
+      // 4. Aseveramos
+      expect(data.details.serviceName).toEqual('test-service');
+      expect(data.details.pricingVersion).toEqual('2025');
     });
   });
 
   describe('Pricing Creation Events', function () {
     it('Should emit event when uploading a new pricing file', async () => {
-      await new Promise<void>(async (resolve, reject) => {
-        // Set up message event handler
-        pricingNamespace.on('message', data => {
-          try {
-            expect(data).toBeDefined();
-            expect(data.code).toEqual('PRICING_CREATED');
-            expect(data.details).toBeDefined();
-            expect(data.details.serviceName).toBeDefined();
-            expect(data.details.pricingVersion).toBeDefined();
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
-        });
+      // 1. Preparar escucha
+      const eventPromise = waitForPricingEvent(pricingNamespace, 'PRICING_CREATED');
 
-        // Wait for connection before uploading pricing
-        pricingNamespace.on('connect', async () => {
-          try {
-            const pricingFile = await getRandomPricingFile(uuidv4());
+      // 2. Acción
+      const pricingFilePath = await getRandomPricingFile(new Date().getTime().toString());
+      await request(app)
+          .post(`${baseUrl}/services`)
+          .set('x-api-key', testOrgApiKey)
+          .attach('pricing', pricingFilePath)
+          .expect(201);
 
-            // Upload a pricing file which should trigger an event
-            const response = await request(app)
-              .post(`${baseUrl}/services`)
-              .set('x-api-key', adminApiKey)
-              .attach('pricing', pricingFile);
-
-            expect(response.status).toEqual(201);
-          } catch (error) {
-            reject(error);
-          }
-        });
-
-        // Handle connection errors
-        pricingNamespace.on('connect_error', err => {
-          reject(err);
-        });
-      });
+      // 3. Validación
+      const data = await eventPromise;
+      expect(data.details).toBeDefined();
     });
 
     it('Should emit event when changing pricing availability', async () => {
-      await new Promise<void>(async (resolve, reject) => {
-        // This test requires an existing service with at least two pricings
+      // 1. Preparar escucha
+      const eventPromise = waitForPricingEvent(pricingNamespace, 'PRICING_ARCHIVED');
 
-        // Set up message event handler
-        pricingNamespace.on('message', data => {
-          const serviceName = 'Zoom'; // Assuming Zoom service exists with multiple pricings
-          const pricingVersion = '2.0.0'; // Use a version we know exists
-
-          try {
-            expect(data).toBeDefined();
-            expect(data.code).toEqual('PRICING_ARCHIVED');
-            expect(data.details).toBeDefined();
-            expect(data.details.serviceName).toEqual(serviceName);
-            expect(data.details.pricingVersion).toEqual(pricingVersion);
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
-        });
-
-        // Wait for connection before changing pricing availability
-        pricingNamespace.on('connect', async () => {
-          const serviceName = 'Zoom'; // Assuming Zoom service exists with multiple pricings
-          const pricingVersion = '2.0.0'; // Use a version we know exists
-          
-          try {
-            // First, check if service exists and has the required pricing
-            const serviceResponse = await request(app)
-              .get(`${baseUrl}/services/${serviceName}`)
-              .set('x-api-key', adminApiKey);
-
-            expect(serviceResponse.status).toEqual(200);
-
-            // Archive the pricing (requires a fallback subscription)
-            const respose = await request(app)
-              .put(`${baseUrl}/services/${serviceName}/pricings/${pricingVersion}?availability=archived`)
-              .set('x-api-key', adminApiKey)
-              .send({
-                  subscriptionPlan: 'BASIC',
-                  subscriptionAddOns: {},
-                });
-          } catch (error) {
-            reject(error);
-          }
-        });
-
-        // Handle connection errors
-        pricingNamespace.on('connect_error', err => {
-          reject(err);
-        });
-      });
+      // 2. Acción
+      const pricingVersion = "2.0.0";
+      await addArchivedPricingToService(testOrganization.id!, testService.name, pricingVersion);
+      
+      // 3. Validación
+      const data = await eventPromise;
+      expect(data.details.serviceName).toEqual(testService.name);
+      expect(data.details.pricingVersion).toEqual(pricingVersion);      
     });
   });
 });

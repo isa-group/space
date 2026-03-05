@@ -5,6 +5,7 @@ export interface PricingEntry {
 
 export interface TestService {
   name: string;
+  organizationId: string;
   activePricings: Record<string, PricingEntry>;
   archivedPricings: Record<string, PricingEntry>;
 }

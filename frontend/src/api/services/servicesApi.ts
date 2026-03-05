@@ -6,10 +6,11 @@ const DEFAULT_TIMEOUT = 5000;
 
 export async function getServices(
   apiKey: string,
+  organizationId: string,
   filters: Record<string, boolean | number | string> = {}
 ) {
   return axios
-    .get('/services', {
+    .get(`/organizations/${organizationId}/services`, {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
@@ -20,7 +21,7 @@ export async function getServices(
     .then(async response => {
       return await Promise.all(
         response.data.map(async (service: RetrievedService) => {
-          return await _retrievePricingsFromService(apiKey, service.name);
+          return await _retrievePricingsFromService(apiKey, organizationId, service.name);
         })
       );
     })
@@ -32,11 +33,12 @@ export async function getServices(
 
 export async function getPricingsFromService(
   apiKey: string,
+  organizationId: string,
   serviceName: string,
   pricingStatus: 'active' | 'archived' = 'active'
 ): Promise<Pricing[]> {
   return axios
-    .get(`/services/${serviceName}/pricings?pricingStatus=${pricingStatus}`, {
+    .get(`/organizations/${organizationId}/services/${serviceName}/pricings?pricingStatus=${pricingStatus}`, {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
@@ -55,11 +57,12 @@ export async function getPricingsFromService(
 
 export async function getPricingVersion(
   apiKey: string,
+  organizationId: string,
   serviceName: string,
   version: string
 ): Promise<Pricing | null> {
   return axios
-    .get(`/services/${serviceName}/pricings/${version}`, {
+    .get(`/organizations/${organizationId}/services/${serviceName}/pricings/${version}`, {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
@@ -72,11 +75,12 @@ export async function getPricingVersion(
 
 export async function changePricingAvailability(
   apiKey: string,
+  organizationId: string,
   serviceName: string,
   version: string,
   to: 'active' | 'archived'
 ) {
-  const servicePricings = await getPricingsFromService(apiKey, serviceName, 'active');
+  const servicePricings = await getPricingsFromService(apiKey, organizationId, serviceName, 'active');
   const mostRecentVersion = servicePricings.reduce((max, pricing) => {
     return isAfter(pricing.createdAt, max.createdAt) ? pricing : max;
   });
@@ -91,7 +95,7 @@ export async function changePricingAvailability(
 
   return axios
     .put(
-      `/services/${serviceName}/pricings/${version}?availability=${to}`,
+      `/organizations/${organizationId}/services/${serviceName}/pricings/${version}?availability=${to}`,
       {
         subscriptionPlan: fallbackSubscriptionPlan,
         subscriptionAddOns: !fallbackSubscriptionPlan
@@ -118,12 +122,12 @@ export async function changePricingAvailability(
     });
 }
 
-export async function createService(apiKey: string, iPricing: File | string): Promise<Service> {
+export async function createService(apiKey: string, organizationId: string, iPricing: File | string): Promise<Service> {
   // If a File is provided, send multipart/form-data; if a string (URL) is provided, send JSON payload
   if (typeof iPricing === 'string') {
     return axios
       .post(
-        '/services',
+        `/organizations/${organizationId}/services`,
         { pricing: iPricing },
         {
           headers: {
@@ -143,7 +147,7 @@ export async function createService(apiKey: string, iPricing: File | string): Pr
   formData.append('pricing', iPricing);
 
   return axios
-    .post('/services', formData, {
+    .post(`/organizations/${organizationId}/services`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
         'x-api-key': apiKey,
@@ -156,11 +160,11 @@ export async function createService(apiKey: string, iPricing: File | string): Pr
     });
 }
 
-export async function addPricingVersion(apiKey: string, serviceName: string, iPricing: File | string): Promise<Service> {
+export async function addPricingVersion(apiKey: string, organizationId: string, serviceName: string, iPricing: File | string): Promise<Service> {
   if (typeof iPricing === 'string') {
     return axios
       .post(
-        `/services/${serviceName}/pricings`,
+        `/organizations/${organizationId}/services/${serviceName}/pricings`,
         { pricing: iPricing },
         {
           headers: {
@@ -180,7 +184,7 @@ export async function addPricingVersion(apiKey: string, serviceName: string, iPr
   formData.append('pricing', iPricing);
 
   return axios
-    .post(`/services/${serviceName}/pricings`, formData, {
+    .post(`/organizations/${organizationId}/services/${serviceName}/pricings`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
         'x-api-key': apiKey,
@@ -193,9 +197,9 @@ export async function addPricingVersion(apiKey: string, serviceName: string, iPr
     });
 }
 
-export async function disableService(apiKey: string, serviceName: string): Promise<boolean> {
+export async function disableService(apiKey: string, organizationId: string, serviceName: string): Promise<boolean> {
   return axios
-    .delete(`/services/${serviceName}`, {
+    .delete(`/organizations/${organizationId}/services/${serviceName}`, {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
@@ -214,9 +218,9 @@ export async function disableService(apiKey: string, serviceName: string): Promi
     });
 }
 
-export async function deletePricingVersion(apiKey: string, serviceName: string, version: string): Promise<boolean> {
+export async function deletePricingVersion(apiKey: string, organizationId: string, serviceName: string, version: string): Promise<boolean> {
   return axios
-    .delete(`/services/${serviceName}/pricings/${version}`, {
+    .delete(`/organizations/${organizationId}/services/${serviceName}/pricings/${version}`, {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
@@ -235,10 +239,10 @@ export async function deletePricingVersion(apiKey: string, serviceName: string, 
     });
 }
 
-async function _retrievePricingsFromService(apiKey: string, serviceName: string): Promise<Service> {
+async function _retrievePricingsFromService(apiKey: string, organizationId: string, serviceName: string): Promise<Service> {
   const [serviceActivePricings, serviceArchivedPricings] = await Promise.all([
-    getPricingsFromService(apiKey, serviceName, 'active'),
-    getPricingsFromService(apiKey, serviceName, 'archived'),
+    getPricingsFromService(apiKey, organizationId, serviceName, 'active'),
+    getPricingsFromService(apiKey, organizationId, serviceName, 'archived'),
   ]);
 
   const mapPricings = (pricings: Pricing[]) =>

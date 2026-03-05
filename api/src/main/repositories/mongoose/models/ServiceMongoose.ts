@@ -13,6 +13,7 @@ const pricingDataSchema = new Schema(
 const serviceSchema = new Schema(
   {
     name: { type: String, required: true },
+    organizationId: { type: String, ref: "Organization", required: true },
     disabled: { type: Boolean, default: false },
     activePricings: {type: Map, of: pricingDataSchema},
     archivedPricings: {type: Map, of: pricingDataSchema}
@@ -38,7 +39,7 @@ serviceSchema.pre('save', function (next) {
 });
 
 // Adding unique index for [name, owner, version]
-serviceSchema.index({ name: 1 }, { unique: true });
+serviceSchema.index({ name: 1, organizationId: 1 }, { unique: true });
 
 const serviceModel = mongoose.model('Service', serviceSchema, 'services');
 

@@ -15,6 +15,11 @@ features:
     expression: pricingContext['features']['visits'] && subscriptionContext['maxVisits'] < pricingContext['usageLimits']['maxVisits']
     serverExpression: pricingContext['features']['visits'] && subscriptionContext['maxVisits'] <= pricingContext['usageLimits']['maxVisits']
     type: DOMAIN
+  multiDependentFeature:
+    valueType: BOOLEAN
+    defaultValue: true
+    expression: pricingContext['features']['multiDependentFeature'] && subscriptionContext['maxVisits'] < pricingContext['usageLimits']['maxVisits'] && subscriptionContext['maxPets'] < pricingContext['usageLimits']['maxPets']
+    type: DOMAIN
   calendar:
     valueType: BOOLEAN
     defaultValue: false
@@ -74,6 +79,7 @@ usageLimits:
     trackable: true
     linkedFeatures:
       - pets
+      - multiDependentFeature
   maxVisits:
     valueType: NUMERIC
     defaultValue: 1
@@ -84,6 +90,7 @@ usageLimits:
       unit: MONTH
     linkedFeatures:
       - visits
+      - multiDependentFeature
   calendarEventsCreationLimit:
     valueType: NUMERIC
     defaultValue: 5

@@ -1,13 +1,14 @@
 import { addDays } from "date-fns";
 import { LeanContract } from "../../types/models/Contract";
 import { escapeContractedServiceVersions } from "./helpers";
+import { convertKeysToLowercase } from "../helpers";
 
 export function performNovation(contract: LeanContract, newSubscription: any): LeanContract {
   const newContract: LeanContract = {
     ...contract,
-    contractedServices: escapeContractedServiceVersions(newSubscription.contractedServices),
-    subscriptionPlans: newSubscription.subscriptionPlans,
-    subscriptionAddOns: newSubscription.subscriptionAddOns,
+    contractedServices: convertKeysToLowercase(escapeContractedServiceVersions(newSubscription.contractedServices)),
+    subscriptionPlans: convertKeysToLowercase(newSubscription.subscriptionPlans),
+    subscriptionAddOns: convertKeysToLowercase(newSubscription.subscriptionAddOns),
   };
 
   newContract.history.push({

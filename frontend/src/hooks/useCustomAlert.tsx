@@ -2,10 +2,10 @@ import { useState, type JSX } from 'react';
 import CustomAlert from '../components/CustomAlert';
 import type { CustomAlertType } from '../components/CustomAlert';
 
-export function useCustomAlert(): [
-  (msg: string, type?: CustomAlertType) => Promise<void>,
-  JSX.Element | null
-] {
+export function useCustomAlert(): {
+    showAlert: (msg: string, type?: CustomAlertType) => Promise<void>,
+    alertElement: JSX.Element | null
+} {
   const [alert, setAlert] = useState<
     { message: string; type: CustomAlertType; resolve: () => void } | null
   >(null);
@@ -28,5 +28,5 @@ export function useCustomAlert(): [
       <CustomAlert message={alert.message} onClose={handleClose} type={alert.type} />
     );
 
-  return [showAlert, alertElement];
+  return {showAlert, alertElement};
 }

@@ -28,6 +28,8 @@ export interface LeanContract {
     renewalDays: number;
   };
   usageLevels: Record<string, Record<string, UsageLevel>>;
+  organizationId: string;
+  groupId?: string;
   contractedServices: Record<string, string>;
   subscriptionPlans: Record<string, string>;
   subscriptionAddOns: Record<string, Record<string, number>>;
@@ -40,6 +42,8 @@ export interface ContractQueryFilters {
   lastName?: string;
   email?: string;
   serviceName?: string; // Nuevo parámetro para filtrar por servicio contratado
+  organizationId?: string;
+  groupId?: string; // Nuevo parámetro para filtrar por grupo
   page?: number;
   offset?: number;
   limit?: number;
@@ -64,6 +68,8 @@ export interface ContractToCreate {
     autoRenew?: boolean;
     renewalDays?: number;
   };
+  organizationId: string;
+  groupId?: string;
   contractedServices: Record<string, string>; // service name → version
   subscriptionPlans: Record<string, string>; // service name → plan name
   subscriptionAddOns: Record<string, Record<string, number>>; // service name → { addOn: count }

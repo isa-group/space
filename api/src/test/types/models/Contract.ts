@@ -15,6 +15,7 @@ export interface TestContract {
     autoRenew: boolean;
     renewalDays: number;
   };
+  organizationId: string;
   usageLevels: Record<string, Record<string, UsageLevel>>;
   contractedServices: Record<string, string>;
   subscriptionPlans: Record<string, string>;

@@ -14,12 +14,12 @@ services:
         - './api/src/main/init-mongo.sh:/docker-entrypoint-initdb.d/init-mongo.sh'
       networks:
         - space-network
-      # healthcheck:
-      #   test: [ "CMD", "mongo", "--username", "${MONGO_INITDB_ROOT_USERNAME:-root}", "--password", "${MONGO_INITDB_ROOT_PASSWORD:-4dm1n}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')" ]
-      #   interval: 5s
-      #   timeout: 5s
-      #   retries: 3
-      #   start_period: 5s
+      healthcheck:
+        test: [ "CMD", "mongo", "--username", "${MONGO_INITDB_ROOT_USERNAME:-root}", "--password", "${MONGO_INITDB_ROOT_PASSWORD:-4dm1n}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')" ]
+        interval: 5s
+        timeout: 5s
+        retries: 3
+        start_period: 5s
   redis:
     image: redis:7.4.2
     container_name: space-redis

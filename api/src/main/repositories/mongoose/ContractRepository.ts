@@ -1,7 +1,135 @@
 import RepositoryBase from '../RepositoryBase';
 import ContractMongoose from './models/ContractMongoose';
-import { ContractQueryFilters, ContractToCreate, LeanContract } from '../../types/models/Contract';
+import { ContractToCreate, LeanContract } from '../../types/models/Contract';
 import { toPlainObject } from '../../utils/mongoose';
+
+type ContractMatchPipeline = {
+  pipeline: any[];
+  matchConditions: any[];
+  page: number;
+  offset: number;
+  limit: number;
+  sort?: string;
+  order?: 'asc' | 'desc';
+};
+
+const buildMatchPipeline = (queryFilters: any): ContractMatchPipeline => {
+  const {
+    username,
+    firstName,
+    lastName,
+    email,
+    page = 1,
+    offset = 0,
+    limit = 20,
+    sort,
+    order = 'asc',
+    filters,
+    organizationId,
+    groupId,
+  } = queryFilters || {};
+
+  const matchConditions: any[] = [];
+
+  if (username) {
+    matchConditions.push({ 'userContact.username': { $regex: username, $options: 'i' } });
+  }
+  if (firstName) {
+    matchConditions.push({ 'userContact.firstName': { $regex: firstName, $options: 'i' } });
+  }
+  if (lastName) {
+    matchConditions.push({ 'userContact.lastName': { $regex: lastName, $options: 'i' } });
+  }
+  if (email) {
+    matchConditions.push({ 'userContact.email': { $regex: email, $options: 'i' } });
+  }
+  if (organizationId) {
+    matchConditions.push({ organizationId: organizationId });
+  }
+  if (groupId) {
+    matchConditions.push({ groupId: groupId });
+  }
+
+  const pipeline: any[] = [
+    { $addFields: { contractedServicesArray: { $objectToArray: '$contractedServices' } } },
+  ];
+
+  if (filters) {
+    if (filters.services) {
+      const services = filters.services;
+      if (Array.isArray(services)) {
+        matchConditions.push({
+          'contractedServicesArray.k': { $in: services.map((s: string) => s.toLowerCase()) },
+        });
+      } else if (typeof services === 'object') {
+        const perServiceMatches: any[] = [];
+        for (const [serviceName, versions] of Object.entries(services)) {
+          if (!Array.isArray(versions) || versions.length === 0) {
+            perServiceMatches.push({
+              'contractedServicesArray': { $elemMatch: { k: serviceName.toLowerCase() } },
+            });
+          } else {
+            perServiceMatches.push({
+              $and: [
+                {
+                  'contractedServicesArray': {
+                    $elemMatch: {
+                      k: serviceName.toLowerCase(),
+                      v: { $in: versions.map((v: string) => v.replace(/\./g, '_')) },
+                    },
+                  },
+                },
+              ],
+            });
+          }
+        }
+        if (perServiceMatches.length > 0) {
+          matchConditions.push({ $or: perServiceMatches });
+        }
+      }
+    }
+
+    if (filters.plans && typeof filters.plans === 'object') {
+      const perServicePlanMatches: any[] = [];
+      for (const [serviceName, plans] of Object.entries(filters.plans)) {
+        if (Array.isArray(plans) && plans.length > 0) {
+          perServicePlanMatches.push({
+            [`subscriptionPlans.${serviceName.toLowerCase()}`]: {
+              $in: plans.map((p: string) => new RegExp(`^${p}$`, 'i')),
+            },
+          });
+        }
+      }
+      if (perServicePlanMatches.length > 0) {
+        matchConditions.push({ $or: perServicePlanMatches });
+      }
+    }
+
+    if (filters.addOns && typeof filters.addOns === 'object') {
+      const perServiceAddOnMatches: any[] = [];
+      for (const [serviceName, addOns] of Object.entries(filters.addOns)) {
+        if (Array.isArray(addOns) && addOns.length > 0) {
+          perServiceAddOnMatches.push({
+            $or: addOns.map((addOnName: string) => ({
+              [`subscriptionAddOns.${serviceName.toLowerCase()}.${addOnName.toLowerCase()}`]: {
+                $exists: true,
+              },
+            })),
+          });
+        }
+      }
+      if (perServiceAddOnMatches.length > 0) {
+        matchConditions.push({ $or: perServiceAddOnMatches });
+      }
+    }
+  }
+
+  if (matchConditions.length > 0) {
+    pipeline.push({ $match: { $and: matchConditions } });
+  }
+
+  return { pipeline, matchConditions, page, offset, limit, sort, order };
+};
 
 class ContractRepository extends RepositoryBase {
   /**
@@ -12,101 +140,7 @@ class ContractRepository extends RepositoryBase {
    * - addOns: { serviceName: [addOnNames] }
    */
   async findByFilters(queryFilters: any) {
-    const {
-      username,
-      firstName,
-      lastName,
-      email,
-      page = 1,
-      offset = 0,
-      limit = 20,
-      sort,
-      order = 'asc',
-      filters,
-    } = queryFilters || {};
-
-    const matchConditions: any[] = [];
-
-    if (username) {
-      matchConditions.push({ 'userContact.username': { $regex: username, $options: 'i' } });
-    }
-    if (firstName) {
-      matchConditions.push({ 'userContact.firstName': { $regex: firstName, $options: 'i' } });
-    }
-    if (lastName) {
-      matchConditions.push({ 'userContact.lastName': { $regex: lastName, $options: 'i' } });
-    }
-    if (email) {
-      matchConditions.push({ 'userContact.email': { $regex: email, $options: 'i' } });
-    }
-
-    // We'll convert contractedServices object to array to ease matching
-    const pipeline: any[] = [
-      { $addFields: { contractedServicesArray: { $objectToArray: '$contractedServices' } } },
-    ];
-
-    if (filters) {
-      // services filter
-      if (filters.services) {
-        const services = filters.services;
-        if (Array.isArray(services)) {
-          // array of service names: contractedServicesArray.k in list
-          matchConditions.push({ 'contractedServicesArray.k': { $in: services.map((s: string) => s.toLowerCase()) } });
-        } else if (typeof services === 'object') {
-          // object mapping serviceName -> [versions]
-          const perServiceMatches: any[] = [];
-          for (const [serviceName, versions] of Object.entries(services)) {
-            if (!Array.isArray(versions) || versions.length === 0) {
-              // match any version for the service
-              perServiceMatches.push({ 'contractedServicesArray': { $elemMatch: { k: serviceName.toLowerCase() } } });
-            } else {
-              // match if contractedServices has key serviceName and its v (value) in provided versions
-              perServiceMatches.push({
-                $and: [
-                  { 'contractedServicesArray': { $elemMatch: { k: serviceName.toLowerCase(), v: { $in: versions.map((v: string) => v.replace(/\./g, '_')) } } } },
-                ],
-              });
-            }
-          }
-          if (perServiceMatches.length > 0) {
-            matchConditions.push({ $or: perServiceMatches });
-          }
-        }
-      }
-
-      // plans filter: subscriptionPlans is an object serviceName -> planName
-      if (filters.plans && typeof filters.plans === 'object') {
-        const perServicePlanMatches: any[] = [];
-        for (const [serviceName, plans] of Object.entries(filters.plans)) {
-          if (Array.isArray(plans) && plans.length > 0) {
-            perServicePlanMatches.push({ [`subscriptionPlans.${serviceName.toLowerCase()}`]: { $in: plans.map((p: string) => new RegExp(`^${p}$`, 'i')) } });
-          }
-        }
-        if (perServicePlanMatches.length > 0) {
-          matchConditions.push({ $or: perServicePlanMatches });
-        }
-      }
-
-      // addOns filter: subscriptionAddOns is object serviceName -> { addOnName: count }
-      if (filters.addOns && typeof filters.addOns === 'object') {
-        const perServiceAddOnMatches: any[] = [];
-        for (const [serviceName, addOns] of Object.entries(filters.addOns)) {
-          if (Array.isArray(addOns) && addOns.length > 0) {
-            // We need to check keys of subscriptionAddOns[serviceName]
-            perServiceAddOnMatches.push({
-              $or: addOns.map((addOnName: string) => ({ [`subscriptionAddOns.${serviceName.toLowerCase()}.${addOnName.toLowerCase()}`]: { $exists: true } })),
-            });
-          }
-        }
-        if (perServiceAddOnMatches.length > 0) {
-          matchConditions.push({ $or: perServiceAddOnMatches });
-        }
-      }
-    }
-
-    if (matchConditions.length > 0) {
-      pipeline.push({ $match: { $and: matchConditions } });
-    }
+    const { pipeline, page, offset, limit, sort, order } = buildMatchPipeline(queryFilters);
 
     pipeline.push({
       $sort: {
@@ -120,6 +154,12 @@ class ContractRepository extends RepositoryBase {
     const contracts = await ContractMongoose.aggregate(pipeline);
 
     return contracts.map(contract => toPlainObject<LeanContract>(contract));
+  }
+
+  async countByFilters(queryFilters: any): Promise<number> {
+    const { pipeline } = buildMatchPipeline(queryFilters);
+    const result = await ContractMongoose.aggregate([...pipeline, { $count: 'total' }]);
+    return result[0]?.total ?? 0;
   }
 
   async findByUserId(userId: string): Promise<LeanContract | null> {
@@ -145,9 +185,65 @@ class ContractRepository extends RepositoryBase {
     return contract ? toPlainObject<LeanContract>(contract.toJSON()) : null;
   }
 
-  async bulkUpdate(contracts: LeanContract[], disable = false): Promise<boolean> {
+  async changeServiceName(oldServiceName: string, newServiceName: string, organizationId: string): Promise<number> {
+    const oldServiceKey = oldServiceName.toLowerCase();
+    const newServiceKey = newServiceName.toLowerCase();
+
+    const result = await ContractMongoose.updateMany(
+      {
+        organizationId,
+        [`contractedServices.${oldServiceKey}`]: { $exists: true }
+      },
+      [
+        {
+          $set: {
+            contractedServices: {
+              $arrayToObject: {
+                $map: {
+                  input: { $objectToArray: '$contractedServices' },
+                  as: 'item',
+                  in: {
+                    k: { $cond: [{ $eq: ['$$item.k', oldServiceKey] }, newServiceKey, '$$item.k'] },
+                    v: '$$item.v'
+                  }
+                }
+              }
+            },
+            subscriptionPlans: {
+              $arrayToObject: {
+                $map: {
+                  input: { $objectToArray: '$subscriptionPlans' },
+                  as: 'item',
+                  in: {
+                    k: { $cond: [{ $eq: ['$$item.k', oldServiceKey] }, newServiceKey, '$$item.k'] },
+                    v: '$$item.v'
+                  }
+                }
+              }
+            },
+            subscriptionAddOns: {
+              $arrayToObject: {
+                $map: {
+                  input: { $objectToArray: '$subscriptionAddOns' },
+                  as: 'item',
+                  in: {
+                    k: { $cond: [{ $eq: ['$$item.k', oldServiceKey] }, newServiceKey, '$$item.k'] },
+                    v: '$$item.v'
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    );
+
+    return result.modifiedCount;
+  }
+
+  async bulkUpdate(contracts: LeanContract[], disable = false): Promise<number> {
     if (contracts.length === 0) {
-      return true;
+      return 0;
     }
 
     const bulkOps = contracts.map(contract => ({
@@ -165,18 +261,13 @@ class ContractRepository extends RepositoryBase {
 
     const result = await ContractMongoose.bulkWrite(bulkOps);
 
-    if (result.modifiedCount === 0 && result.upsertedCount === 0) {
-      throw new Error('No contracts were updated or inserted');
-    }
-
-    return true;
+    return result.modifiedCount;
   }
 
-  async prune(): Promise<number> {
-    const result = await ContractMongoose.deleteMany({});
-    if (result.deletedCount === 0) {
-      throw new Error('No contracts found to delete');
-    }
+  async prune(organizationId?: string): Promise<number> {
+    const filter = organizationId ? { organizationId } : {};
+    const result = await ContractMongoose.deleteMany(filter);
+
     return result.deletedCount;
   }
 
@@ -185,6 +276,11 @@ class ContractRepository extends RepositoryBase {
     if (result.deletedCount === 0) {
       throw new Error(`Contract with userId ${userId} not found`);
     }
+  }
+
+  async bulkDestroy(userIds: string[]): Promise<number> {
+    const result = await ContractMongoose.deleteMany({ 'userContact.userId': { $in: userIds } });
+    return result.deletedCount || 0;
   }
 }
 

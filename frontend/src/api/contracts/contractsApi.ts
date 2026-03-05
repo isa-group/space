@@ -9,12 +9,13 @@ const DEFAULT_TIMEOUT = 8000;
  */
 export async function getContracts(
   apiKey: string,
+  organizationId: string,
   params: Record<string, any> = {},
   body: any = undefined
 ): Promise<{ data: Subscription[]; total?: number }> {
   try {
     const response = await axios.request({
-      url: '/contracts',
+      url: `/organizations/${organizationId}/contracts`,
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -31,5 +32,31 @@ export async function getContracts(
   } catch (error) {
     console.error('Failed to fetch contracts', error);
     throw new Error('Failed to fetch contracts');
+  }
+}
+
+/**
+ * Fetch a specific contract by userId
+ */
+export async function getContractDetail(
+  apiKey: string,
+  organizationId: string,
+  userId: string
+): Promise<Subscription> {
+  try {
+    const response = await axios.request({
+      url: `/organizations/${organizationId}/contracts/${userId}`,
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      timeout: DEFAULT_TIMEOUT,
+    });
+
+    return response.data as Subscription;
+  } catch (error) {
+    console.error('Failed to fetch contract details', error);
+    throw new Error('Failed to fetch contract details');
   }
 }

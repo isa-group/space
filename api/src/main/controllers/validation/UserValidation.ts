@@ -1,5 +1,5 @@
 import { check } from 'express-validator';
-import { USER_ROLES } from '../../types/models/User';
+import { USER_ROLES } from '../../types/permissions';
 
 const create = [
   check('username')

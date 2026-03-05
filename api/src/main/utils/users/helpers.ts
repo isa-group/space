@@ -1,8 +1,13 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
-function generateApiKey() {
-  const apiKey = crypto.randomBytes(32).toString('hex');
+function generateUserApiKey() {
+  const apiKey = "usr_" + crypto.randomBytes(32).toString('hex');
+  return apiKey;
+};
+
+function generateOrganizationApiKey() {
+  const apiKey = "org_" + crypto.randomBytes(32).toString('hex');
   return apiKey;
 };
 
@@ -13,4 +18,4 @@ async function hashPassword(password: string): Promise<string> {
   return hash;
 }
 
-export { generateApiKey, hashPassword };
+export { generateUserApiKey, generateOrganizationApiKey, hashPassword };

@@ -3,6 +3,7 @@ import { LeanPricing } from '../../types/models/Pricing';
 import { Subscription } from '../../types/models/Contract';
 import ServiceService from '../../services/ServiceService';
 import container from '../../config/container';
+import { convertKeysToLowercase } from '../../utils/helpers';
 
 const create = [
   // userContact (required)
@@ -238,7 +239,7 @@ const novateBillingPeriod = [
     .withMessage('renewalDays must be a positive integer'),
 ];
 
-async function isSubscriptionValid(subscription: Subscription): Promise<void> {
+async function isSubscriptionValid(subscription: Subscription, organizationId: string): Promise<void> {
   const selectedPricings: Record<string, LeanPricing> = {};
   const serviceService: ServiceService = container.resolve('serviceService');
 
@@ -246,11 +247,17 @@ async function isSubscriptionValid(subscription: Subscription): Promise<void> {
   const pricingPromises = Object.entries(subscription.contractedServices).map(
     async ([serviceName, pricingVersion]) => {
       try {
-        const pricing = await serviceService.showPricing(serviceName, pricingVersion);
+        const pricing = await serviceService.showPricing(serviceName, pricingVersion, organizationId);
+        if (!pricing) {
+          throw new Error(
+            `Pricing version ${pricingVersion} for service ${serviceName} not found in the request organization`
+          );
+        }
+        
         return { serviceName, pricing };
       } catch (error) {
         throw new Error(
-          `Pricing version ${pricingVersion} for service ${serviceName} not found`
+          `Pricing version ${pricingVersion} for service ${serviceName} not found in the request organization`
         );
       }
     }
@@ -276,7 +283,7 @@ async function isSubscriptionValid(subscription: Subscription): Promise<void> {
 
     if (!pricing) {
       throw new Error(
-        `Service ${serviceName} not found. Please check the services declared in subscriptionPlans and subscriptionAddOns.`
+        `NOT FOUND: Service with name ${serviceName} in the request organization. Please check the services declared in subscriptionPlans and subscriptionAddOns.`
       );
     }
 
@@ -291,6 +298,7 @@ function isSubscriptionValidInPricing(
 ): void {  
   const selectedPlan: string | undefined = subscription.subscriptionPlans[serviceName];
   const selectedAddOns = subscription.subscriptionAddOns[serviceName];
+  const pricingPlans = convertKeysToLowercase(pricing.plans || {});
 
   if (!selectedPlan && !selectedAddOns) {
     throw new Error(
@@ -298,9 +306,9 @@ function isSubscriptionValidInPricing(
     );
   }
 
-  if (selectedPlan && !(pricing.plans || {})[selectedPlan]) {
+  if (selectedPlan && !pricingPlans[selectedPlan.toLowerCase()]) {
     throw new Error(
-      `Plan ${selectedPlan} for service ${serviceName} not found`
+      `Plan ${selectedPlan} for service ${serviceName} not found in the request organization`
     );
   }
 
@@ -316,10 +324,12 @@ function _validateAddOns(
     return;
   }
 
+  const pricingAddOns = convertKeysToLowercase(pricing.addOns || {});
+
   for (const addOnName in selectedAddOns) {
 
-    if (!pricing.addOns![addOnName]){
-      throw new Error(`Add-on ${addOnName} declared in the subscription not found in pricing version ${pricing.version}`);
+    if (!pricingAddOns[addOnName.toLowerCase()]){
+      throw new Error(`Add-on ${addOnName} declared in the subscription not found in pricing version ${pricing.version} in the request organization`);
     }
 
     _validateAddOnAvailability(addOnName, selectedPlan, pricing);
@@ -336,10 +346,10 @@ function _validateAddOnAvailability(
 ): void {
   if (
     selectedPlan && pricing.addOns![addOnName] &&
-    !(pricing.addOns![addOnName].availableFor ?? Object.keys(pricing.plans!))?.includes(selectedPlan)
+    !(pricing.addOns![addOnName].availableFor ?? Object.keys(pricing.plans!))?.map(p => p.toLowerCase()).includes(selectedPlan.toLowerCase())
   ) {
     throw new Error(
-      `Add-on ${addOnName} is not available for plan ${selectedPlan}`
+      `Add-on ${addOnName} is not available for plan ${selectedPlan} in the request organization`
     );
   }
 }
@@ -353,7 +363,7 @@ function _validateDependentAddOns(
   const dependentAddOns = pricing.addOns![addOnName].dependsOn ?? [];
   if (!dependentAddOns.every(dependentAddOn => selectedAddOns.hasOwnProperty(dependentAddOn))) {
     throw new Error(
-      `Add-on ${addOnName} requires the following add-ons to be selected: ${dependentAddOns.join(', ')}`
+      `Add-on ${addOnName} requires the following add-ons to be selected in the request organization: ${dependentAddOns.join(', ')}`
     );
   }
 }
@@ -366,7 +376,7 @@ function _validateExcludedAddOns(
   const excludedAddOns = pricing.addOns![addOnName].excludes ?? [];
   if (excludedAddOns.some(excludedAddOn => selectedAddOns.hasOwnProperty(excludedAddOn))) {
     throw new Error(
-      `Add-on ${addOnName} cannot be selected with the following add-ons: ${excludedAddOns.join(', ')}`
+      `Add-on ${addOnName} cannot be selected with the following add-ons in the request organization: ${excludedAddOns.join(', ')}`
     );
   }
 }
@@ -378,7 +388,7 @@ function _validateAddOnQuantity(
 ): void {
   const quantity = selectedAddOns[addOnName];
   const minQuantity = pricing.addOns![addOnName].subscriptionConstraints?.minQuantity ?? 1;
-  const maxQuantity = pricing.addOns![addOnName].subscriptionConstraints?.maxQuantity ?? 1;
+  const maxQuantity = pricing.addOns![addOnName].subscriptionConstraints?.maxQuantity ?? Infinity;
   const quantityStep = pricing.addOns![addOnName].subscriptionConstraints?.quantityStep ?? 1;
 
   const isValidQuantity =
@@ -388,7 +398,7 @@ function _validateAddOnQuantity(
 
   if (!isValidQuantity) {
     throw new Error(
-      `Add-on ${addOnName} quantity ${quantity} is not valid. It must be between ${minQuantity} and ${maxQuantity}, and a multiple of ${quantityStep}`
+      `Add-on ${addOnName} quantity ${quantity} is not valid. It must be between ${minQuantity} and ${maxQuantity}, and a multiple of ${quantityStep} in the request organization`
     );
   }
 }

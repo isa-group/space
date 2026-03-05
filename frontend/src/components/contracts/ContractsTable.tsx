@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { motion } from 'framer-motion';
 
 import type { Subscription } from '@/types/Subscription';
 
@@ -16,6 +18,7 @@ interface Props {
 }
 
 export default function ContractsTable({ contracts, page, setPage, limit, setLimit, total, selectedService, availableVersions, selectedVersion, setSelectedVersion }: Props) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [planFilter, setPlanFilter] = useState('');
   const [addOnFilter, setAddOnFilter] = useState('');
@@ -182,7 +185,14 @@ export default function ContractsTable({ contracts, page, setPage, limit, setLim
                 </td>
                 <td className="px-4 py-3 align-top">{c.billingPeriod?.autoRenewal ? 'Auto' : c.billingPeriod?.endDate ?? '—'}</td>
                 <td className="px-4 py-3 align-top text-right">
-                  <button className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm">View</button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigate(`/contracts/${c.userContact?.userId}`)}
+                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm transition-colors cursor-pointer"
+                  >
+                    View
+                  </motion.button>
                 </td>
               </tr>
             ))}
