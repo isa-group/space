@@ -26,6 +26,7 @@ const buildMatchPipeline = (queryFilters: any): ContractMatchPipeline => {
     order = 'asc',
     filters,
     organizationId,
+    groupId,
   } = queryFilters || {};
 
   const matchConditions: any[] = [];
@@ -44,6 +45,9 @@ const buildMatchPipeline = (queryFilters: any): ContractMatchPipeline => {
   }
   if (organizationId) {
     matchConditions.push({ organizationId: organizationId });
+  }
+  if (groupId) {
+    matchConditions.push({ groupId: groupId });
   }
 
   const pipeline: any[] = [

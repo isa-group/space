@@ -98,6 +98,7 @@ class Pricing <<Entity>> {
 class Contract <<Entity>> {
     - userContact: UserContact
     - billingPeriod: BillingPeriod
+    - groupId: String
     - usageLevels: Map<String, Map<String, UsageLevel>>
     - contractedServices: Map<String, String>
     - subscriptionPlans: Map<String, String>

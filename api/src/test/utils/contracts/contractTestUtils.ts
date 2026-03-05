@@ -10,7 +10,7 @@ import { createMultipleTestServices } from '../services/serviceTestUtils';
 import { LeanUser } from '../../../main/types/models/User';
 import { createTestUser } from '../users/userTestUtils';
 
-async function createTestContract(organizationId: string, services: LeanService[], app: any): Promise<LeanContract> {
+async function createTestContract(organizationId: string, services: LeanService[], app: any, groupId?: string): Promise<LeanContract> {
   if (!app){
     app = await getApp();
   }
@@ -27,7 +27,7 @@ async function createTestContract(organizationId: string, services: LeanService[
     {} as Record<string, string>
   );
 
-  const contractData: ContractToCreate = await generateContract(contractedServices, organizationId, undefined, app);
+  const contractData: ContractToCreate = await generateContract(contractedServices, organizationId, undefined, app, groupId);
   const adminUser: LeanUser = await createTestUser('ADMIN');
   const apiKey = adminUser.apiKey;
 

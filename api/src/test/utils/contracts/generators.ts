@@ -24,7 +24,8 @@ async function generateContract(
   contractedServices: Record<string, string>,
   organizationId: string,
   userId?: string,
-  app?: any
+  app?: any,
+  groupId?: string
 ): Promise<ContractToCreate> {
   const appCopy = await useApp(app);
 
@@ -64,6 +65,7 @@ async function generateContract(
       renewalDays: faker.helpers.arrayElement([30, 365]),
     },
     organizationId: organizationId,
+    groupId: groupId,
     contractedServices: contractedServices,
     subscriptionPlans: subscriptionPlans,
     subscriptionAddOns: subscriptionAddOns,

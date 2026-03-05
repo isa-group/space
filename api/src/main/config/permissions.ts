@@ -174,13 +174,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   // ============================================
   {
     path: '/contracts',
-    methods: ['GET'],
-    allowedUserRoles: ['ADMIN'],
-    allowedOrgRoles: ['ALL', 'MANAGEMENT'],
-  },
-  {
-    path: '/contracts',
-    methods: ['POST'],
+    methods: ['GET', 'POST', 'PUT'],
     allowedUserRoles: ['ADMIN'],
     allowedOrgRoles: ['ALL', 'MANAGEMENT'],
   },
