@@ -26,6 +26,7 @@ const contractSchema = new Schema(
     },
     usageLevels: {type: Map, of: {type: Map, of: usageLevelSchema}},
     organizationId: { type: String, ref: "Organization", required: true },
+    groupId: { type: String },
     contractedServices: {type: Map, of: String},
     subscriptionPlans: { type: Map, of: String },
     subscriptionAddOns: { type: Map, of: {type: Map, of: Number} },

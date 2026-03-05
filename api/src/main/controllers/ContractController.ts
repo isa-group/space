@@ -17,8 +17,10 @@ class ContractController {
     this.show = this.show.bind(this);
     this.create = this.create.bind(this);
     this.novate = this.novate.bind(this);
+    this.novateByGroupId = this.novateByGroupId.bind(this);
     this.novateUserContact = this.novateUserContact.bind(this);
     this.novateBillingPeriod = this.novateBillingPeriod.bind(this);
+    this.novateBillingPeriodByGroupId = this.novateBillingPeriodByGroupId.bind(this);
     this.resetUsageLevels = this.resetUsageLevels.bind(this);
     this.prune = this.prune.bind(this);
     this.destroy = this.destroy.bind(this);
@@ -82,7 +84,7 @@ class ContractController {
       } else if (err.message.toLowerCase().includes('conflict:')) {
         res.status(409).send({ error: err.message });
       } else {
-      res.status(500).send({ error: err.message });
+        res.status(500).send({ error: err.message });
       }
     }
   }
@@ -93,6 +95,27 @@ class ContractController {
       const newSubscription: Subscription = req.body;
       const contract = await this.contractService.novate(userId, newSubscription);
       res.status(200).json(contract);
+    } catch (err: any) {
+      if (err.message.toLowerCase().includes('not found')) {
+        res.status(404).send({ error: err.message });
+      } else if (err.message.toLowerCase().includes('invalid subscription:')) {
+        res.status(400).send({ error: err.message });
+      } else {
+        res.status(500).send({ error: err.message });
+      }
+    }
+  }
+
+  async novateByGroupId(req: any, res: any) {
+    try {
+      const groupId = req.query.groupId;
+      if (!groupId) {
+        res.status(400).send({ error: 'Missing groupId query parameter' });
+        return;
+      }
+      const newSubscription: Subscription = req.body;
+      const contracts = await this.contractService.novateByGroupId(groupId, newSubscription);
+      res.status(200).json(contracts);
     } catch (err: any) {
       if (err.message.toLowerCase().includes('not found')) {
         res.status(404).send({ error: err.message });
@@ -123,11 +146,37 @@ class ContractController {
     try {
       const userId = req.params.userId;
       const billingPeriod = req.body;
+
       const contract = await this.contractService.novateBillingPeriod(userId, billingPeriod);
       res.status(200).json(contract);
     } catch (err: any) {
       if (err.message.toLowerCase().includes('not found')) {
         res.status(404).send({ error: err.message });
+      } else if (err.message.toLowerCase().includes('invalid data:')) {
+        res.status(400).send({ error: err.message });
+      } else {
+        res.status(500).send({ error: err.message });
+      }
+    }
+  }
+
+  async novateBillingPeriodByGroupId(req: any, res: any) {
+    try {
+      const groupId = req.params.groupId;
+      const billingPeriod = req.body;
+
+      if (!groupId) {
+        res.status(400).send({ error: 'Missing groupId query parameter' });
+        return;
+      }
+
+      const contracts = await this.contractService.novateByGroupId(groupId, billingPeriod);
+      res.status(200).json(contracts);
+    } catch (err: any) {
+      if (err.message.toLowerCase().includes('not found')) {
+        res.status(404).send({ error: err.message });
+      } else if (err.message.toLowerCase().includes('invalid data:')) {
+        res.status(400).send({ error: err.message });
       } else {
         res.status(500).send({ error: err.message });
       }
@@ -158,7 +207,6 @@ class ContractController {
 
   async prune(req: any, res: any) {
     try {
-
       const organizationId = req.org?.id ?? req.params.organizationId;
 
       const result: number = await this.contractService.prune(organizationId, req.user);

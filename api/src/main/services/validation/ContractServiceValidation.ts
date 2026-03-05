@@ -19,5 +19,9 @@ export function validateContractQueryFilters(contractQueryFilters: ContractQuery
     errors.push("Invalid sort field. Please use one of the following: firstName, lastName, username, email");
   }
 
+  if (contractQueryFilters.order && !["asc", "desc"].includes(contractQueryFilters.order)) {
+    errors.push("Invalid order value. Please use 'asc' or 'desc'");
+  }
+
   return errors;
 }

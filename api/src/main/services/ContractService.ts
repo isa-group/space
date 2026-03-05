@@ -221,6 +221,36 @@ class ContractService {
 
     return result;
   }
+  
+  async novateByGroupId(groupId: string, newSubscription: any): Promise<LeanContract[]> {
+    const contracts = await this.index({groupId})
+
+    if (!contracts || contracts.length === 0) {
+      throw new Error(`INVALID DATA: No contracts found with groupId ${groupId}`);
+    }
+
+    const updatedContracts: LeanContract[] = [];
+
+    for (const contract of contracts) {
+      await isSubscriptionValid(newSubscription, contract.organizationId);
+      const newContract = performNovation(contract, newSubscription);
+      updatedContracts.push(newContract);
+    }
+
+    const result = await this.contractRepository.bulkUpdate(updatedContracts);
+
+    if (!result) {
+      throw new Error(`Failed to update contracts for groupId ${groupId}`);
+    }
+
+    const contractsToReturn = await this.index({groupId})
+
+    for (const contract of contractsToReturn) {
+      contract.contractedServices = resetEscapeContractedServiceVersions(contract.contractedServices);
+    }
+
+    return contractsToReturn;
+  }
 
   async renew(userId: string): Promise<LeanContract> {
     let contract = await this.cacheService.get(`contracts.${userId}`);
@@ -327,6 +357,46 @@ class ContractService {
     await this.cacheService.del(`features.${userId}.*`);
 
     return result;
+  }
+  
+  async novateBillingPeriodByGroupId(
+    groupId: string,
+    newBillingPeriod: { endDate: Date; autoRenew: boolean; renewalDays: number }
+  ): Promise<LeanContract[]> {
+
+    const contracts = await this.index({ groupId: groupId });
+
+    if (!contracts || contracts.length === 0) {
+      throw new Error(`INVALID DATA: Contract with groupId ${groupId} not found`);
+    }
+
+    const updatedContracts: LeanContract[] = [];
+
+    for (const contract of contracts) {
+      if (new Date(newBillingPeriod.endDate) < new Date(contract.billingPeriod.startDate)) {
+        throw new Error(`INVALID DATA: Error updating billing period for contract of user ${contract.userContact.userId}. End date cannot be before the start date.`);
+      }
+      contract.billingPeriod = {
+        ...contract.billingPeriod,
+        ...newBillingPeriod,
+      };
+
+      updatedContracts.push(contract);
+    }
+
+    const result = await this.contractRepository.bulkUpdate(updatedContracts);
+
+    if (!result) {
+      throw new Error(`Failed to update contracts for groupId ${groupId}`);
+    }
+
+    const contractsToReturn = await this.index({ groupId: groupId });
+
+    for (const contract of contractsToReturn) {
+      contract.contractedServices = resetEscapeContractedServiceVersions(contract.contractedServices);
+    }
+
+    return contractsToReturn;
   }
 
   async resetUsageLevels(
