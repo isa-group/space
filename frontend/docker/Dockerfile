@@ -26,6 +26,7 @@ COPY ./vite.config.ts .
 COPY ./index.html .
 
 ARG VITE_ENVIRONMENT
+ARG VITE_FRONTEND_BASE_PATH
 ARG VITE_SPACE_BASE_URL
 
 # Build your application
