@@ -106,7 +106,7 @@ export default function Sidebar({
               (selected === tab.path
                 ? 'bg-indigo-100 dark:bg-gray-800 font-bold' : '')
             }
-            onClick={() => navigate(tab.path)}
+            onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH}${tab.path}`)}
             aria-current={selected === tab.path ? 'page' : undefined}
           >
             {tab.icon}
@@ -155,7 +155,7 @@ export default function Sidebar({
                       (selected === tab.path
                         ? 'bg-indigo-100 dark:bg-gray-800 font-bold' : '')
                     }
-                    onClick={() => navigate(tab.path)}
+                    onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH}${tab.path}`)}
                     aria-current={selected === tab.path ? 'page' : undefined}
                   >
                     {tab.icon}
@@ -182,7 +182,7 @@ export default function Sidebar({
                   (selected === tab.path
                     ? 'bg-indigo-100 dark:bg-gray-800 font-bold' : '')
                 }
-                onClick={() => navigate(tab.path)}
+                onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH}${tab.path}`)}
                 aria-current={selected === tab.path ? 'page' : undefined}
               >
                 {tab.icon}
