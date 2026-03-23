@@ -1,9 +1,9 @@
 import type { Pricing } from '@/types/Services';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiZap, FiArchive } from 'react-icons/fi';
+import { FiZap, FiArchive, FiMoreVertical, FiDownload, FiExternalLink } from 'react-icons/fi';
 import { useCustomConfirm } from '@/hooks/useCustomConfirm';
-import { deletePricingVersion } from '@/api/services/servicesApi';
+import { deletePricingVersion, getPublicPricingUrl } from '@/api/services/servicesApi';
 import useAuth from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useCustomAlert } from '@/hooks/useCustomAlert';
@@ -26,12 +26,121 @@ export default function DragDropPricings({
     null
   );
   const [overDelete, setOverDelete] = useState(false);
+  const [openMenuVersion, setOpenMenuVersion] = useState<string | null>(null);
+  const [menuActionLoadingVersion, setMenuActionLoadingVersion] = useState<string | null>(null);
   const {showConfirm, confirmElement} = useCustomConfirm();
   const {showAlert, alertElement} = useCustomAlert();
 
   const { user } = useAuth();
   const { currentOrganization } = useOrganization();
-  const serviceName = window.location.pathname.split('/').pop() || '';
+  const serviceName = decodeURIComponent(window.location.pathname.split('/').pop() || '');
+
+  function getAbsoluteUrlFromPath(path: string): string {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+
+    const apiBaseUrl = (import.meta.env.VITE_SPACE_BASE_URL ?? 'http://localhost:3000/api/v1').replace(/\/+$/, '');
+    const apiOrigin = apiBaseUrl.replace(/\/api\/v1$/, '');
+    const withoutPublicPrefix = path.startsWith('public/') ? path.replace(/^public\/+/, '') : path;
+    const normalizedPath = withoutPublicPrefix.startsWith('/') ? withoutPublicPrefix : `/${withoutPublicPrefix}`;
+
+    return `${apiOrigin}${normalizedPath}`;
+  }
+
+  async function resolvePublicYamlUrl(pricing: Pricing): Promise<string | null> {
+    if (pricing.yamlPath) {
+      return getAbsoluteUrlFromPath(pricing.yamlPath);
+    }
+
+    if (!currentOrganization?.id) {
+      await showAlert('Organization not found. Please select an organization and try again.');
+      return null;
+    }
+
+    try {
+      setMenuActionLoadingVersion(pricing.version);
+      const result = await getPublicPricingUrl(
+        user.apiKey,
+        currentOrganization.id,
+        serviceName,
+        pricing.version
+      );
+      return result.url;
+    } catch (error: any) {
+      await showAlert(error.message || 'Failed to prepare public pricing YAML URL');
+      return null;
+    } finally {
+      setMenuActionLoadingVersion(null);
+    }
+  }
+
+  async function resolveViewYamlUrl(pricing: Pricing): Promise<string | null> {
+    if (pricing.url) {
+      return getAbsoluteUrlFromPath(pricing.url);
+    }
+
+    return resolvePublicYamlUrl(pricing);
+  }
+
+  async function downloadYamlFile(url: string, fileName: string): Promise<void> {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = fileName;
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+  }
+
+  async function handleViewYaml(pricing: Pricing) {
+    const yamlUrl = await resolveViewYamlUrl(pricing);
+
+    if (!yamlUrl) {
+      return;
+    }
+
+    window.open(yamlUrl, '_blank', 'noopener,noreferrer');
+  }
+
+  async function handleDownloadYaml(pricing: Pricing) {
+    const yamlUrl = await resolveViewYamlUrl(pricing);
+
+    if (!yamlUrl) {
+      return;
+    }
+
+    await downloadYamlFile(yamlUrl, `${pricing.version}.yaml`);
+  }
+
+  async function handleOpenInSphere(pricing: Pricing) {
+    const publicYamlUrl = await resolvePublicYamlUrl(pricing);
+
+    if (!publicYamlUrl) {
+      return;
+    }
+
+    const sphereUrl = `https://sphere.score.us.es/editor?pricingUrl=${encodeURI(publicYamlUrl)}`;
+    window.open(sphereUrl, '_blank', 'noopener,noreferrer');
+  }
 
   function handleDragStart(e: React.DragEvent, pricing: Pricing, from: 'active' | 'archived') {
     setDragged({ pricing, from });
@@ -156,9 +265,86 @@ export default function DragDropPricings({
                 {pricing.version}
               </span>
               <span className="text-xs text-gray-500 dark:text-gray-300">{pricing.currency}</span>
-              <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">
-                {new Date(pricing.createdAt).toLocaleDateString()}
-              </span>
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-xs text-gray-400 dark:text-gray-500">
+                  {new Date(pricing.createdAt).toLocaleDateString()}
+                </span>
+                <div
+                  className="relative"
+                  tabIndex={0}
+                  onBlur={e => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      setOpenMenuVersion(null);
+                    }
+                  }}
+                >
+                  <button
+                    type="button"
+                    draggable={false}
+                    aria-label={`Pricing ${pricing.version} options`}
+                    className="cursor-pointer p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+                    onMouseDown={e => {
+                      e.stopPropagation();
+                    }}
+                    onClick={e => {
+                      e.stopPropagation();
+                      setOpenMenuVersion(current =>
+                        current === pricing.version ? null : pricing.version
+                      );
+                    }}
+                  >
+                    <FiMoreVertical size={14} />
+                  </button>
+
+                  <AnimatePresence>
+                    {openMenuVersion === pricing.version && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.12 }}
+                        className="absolute right-0 mt-1 w-44 bg-white dark:bg-gray-900 rounded-lg border border-gray-100 dark:border-gray-700 shadow-lg z-50"
+                        onMouseDown={e => e.stopPropagation()}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          disabled={menuActionLoadingVersion === pricing.version}
+                          className="cursor-pointer w-full px-3 py-2 text-left text-xs text-indigo-700 dark:text-indigo-300 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 disabled:opacity-60"
+                          onClick={() => {
+                            setOpenMenuVersion(null);
+                            void handleViewYaml(pricing);
+                          }}
+                        >
+                          <FiExternalLink size={13} /> View YAML
+                        </button>
+                        <button
+                          type="button"
+                          disabled={menuActionLoadingVersion === pricing.version}
+                          className="cursor-pointer w-full px-3 py-2 text-left text-xs text-indigo-700 dark:text-indigo-300 hover:bg-gray-100 dark:hover:bg-gray-800 border-t border-gray-100 dark:border-gray-700 flex items-center gap-2 disabled:opacity-60"
+                          onClick={() => {
+                            setOpenMenuVersion(null);
+                            void handleDownloadYaml(pricing);
+                          }}
+                        >
+                          <FiDownload size={13} /> Download YAML
+                        </button>
+                        <button
+                          type="button"
+                          disabled={menuActionLoadingVersion === pricing.version}
+                          className="cursor-pointer w-full px-3 py-2 text-left text-xs text-indigo-700 dark:text-indigo-300 hover:bg-gray-100 dark:hover:bg-gray-800 border-t border-gray-100 dark:border-gray-700 flex items-center gap-2 disabled:opacity-60"
+                          onClick={() => {
+                            setOpenMenuVersion(null);
+                            void handleOpenInSphere(pricing);
+                          }}
+                        >
+                          <FiExternalLink size={13} /> View in SPHERE
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
             </li>
           </div>
         ))}

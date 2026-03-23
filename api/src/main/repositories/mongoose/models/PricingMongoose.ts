@@ -8,6 +8,7 @@ const pricingSchema = new Schema(
   {
     _serviceName: { type: String },
     _organizationId: { type: String },
+    yamlPath: { type: String },
     version: { type: String, required: true },
     currency: { type: String, required: true },
     createdAt: { type: Date, required: true, default: Date.now },

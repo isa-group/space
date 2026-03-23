@@ -73,6 +73,33 @@ export async function getPricingVersion(
     .catch(() => null);
 }
 
+export async function getPublicPricingUrl(
+  apiKey: string,
+  organizationId: string,
+  serviceName: string,
+  version: string
+): Promise<{ path: string; url: string }> {
+  return axios
+    .get(
+      `/organizations/${organizationId}/services/${serviceName}/pricings/${version}/public-url`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+        },
+        timeout: DEFAULT_TIMEOUT,
+      }
+    )
+    .then(response => response.data as { path: string; url: string })
+    .catch(error => {
+      throw new Error(
+        `Failed to retrieve public YAML URL for pricing version ${version}. Error: ${
+          error.response?.data?.error || error.message
+        }`
+      );
+    });
+}
+
 export async function changePricingAvailability(
   apiKey: string,
   organizationId: string,

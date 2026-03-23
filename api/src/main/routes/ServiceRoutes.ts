@@ -36,6 +36,10 @@ const loadFileRoutes = function (app: express.Application) {
     .post(memberRole, hasPermission(['OWNER','ADMIN', 'MANAGER']), upload, serviceController.addPricingToService);
 
   app
+    .route(baseUrl + '/organizations/:organizationId/services/:serviceName/pricings/:pricingVersion/public-url')
+    .get(memberRole, hasPermission(['OWNER', 'ADMIN', 'MANAGER', 'EVALUATOR']), serviceController.showPublicPricingUrl);
+
+  app
     .route(baseUrl + '/organizations/:organizationId/services/:serviceName/pricings/:pricingVersion')
     .get(memberRole, hasPermission(['OWNER', 'ADMIN', 'MANAGER', 'EVALUATOR']), serviceController.showPricing)
     .put(memberRole, hasPermission(['OWNER','ADMIN', 'MANAGER']), PricingValidator.updateAvailability, handleValidation, serviceController.updatePricingAvailability)
@@ -62,6 +66,10 @@ const loadFileRoutes = function (app: express.Application) {
     .route(baseUrl + '/services/:serviceName/pricings')
     .get(serviceController.indexPricings)
     .post(upload, serviceController.addPricingToService);
+
+  app
+    .route(baseUrl + '/services/:serviceName/pricings/:pricingVersion/public-url')
+    .get(serviceController.showPublicPricingUrl);
 
   app
     .route(baseUrl + '/services/:serviceName/pricings/:pricingVersion')

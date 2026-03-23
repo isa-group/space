@@ -14,6 +14,7 @@ class ServiceController {
     this.indexPricings = this.indexPricings.bind(this);
     this.show = this.show.bind(this);
     this.showPricing = this.showPricing.bind(this);
+    this.showPublicPricingUrl = this.showPublicPricingUrl.bind(this);
     this.create = this.create.bind(this);
     this.update = this.update.bind(this);
     this.updatePricingAvailability = this.updatePricingAvailability.bind(this);
@@ -109,6 +110,38 @@ class ServiceController {
       resetEscapePricingVersion(pricing);
 
       return res.json(pricing);
+    } catch (err: any) {
+      if (err.message.toLowerCase().includes('not found')) {
+        res.status(404).send({ error: err.message });
+      } else {
+        res.status(500).send({ error: err.message });
+      }
+    }
+  }
+
+  async showPublicPricingUrl(req: any, res: any) {
+    try {
+      const serviceName = req.params.serviceName;
+      const pricingVersion = req.params.pricingVersion;
+      const organizationId = req.org ? req.org.id : req.params.organizationId;
+
+      if (!organizationId) {
+        return res.status(400).send({
+          error:
+            'Organization ID is required. You can either provide an organization scoped API key or use the /organizations/*/services/** paths',
+        });
+      }
+
+      const pricingPath = await this.serviceService.showPublicPricingUrl(
+        serviceName,
+        pricingVersion,
+        organizationId
+      );
+
+      return res.json({
+        path: pricingPath,
+        url: `${req.protocol}://${req.get('host')}${pricingPath}`,
+      });
     } catch (err: any) {
       if (err.message.toLowerCase().includes('not found')) {
         res.status(404).send({ error: err.message });
