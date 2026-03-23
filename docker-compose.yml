@@ -72,6 +72,18 @@ services:
       - space-server
     networks:
       - space-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:5050').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
   nginx:
     restart: always
     container_name: space-nginx
@@ -85,6 +97,12 @@ services:
       - space-client
     networks:
       - space-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5403/api/v1/healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 volumes:
   space-mongodb:
     driver: local
