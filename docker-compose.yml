@@ -50,8 +50,10 @@ services:
     volumes:
       - 'space-statics:/usr/src/server/public'
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - space-network
     healthcheck:
@@ -70,7 +72,8 @@ services:
         VITE_SPACE_BASE_URL: http://localhost:5403/api/v1 # Change to http://localhost/api/v1 if running SPACE in kubernetes
         # VITE_FRONTEND_BASE_PATH: /space # Uncomment and set to the base path of the frontend if it's not served at the root (e.g., /space)
     depends_on:
-      - space-server
+      space-server:
+        condition: service_healthy
     networks:
       - space-network
     healthcheck:
@@ -94,8 +97,10 @@ services:
     ports:
       - 5403:5403
     depends_on:
-      - space-server
-      - space-client
+      space-server:
+        condition: service_healthy
+      space-client:
+        condition: service_healthy
     networks:
       - space-network
     healthcheck:
