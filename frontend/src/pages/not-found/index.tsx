@@ -35,7 +35,7 @@ export default function NotFoundPage() {
         </p>
 
         <button
-          onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH ?? '/'}`)}
+          onClick={() => navigate(`${import.meta.env.BASE_URL}`)}
           className="cursor-pointer inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-md transition-all hover:shadow-lg"
         >
           <FiHome size={20} />
