@@ -102,6 +102,9 @@ class ServiceService {
       const batchResults = await Promise.all(
         batch.map(async version => {
           const url = pricingsToReturn.get(version)?.url;
+          if (!url) {
+            return null;
+          }
           // Try cache first
           let pricing = await this.cacheService.get(`pricing.url.${url}`);
           if (!pricing) {
@@ -114,10 +117,10 @@ class ServiceService {
               console.debug('Cache set failed for pricing.url.' + url, err);
             }
           }
-          return pricing;
+          return { ...pricing, url };
         })
       );
-      remotePricings.push(...batchResults);
+      remotePricings.push(...batchResults.filter(Boolean));
     }
 
     return (locallySavedPricings as unknown as LeanPricing[]).concat(remotePricings);
@@ -184,8 +187,20 @@ class ServiceService {
         await this.cacheService.set(`pricing.url.${pricingLocator.url}`, pricing, 3600, true);
       }
 
-      return pricing;
+      return { ...pricing, url: pricingLocator.url };
     }
+  }
+
+  async showPublicPricingUrl(serviceName: string, pricingVersion: string, organizationId: string) {
+    const pricing = await this.showPricing(serviceName, pricingVersion, organizationId);
+
+    if (pricing?.yamlPath) {
+      return pricing.yamlPath;
+    }
+
+    throw new Error(
+      `Pricing version ${pricingVersion} for service ${serviceName} does not have a persisted yamlPath`
+    );
   }
 
   async create(receivedPricing: any, pricingType: 'file' | 'url', organizationId: string) {
@@ -229,6 +244,12 @@ class ServiceService {
     // Step 1: Parse and validate pricing
 
     const uploadedPricing: Pricing = await this._getPricingFromPath(pricingFile.path);
+    const pricingYamlPath = this._savePricingYamlFile(
+      pricingFile.path,
+      organizationId,
+      uploadedPricing.saasName,
+      uploadedPricing.version
+    );
     const formattedPricingVersion = escapeVersion(uploadedPricing.version);
     // Step 1.1: Load the service if already exists
     if (serviceName) {
@@ -255,6 +276,7 @@ class ServiceService {
     const pricingData: ExpectedPricingType & { _serviceName: string; _organizationId: string } = {
       _serviceName: uploadedPricing.saasName,
       _organizationId: organizationId,
+      yamlPath: pricingYamlPath,
       ...parsePricingToSpacePricingObject(uploadedPricing),
     };
 
@@ -478,8 +500,28 @@ class ServiceService {
   }
 
   async _createFromUrl(pricingUrl: string, organizationId: string, serviceName?: string) {
-    const uploadedPricing: Pricing = await this._getPricingFromRemoteUrl(pricingUrl);
+    const remotePricingYaml = await this._fetchRemotePricingYaml(pricingUrl);
+    const uploadedPricing: Pricing = retrievePricingFromText(remotePricingYaml);
+    const pricingYamlPath = this._savePricingYamlContent(
+      remotePricingYaml,
+      organizationId,
+      uploadedPricing.saasName,
+      uploadedPricing.version
+    );
     const formattedPricingVersion = escapeVersion(uploadedPricing.version);
+
+    const pricingData: ExpectedPricingType & { _serviceName: string; _organizationId: string } = {
+      _serviceName: uploadedPricing.saasName,
+      _organizationId: organizationId,
+      yamlPath: pricingYamlPath,
+      ...parsePricingToSpacePricingObject(uploadedPricing),
+    };
+
+    const validationErrors: string[] = validatePricingData(pricingData);
+
+    if (validationErrors.length > 0) {
+      throw new Error(`Validation errors: ${validationErrors.join(', ')}`);
+    }
 
     if (!serviceName) {
       // Create a new service or re-enable a disabled one
@@ -496,6 +538,12 @@ class ServiceService {
 
       if (existingEnabled) {
         throw new Error(`Invalid request: Service ${uploadedPricing.saasName} already exists`);
+      }
+
+      const savedPricing = await this.pricingRepository.create(pricingData);
+
+      if (!savedPricing) {
+        throw new Error(`Pricing ${uploadedPricing.version} not saved`);
       }
 
       if (existingDisabled) {
@@ -526,11 +574,7 @@ class ServiceService {
         const updateData: any = {
           disabled: false,
           organizationId: organizationId,
-          activePricings: {
-            [formattedPricingVersion]: {
-              url: pricingUrl,
-            },
-          },
+          activePricings: new Map([[formattedPricingVersion, { id: savedPricing.id }]]),
           archivedPricings: newArchived,
         };
 
@@ -550,11 +594,7 @@ class ServiceService {
         name: uploadedPricing.saasName,
         disabled: false,
         organizationId: organizationId,
-        activePricings: {
-          [formattedPricingVersion]: {
-            url: pricingUrl,
-          },
-        },
+        activePricings: new Map([[formattedPricingVersion, { id: savedPricing.id }]]),
       };
 
       const service = await this.serviceRepository.create(serviceData);
@@ -620,16 +660,22 @@ class ServiceService {
 
         updatePayload.disabled = false;
         updatePayload.organizationId = organizationId;
-        updatePayload.activePricings = {
-          [formattedPricingVersion]: {
-            url: pricingUrl,
-          },
-        };
+        const savedPricing = await this.pricingRepository.create(pricingData);
+
+        if (!savedPricing) {
+          throw new Error(`Pricing ${uploadedPricing.version} not saved`);
+        }
+
+        updatePayload.activePricings = new Map([[formattedPricingVersion, { id: savedPricing.id }]]);
         updatePayload.archivedPricings = newArchived;
       } else {
-        updatePayload[`activePricings.${formattedPricingVersion}`] = {
-          url: pricingUrl,
-        };
+        const savedPricing = await this.pricingRepository.create(pricingData);
+
+        if (!savedPricing) {
+          throw new Error(`Pricing ${uploadedPricing.version} not saved`);
+        }
+
+        updatePayload[`activePricings.${formattedPricingVersion}`] = { id: savedPricing.id };
       }
 
       const updatedService = await this.serviceRepository.update(
@@ -1083,9 +1129,49 @@ class ServiceService {
     }
   }
 
-  async _getPricingFromRemoteUrl(url: string) {
+  _normalizePricingPathPart(value: string) {
+    return value
+      .trim()
+      .replace(/[^a-zA-Z0-9._-]/g, '-')
+      .replace(/-+/g, '-')
+      .toLowerCase();
+  }
+
+  _buildPricingYamlRelativePath(organizationId: string, serviceName: string, version: string) {
+    const safeOrganizationId = this._normalizePricingPathPart(organizationId);
+    const safeServiceName = this._normalizePricingPathPart(serviceName);
+    const safeVersion = this._normalizePricingPathPart(version);
+
+    return `/static/pricings/${safeOrganizationId}-${safeServiceName}-${safeVersion}.yaml`;
+  }
+
+  _savePricingYamlContent(
+    yamlContent: string,
+    organizationId: string,
+    serviceName: string,
+    version: string
+  ) {
+    const relativePath = this._buildPricingYamlRelativePath(organizationId, serviceName, version);
+    const absolutePath = path.resolve('public', `.${relativePath}`);
+
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    fs.writeFileSync(absolutePath, yamlContent, 'utf8');
+
+    return relativePath;
+  }
+
+  _savePricingYamlFile(
+    sourcePath: string,
+    organizationId: string,
+    serviceName: string,
+    version: string
+  ) {
+    const yamlContent = fs.readFileSync(sourcePath, 'utf8');
+    return this._savePricingYamlContent(yamlContent, organizationId, serviceName, version);
+  }
+
+  async _fetchRemotePricingYaml(url: string) {
     const agent = new https.Agent({ rejectUnauthorized: false });
-    // Abort fetch if it takes longer than timeoutMs
     const timeoutMs = 5000;
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -1105,7 +1191,12 @@ class ServiceService {
     if (!response.ok) {
       throw new Error(`Failed to fetch pricing from URL: ${url}, status: ${response.status}`);
     }
-    const remotePricingYaml = await response.text();
+
+    return response.text();
+  }
+
+  async _getPricingFromRemoteUrl(url: string) {
+    const remotePricingYaml = await this._fetchRemotePricingYaml(url);
     return retrievePricingFromText(remotePricingYaml);
   }
 
