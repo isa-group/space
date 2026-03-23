@@ -160,7 +160,7 @@ export default function WelcomePage() {
               Recent Services
             </h2>
             <button
-              onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH}/services`)}
+              onClick={() => navigate(`${import.meta.env.BASE_URL}services`)}
               className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 cursor-pointer transition-colors"
             >
               View all <FiArrowRight />
@@ -177,7 +177,7 @@ export default function WelcomePage() {
               <FiServer className="mx-auto mb-2" size={32} />
               <p>No services yet</p>
               <button
-                onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH}/services`)}
+                onClick={() => navigate(`${import.meta.env.BASE_URL}services`)}
                 className="mt-3 text-sm text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
               >
                 Create your first service
@@ -191,7 +191,7 @@ export default function WelcomePage() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: idx * 0.1 }}
-                  onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH}/services/${service.name}`)}
+                  onClick={() => navigate(`${import.meta.env.BASE_URL}services/${service.name}`)}
                   className="cursor-pointer p-4 bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-gray-700 dark:to-gray-600 rounded-lg hover:shadow-md transition-shadow border border-indigo-100 dark:border-gray-600"
                 >
                   <div className="flex items-center justify-between">
@@ -217,7 +217,7 @@ export default function WelcomePage() {
               Recent Contracts
             </h2>
             <button
-              onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH}/contracts/dashboard`)}
+              onClick={() => navigate(`${import.meta.env.BASE_URL}contracts/dashboard`)}
               className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 cursor-pointer transition-colors"
             >
               View all <FiArrowRight />
@@ -234,7 +234,7 @@ export default function WelcomePage() {
               <FiFileText className="mx-auto mb-2" size={32} />
               <p>No contracts yet</p>
               <button
-                onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH}/contracts/dashboard`)}
+                onClick={() => navigate(`${import.meta.env.BASE_URL}contracts/dashboard`)}
                 className="mt-3 text-sm text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
               >
                 View contracts dashboard
