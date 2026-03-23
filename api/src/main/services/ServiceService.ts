@@ -500,28 +500,8 @@ class ServiceService {
   }
 
   async _createFromUrl(pricingUrl: string, organizationId: string, serviceName?: string) {
-    const remotePricingYaml = await this._fetchRemotePricingYaml(pricingUrl);
-    const uploadedPricing: Pricing = retrievePricingFromText(remotePricingYaml);
-    const pricingYamlPath = this._savePricingYamlContent(
-      remotePricingYaml,
-      organizationId,
-      uploadedPricing.saasName,
-      uploadedPricing.version
-    );
+    const uploadedPricing: Pricing = await this._getPricingFromRemoteUrl(pricingUrl);
     const formattedPricingVersion = escapeVersion(uploadedPricing.version);
-
-    const pricingData: ExpectedPricingType & { _serviceName: string; _organizationId: string } = {
-      _serviceName: uploadedPricing.saasName,
-      _organizationId: organizationId,
-      yamlPath: pricingYamlPath,
-      ...parsePricingToSpacePricingObject(uploadedPricing),
-    };
-
-    const validationErrors: string[] = validatePricingData(pricingData);
-
-    if (validationErrors.length > 0) {
-      throw new Error(`Validation errors: ${validationErrors.join(', ')}`);
-    }
 
     if (!serviceName) {
       // Create a new service or re-enable a disabled one
@@ -538,12 +518,6 @@ class ServiceService {
 
       if (existingEnabled) {
         throw new Error(`Invalid request: Service ${uploadedPricing.saasName} already exists`);
-      }
-
-      const savedPricing = await this.pricingRepository.create(pricingData);
-
-      if (!savedPricing) {
-        throw new Error(`Pricing ${uploadedPricing.version} not saved`);
       }
 
       if (existingDisabled) {
@@ -574,7 +548,11 @@ class ServiceService {
         const updateData: any = {
           disabled: false,
           organizationId: organizationId,
-          activePricings: new Map([[formattedPricingVersion, { id: savedPricing.id }]]),
+          activePricings: {
+            [formattedPricingVersion]: {
+              url: pricingUrl,
+            },
+          },
           archivedPricings: newArchived,
         };
 
@@ -594,7 +572,11 @@ class ServiceService {
         name: uploadedPricing.saasName,
         disabled: false,
         organizationId: organizationId,
-        activePricings: new Map([[formattedPricingVersion, { id: savedPricing.id }]]),
+        activePricings: {
+          [formattedPricingVersion]: {
+            url: pricingUrl,
+          },
+        },
       };
 
       const service = await this.serviceRepository.create(serviceData);
@@ -660,22 +642,16 @@ class ServiceService {
 
         updatePayload.disabled = false;
         updatePayload.organizationId = organizationId;
-        const savedPricing = await this.pricingRepository.create(pricingData);
-
-        if (!savedPricing) {
-          throw new Error(`Pricing ${uploadedPricing.version} not saved`);
-        }
-
-        updatePayload.activePricings = new Map([[formattedPricingVersion, { id: savedPricing.id }]]);
+        updatePayload.activePricings = {
+          [formattedPricingVersion]: {
+            url: pricingUrl,
+          },
+        };
         updatePayload.archivedPricings = newArchived;
       } else {
-        const savedPricing = await this.pricingRepository.create(pricingData);
-
-        if (!savedPricing) {
-          throw new Error(`Pricing ${uploadedPricing.version} not saved`);
-        }
-
-        updatePayload[`activePricings.${formattedPricingVersion}`] = { id: savedPricing.id };
+        updatePayload[`activePricings.${formattedPricingVersion}`] = {
+          url: pricingUrl,
+        };
       }
 
       const updatedService = await this.serviceRepository.update(
@@ -726,19 +702,27 @@ class ServiceService {
     }
 
     if (newServiceData.organizationId && newServiceData.organizationId !== organizationId) {
-      const organization = await this.organizationRepository.findById(newServiceData.organizationId);
+      const organization = await this.organizationRepository.findById(
+        newServiceData.organizationId
+      );
       if (!organization) {
-        throw new Error(`INVALID DATA: Organization with id ${newServiceData.organizationId} not found`);
+        throw new Error(
+          `INVALID DATA: Organization with id ${newServiceData.organizationId} not found`
+        );
       }
 
-      const contracts = await this.contractRepository.findByFilters({filters: {services: [service.name]}, organizationId});
-      
+      const contracts = await this.contractRepository.findByFilters({
+        filters: { services: [service.name] },
+        organizationId,
+      });
+
       for (const contract of contracts) {
         if (Object.keys(contract.contractedServices).length > 1) {
-          contractsToRemoveService.push(contract);   
-        }else{
+          contractsToRemoveService.push(contract);
+        } else {
           if (dataToUpdate.name) {
-            contract.contractedServices[dataToUpdate.name] = contract.contractedServices[service.name];
+            contract.contractedServices[dataToUpdate.name] =
+              contract.contractedServices[service.name];
             delete contract.contractedServices[service.name];
           }
           contractsToUpdateOrgId.push(contract);
@@ -759,10 +743,19 @@ class ServiceService {
       await this.cacheService.del(cacheKey);
       serviceName = dataToUpdate.name;
 
-      await this.contractRepository.changeServiceName(service.name, dataToUpdate.name, organizationId);
-      const updatedContracts = await this.contractRepository.findByFilters({filters: {services: [dataToUpdate.name]}, organizationId: dataToUpdate.organizationId || organizationId});
+      await this.contractRepository.changeServiceName(
+        service.name,
+        dataToUpdate.name,
+        organizationId
+      );
+      const updatedContracts = await this.contractRepository.findByFilters({
+        filters: { services: [dataToUpdate.name] },
+        organizationId: dataToUpdate.organizationId || organizationId,
+      });
 
-      await this.cacheService.delMany(updatedContracts.map(c => `contracts.${c.userContact.userId}`));
+      await this.cacheService.delMany(
+        updatedContracts.map(c => `contracts.${c.userContact.userId}`)
+      );
     }
 
     if (dataToUpdate.organizationId) {
@@ -776,8 +769,12 @@ class ServiceService {
       }
       await this.contractRepository.bulkUpdate(contractsToUpdateOrgId);
 
-      await this.cacheService.delMany(contractsToRemoveService.map(c => `contracts.${c.userContact.userId}`));
-      await this.cacheService.delMany(contractsToUpdateOrgId.map(c => `contracts.${c.userContact.userId}`));
+      await this.cacheService.delMany(
+        contractsToRemoveService.map(c => `contracts.${c.userContact.userId}`)
+      );
+      await this.cacheService.delMany(
+        contractsToUpdateOrgId.map(c => `contracts.${c.userContact.userId}`)
+      );
     }
 
     let newCacheKey = `service.${organizationId}.${serviceName}`;
@@ -1201,13 +1198,13 @@ class ServiceService {
   }
 
   async _removeServiceFromContracts(serviceName: string, organizationId: string): Promise<boolean> {
-    try{
+    try {
       const contracts: LeanContract[] = await this.contractRepository.findByFilters({
         organizationId,
       });
       const novatedContracts: LeanContract[] = [];
       const contractsToDisable: LeanContract[] = [];
-  
+
       for (const contract of contracts) {
         // Remove this service from the subscription objects
         const newSubscription: Record<string, any> = {
@@ -1215,42 +1212,42 @@ class ServiceService {
           subscriptionPlans: {},
           subscriptionAddOns: {},
         };
-  
+
         // Rebuild subscription objects without the service to be removed
         for (const key in contract.contractedServices) {
           if (key !== serviceName) {
             newSubscription.contractedServices[key] = contract.contractedServices[key];
           }
         }
-  
+
         for (const key in contract.subscriptionPlans) {
           if (key !== serviceName) {
             newSubscription.subscriptionPlans[key] = contract.subscriptionPlans[key];
           }
         }
-  
+
         for (const key in contract.subscriptionAddOns) {
           if (key !== serviceName) {
             newSubscription.subscriptionAddOns[key] = contract.subscriptionAddOns[key];
           }
         }
-  
+
         // Check if objects have the same content by comparing their JSON string representation
         const hasContractChanged =
           JSON.stringify(contract.contractedServices) !==
           JSON.stringify(newSubscription.contractedServices);
-  
+
         // If objects are equal, skip this contract
         if (!hasContractChanged) {
           continue;
         }
-  
+
         const newContract = performNovation(contract, newSubscription);
-  
+
         if (contract.usageLevels[serviceName]) {
           delete contract.usageLevels[serviceName];
         }
-  
+
         if (Object.keys(newSubscription.contractedServices).length === 0) {
           newContract.usageLevels = {};
           newContract.billingPeriod = {
@@ -1259,16 +1256,16 @@ class ServiceService {
             autoRenew: false,
             renewalDays: 0,
           };
-  
+
           contractsToDisable.push(newContract);
           continue;
         }
-  
+
         novatedContracts.push(newContract);
       }
 
       return true;
-    }catch(err){
+    } catch (err) {
       return false;
     }
   }
