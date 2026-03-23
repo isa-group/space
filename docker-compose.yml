@@ -15,7 +15,7 @@ services:
       networks:
         - space-network
       healthcheck:
-        test: [ "CMD", "mongo", "--username", "${MONGO_INITDB_ROOT_USERNAME:-root}", "--password", "${MONGO_INITDB_ROOT_PASSWORD:-4dm1n}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')" ]
+        test: [ "CMD", "mongosh", "--username", "${MONGO_INITDB_ROOT_USERNAME:-root}", "--password", "${MONGO_INITDB_ROOT_PASSWORD:-4dm1n}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')" ]
         interval: 5s
         timeout: 5s
         retries: 3
@@ -55,10 +55,10 @@ services:
     networks:
       - space-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/healthcheck"]
-      interval: 1m30s
-      timeout: 30s
-      retries: 5
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/v1/healthcheck', r => process.exit(r.statusCode===200?0:1)).on('error', () => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
       start_period: 30s
   space-client:
     container_name: space-client
