@@ -44,7 +44,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-space4all}
-      BASE_URL_PATH: ${BASE_PATH:-/}
+      BASE_URL_PATH: ${BASE_PATH:-}
       MONGO_URI: ${MONGO_URI:-mongodb://${DATABASE_USERNAME:-mongoUser}:${DATABASE_PASSWORD:-mongoPassword}@mongodb:27017/${DATABASE_NAME:-space_db}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       JWT_SECRET: ${JWT_SECRET:-test_secret}
@@ -73,7 +73,7 @@ services:
       args:
         VITE_ENVIRONMENT: ${ENVIRONMENT:-production}
         VITE_SPACE_BASE_URL: ${SPACE_HOST:-http://localhost:5403}${BASE_PATH:-}/api/v1 # Change to http://localhost/api/v1 if running SPACE in kubernetes
-        VITE_FRONTEND_BASE_PATH: ${BASE_PATH:-/}
+        VITE_FRONTEND_BASE_PATH: ${BASE_PATH:-}
     depends_on:
       space-server:
         condition: service_healthy
@@ -100,7 +100,7 @@ services:
     ports:
       - 5403:5403
     environment:
-      BASE_URL_PATH: ${BASE_PATH:-/}
+      BASE_URL_PATH: ${BASE_PATH:-}
     depends_on:
       space-server:
         condition: service_healthy
