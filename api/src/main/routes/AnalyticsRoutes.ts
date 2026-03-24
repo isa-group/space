@@ -4,7 +4,7 @@ import AnalyticsController from '../controllers/AnalyticsController';
 const loadFileRoutes = function (app: express.Application) {
   const analyticsController = new AnalyticsController();
 
-  const baseUrl = process.env.BASE_URL_PATH || '/api/v1';
+  const baseUrl = (process.env.BASE_URL_PATH ?? "") + '/api/v1';
 
   app
   .route(baseUrl + '/analytics/api-calls')

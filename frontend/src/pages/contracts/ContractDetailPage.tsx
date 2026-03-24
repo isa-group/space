@@ -11,6 +11,11 @@ import ContractBillingSection from '@/components/contracts/ContractBillingSectio
 import ContractAddOnsSection from '@/components/contracts/ContractAddOnsSection';
 import ContractUsageLevelsSection from '@/components/contracts/ContractUsageLevelsSection';
 
+const normalizePlanName = (plan?: string | null) => {
+  const normalized = String(plan ?? '').trim();
+  return normalized ? normalized.toUpperCase() : 'UNKNOWN';
+};
+
 export default function ContractDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
@@ -47,7 +52,22 @@ export default function ContractDetailPage() {
             calculatedCreatedAt = oldestEntry;
           }
           
-          setContract({ ...data, createdAt: calculatedCreatedAt });
+          setContract({
+            ...data,
+            createdAt: calculatedCreatedAt,
+            services: (data.services || []).map(service => ({
+              ...service,
+              subscriptionPlan: normalizePlanName(service.subscriptionPlan),
+            })),
+            subscriptionPlans: data.subscriptionPlans
+              ? Object.fromEntries(
+                  Object.entries(data.subscriptionPlans).map(([serviceName, planName]) => [
+                    serviceName,
+                    normalizePlanName(planName),
+                  ]),
+                )
+              : data.subscriptionPlans,
+          });
           setError(null);
         }
       })

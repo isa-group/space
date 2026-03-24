@@ -7,7 +7,7 @@ import { handleValidation } from '../middlewares/ValidationHandlingMiddleware';
 const loadFileRoutes = function (app: express.Application) {
   const featureEvaluationController = new FeatureEvaluationController();
 
-  const baseUrl = process.env.BASE_URL_PATH || '/api/v1';
+  const baseUrl = (process.env.BASE_URL_PATH ?? "") + '/api/v1';
 
   app
     .route(baseUrl + '/features')
