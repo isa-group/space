@@ -3,12 +3,12 @@ services:
       image: mongo:7.0.16
       container_name: space-mongodb
       environment:
-        MONGO_INITDB_ROOT_USERNAME: root
-        MONGO_INITDB_ROOT_PASSWORD: 4dm1n
-        MONGO_INITDB_DATABASE: space_db
-        DATABASE_NAME: space_db
-        DATABASE_USERNAME: mongoUser
-        DATABASE_PASSWORD: mongoPassword
+        MONGO_INITDB_ROOT_USERNAME: ${DATABASE_ROOT_USERNAME:-root}
+        MONGO_INITDB_ROOT_PASSWORD: ${DATABASE_ROOT_PASSWORD:-4dm1n}
+        MONGO_INITDB_DATABASE: ${DATABASE_NAME:-space_db}
+        DATABASE_NAME: ${DATABASE_NAME:-space_db}
+        DATABASE_USERNAME: ${DATABASE_USERNAME:-mongoUser}
+        DATABASE_PASSWORD: ${DATABASE_PASSWORD:-mongoPassword}
       volumes:
         - 'space-mongodb:/data/db'
         - './api/src/main/init-mongo.sh:/docker-entrypoint-initdb.d/init-mongo.sh'
@@ -41,10 +41,12 @@ services:
         context: ./api/
         dockerfile: ./docker/production/Dockerfile
     environment:
-      ENVIRONMENT: production
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-space4all}
       BASE_URL_PATH: ${BASE_PATH:-/}
-      MONGO_URI: mongodb://mongoUser:mongoPassword@mongodb:27017/space_db
-      REDIS_URL: redis://redis:6379
+      MONGO_URI: ${MONGO_URI:-mongodb://${DATABASE_USERNAME:-mongoUser}:${DATABASE_PASSWORD:-mongoPassword}@mongodb:27017/${DATABASE_NAME:-space_db}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       JWT_SECRET: ${JWT_SECRET:-test_secret}
       JWT_SALT: ${JWT_SALT:-wgv~eb6v=VWwC9GIG1q6rZ]J.tUM(M}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-1h}
@@ -69,8 +71,8 @@ services:
       context: ./frontend/
       dockerfile: ./docker/Dockerfile
       args:
-        VITE_ENVIRONMENT: production
-        VITE_SPACE_BASE_URL: http://localhost:5403${BASE_PATH:-}/api/v1 # Change to http://localhost/api/v1 if running SPACE in kubernetes
+        VITE_ENVIRONMENT: ${ENVIRONMENT:-production}
+        VITE_SPACE_BASE_URL: ${SPACE_HOST:-http://localhost:5403}${BASE_PATH:-}/api/v1 # Change to http://localhost/api/v1 if running SPACE in kubernetes
         VITE_FRONTEND_BASE_PATH: ${BASE_PATH:-/}
     depends_on:
       space-server:
