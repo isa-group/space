@@ -188,7 +188,7 @@ export default function ContractsTable({ contracts, page, setPage, limit, setLim
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() => navigate(`${import.meta.env.BASE_URL}/contracts/${c.userContact?.userId}`)}
+                    onClick={() => navigate(`${import.meta.env.BASE_URL}contracts/${c.userContact?.userId}`)}
                     className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm transition-colors cursor-pointer"
                   >
                     View

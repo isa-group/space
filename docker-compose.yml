@@ -42,6 +42,7 @@ services:
         dockerfile: ./docker/production/Dockerfile
     environment:
       ENVIRONMENT: production
+      # BASE_URL_PATH: /space # Optional: Set this if the API is not served at the root (e.g., /space)
       MONGO_URI: mongodb://mongoUser:mongoPassword@mongodb:27017/space_db
       REDIS_URL: redis://redis:6379
       JWT_SECRET: test_secret
@@ -57,11 +58,11 @@ services:
     networks:
       - space-network
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/v1/healthcheck', r => process.exit(r.statusCode===200?0:1)).on('error', () => process.exit(1))"]
+      test: ["CMD-SHELL", "node -e \"const http=require('http'); const path=(process.env.BASE_URL_PATH ?? '') + '/api/v1'; http.get('http://localhost:3000'+path+'/healthcheck', r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1));\""]
       interval: 5s
       timeout: 5s
       retries: 3
-      start_period: 30s
+      start_period: 10s
   space-client:
     container_name: space-client
     build:
@@ -96,6 +97,8 @@ services:
         dockerfile: ./Dockerfile
     ports:
       - 5403:5403
+    # environment:
+    #   BASE_URL_PATH: /space   # optional
     depends_on:
       space-server:
         condition: service_healthy
@@ -104,7 +107,7 @@ services:
     networks:
       - space-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5403/api/v1/healthcheck"]
+      test: ["CMD", "curl", "-f", "http://localhost:5403/${BASE_URL_PATH:-}/api/v1/healthcheck"]
       interval: 5s
       timeout: 5s
       retries: 3
