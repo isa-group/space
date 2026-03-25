@@ -2849,11 +2849,6 @@ paths:
       security:
         - ApiKeyAuth: []
       parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
         - name: groupId
           in: query
           required: true
