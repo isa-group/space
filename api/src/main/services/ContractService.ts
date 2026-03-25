@@ -247,6 +247,8 @@ class ContractService {
 
     for (const contract of contractsToReturn) {
       contract.contractedServices = resetEscapeContractedServiceVersions(contract.contractedServices);
+      this.cacheService.set(`contracts.${contract.userContact.userId}`, contract, 3600, true); // Cache for 1 hour
+      this.cacheService.del(`features.${contract.userContact.userId}.*`);
     }
 
     return contractsToReturn;
