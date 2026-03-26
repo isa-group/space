@@ -1,6 +1,6 @@
 export interface PricingEntry {
-  id: string;
-  url: string;
+  id?: string;
+  url?: string;
 }
 
 export interface LeanService {

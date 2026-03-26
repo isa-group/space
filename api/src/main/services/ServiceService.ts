@@ -102,6 +102,9 @@ class ServiceService {
       const batchResults = await Promise.all(
         batch.map(async version => {
           const url = pricingsToReturn.get(version)?.url;
+          if (!url) {
+            return null;
+          }
           // Try cache first
           let pricing = await this.cacheService.get(`pricing.url.${url}`);
           if (!pricing) {
@@ -114,10 +117,10 @@ class ServiceService {
               console.debug('Cache set failed for pricing.url.' + url, err);
             }
           }
-          return pricing;
+          return { ...pricing, url };
         })
       );
-      remotePricings.push(...batchResults);
+      remotePricings.push(...batchResults.filter(Boolean));
     }
 
     return (locallySavedPricings as unknown as LeanPricing[]).concat(remotePricings);
@@ -184,8 +187,20 @@ class ServiceService {
         await this.cacheService.set(`pricing.url.${pricingLocator.url}`, pricing, 3600, true);
       }
 
-      return pricing;
+      return { ...pricing, url: pricingLocator.url };
     }
+  }
+
+  async showPublicPricingUrl(serviceName: string, pricingVersion: string, organizationId: string) {
+    const pricing = await this.showPricing(serviceName, pricingVersion, organizationId);
+
+    if (pricing?.yamlPath) {
+      return pricing.yamlPath;
+    }
+
+    throw new Error(
+      `Pricing version ${pricingVersion} for service ${serviceName} does not have a persisted yamlPath`
+    );
   }
 
   async create(receivedPricing: any, pricingType: 'file' | 'url', organizationId: string) {
@@ -229,6 +244,12 @@ class ServiceService {
     // Step 1: Parse and validate pricing
 
     const uploadedPricing: Pricing = await this._getPricingFromPath(pricingFile.path);
+    const pricingYamlPath = this._savePricingYamlFile(
+      pricingFile.path,
+      organizationId,
+      uploadedPricing.saasName,
+      uploadedPricing.version
+    );
     const formattedPricingVersion = escapeVersion(uploadedPricing.version);
     // Step 1.1: Load the service if already exists
     if (serviceName) {
@@ -255,6 +276,7 @@ class ServiceService {
     const pricingData: ExpectedPricingType & { _serviceName: string; _organizationId: string } = {
       _serviceName: uploadedPricing.saasName,
       _organizationId: organizationId,
+      yamlPath: pricingYamlPath,
       ...parsePricingToSpacePricingObject(uploadedPricing),
     };
 
@@ -680,19 +702,27 @@ class ServiceService {
     }
 
     if (newServiceData.organizationId && newServiceData.organizationId !== organizationId) {
-      const organization = await this.organizationRepository.findById(newServiceData.organizationId);
+      const organization = await this.organizationRepository.findById(
+        newServiceData.organizationId
+      );
       if (!organization) {
-        throw new Error(`INVALID DATA: Organization with id ${newServiceData.organizationId} not found`);
+        throw new Error(
+          `INVALID DATA: Organization with id ${newServiceData.organizationId} not found`
+        );
       }
 
-      const contracts = await this.contractRepository.findByFilters({filters: {services: [service.name]}, organizationId});
-      
+      const contracts = await this.contractRepository.findByFilters({
+        filters: { services: [service.name] },
+        organizationId,
+      });
+
       for (const contract of contracts) {
         if (Object.keys(contract.contractedServices).length > 1) {
-          contractsToRemoveService.push(contract);   
-        }else{
+          contractsToRemoveService.push(contract);
+        } else {
           if (dataToUpdate.name) {
-            contract.contractedServices[dataToUpdate.name] = contract.contractedServices[service.name];
+            contract.contractedServices[dataToUpdate.name] =
+              contract.contractedServices[service.name];
             delete contract.contractedServices[service.name];
           }
           contractsToUpdateOrgId.push(contract);
@@ -713,10 +743,19 @@ class ServiceService {
       await this.cacheService.del(cacheKey);
       serviceName = dataToUpdate.name;
 
-      await this.contractRepository.changeServiceName(service.name, dataToUpdate.name, organizationId);
-      const updatedContracts = await this.contractRepository.findByFilters({filters: {services: [dataToUpdate.name]}, organizationId: dataToUpdate.organizationId || organizationId});
+      await this.contractRepository.changeServiceName(
+        service.name,
+        dataToUpdate.name,
+        organizationId
+      );
+      const updatedContracts = await this.contractRepository.findByFilters({
+        filters: { services: [dataToUpdate.name] },
+        organizationId: dataToUpdate.organizationId || organizationId,
+      });
 
-      await this.cacheService.delMany(updatedContracts.map(c => `contracts.${c.userContact.userId}`));
+      await this.cacheService.delMany(
+        updatedContracts.map(c => `contracts.${c.userContact.userId}`)
+      );
     }
 
     if (dataToUpdate.organizationId) {
@@ -730,8 +769,12 @@ class ServiceService {
       }
       await this.contractRepository.bulkUpdate(contractsToUpdateOrgId);
 
-      await this.cacheService.delMany(contractsToRemoveService.map(c => `contracts.${c.userContact.userId}`));
-      await this.cacheService.delMany(contractsToUpdateOrgId.map(c => `contracts.${c.userContact.userId}`));
+      await this.cacheService.delMany(
+        contractsToRemoveService.map(c => `contracts.${c.userContact.userId}`)
+      );
+      await this.cacheService.delMany(
+        contractsToUpdateOrgId.map(c => `contracts.${c.userContact.userId}`)
+      );
     }
 
     let newCacheKey = `service.${organizationId}.${serviceName}`;
@@ -1083,9 +1126,49 @@ class ServiceService {
     }
   }
 
-  async _getPricingFromRemoteUrl(url: string) {
+  _normalizePricingPathPart(value: string) {
+    return value
+      .trim()
+      .replace(/[^a-zA-Z0-9._-]/g, '-')
+      .replace(/-+/g, '-')
+      .toLowerCase();
+  }
+
+  _buildPricingYamlRelativePath(organizationId: string, serviceName: string, version: string) {
+    const safeOrganizationId = this._normalizePricingPathPart(organizationId);
+    const safeServiceName = this._normalizePricingPathPart(serviceName);
+    const safeVersion = this._normalizePricingPathPart(version);
+
+    return `/static/pricings/${safeOrganizationId}-${safeServiceName}-${safeVersion}.yaml`;
+  }
+
+  _savePricingYamlContent(
+    yamlContent: string,
+    organizationId: string,
+    serviceName: string,
+    version: string
+  ) {
+    const relativePath = this._buildPricingYamlRelativePath(organizationId, serviceName, version);
+    const absolutePath = path.resolve('public', `.${relativePath}`);
+
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    fs.writeFileSync(absolutePath, yamlContent, 'utf8');
+
+    return relativePath;
+  }
+
+  _savePricingYamlFile(
+    sourcePath: string,
+    organizationId: string,
+    serviceName: string,
+    version: string
+  ) {
+    const yamlContent = fs.readFileSync(sourcePath, 'utf8');
+    return this._savePricingYamlContent(yamlContent, organizationId, serviceName, version);
+  }
+
+  async _fetchRemotePricingYaml(url: string) {
     const agent = new https.Agent({ rejectUnauthorized: false });
-    // Abort fetch if it takes longer than timeoutMs
     const timeoutMs = 5000;
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -1105,18 +1188,23 @@ class ServiceService {
     if (!response.ok) {
       throw new Error(`Failed to fetch pricing from URL: ${url}, status: ${response.status}`);
     }
-    const remotePricingYaml = await response.text();
+
+    return response.text();
+  }
+
+  async _getPricingFromRemoteUrl(url: string) {
+    const remotePricingYaml = await this._fetchRemotePricingYaml(url);
     return retrievePricingFromText(remotePricingYaml);
   }
 
   async _removeServiceFromContracts(serviceName: string, organizationId: string): Promise<boolean> {
-    try{
+    try {
       const contracts: LeanContract[] = await this.contractRepository.findByFilters({
         organizationId,
       });
       const novatedContracts: LeanContract[] = [];
       const contractsToDisable: LeanContract[] = [];
-  
+
       for (const contract of contracts) {
         // Remove this service from the subscription objects
         const newSubscription: Record<string, any> = {
@@ -1124,42 +1212,42 @@ class ServiceService {
           subscriptionPlans: {},
           subscriptionAddOns: {},
         };
-  
+
         // Rebuild subscription objects without the service to be removed
         for (const key in contract.contractedServices) {
           if (key !== serviceName) {
             newSubscription.contractedServices[key] = contract.contractedServices[key];
           }
         }
-  
+
         for (const key in contract.subscriptionPlans) {
           if (key !== serviceName) {
             newSubscription.subscriptionPlans[key] = contract.subscriptionPlans[key];
           }
         }
-  
+
         for (const key in contract.subscriptionAddOns) {
           if (key !== serviceName) {
             newSubscription.subscriptionAddOns[key] = contract.subscriptionAddOns[key];
           }
         }
-  
+
         // Check if objects have the same content by comparing their JSON string representation
         const hasContractChanged =
           JSON.stringify(contract.contractedServices) !==
           JSON.stringify(newSubscription.contractedServices);
-  
+
         // If objects are equal, skip this contract
         if (!hasContractChanged) {
           continue;
         }
-  
+
         const newContract = performNovation(contract, newSubscription);
-  
+
         if (contract.usageLevels[serviceName]) {
           delete contract.usageLevels[serviceName];
         }
-  
+
         if (Object.keys(newSubscription.contractedServices).length === 0) {
           newContract.usageLevels = {};
           newContract.billingPeriod = {
@@ -1168,16 +1256,16 @@ class ServiceService {
             autoRenew: false,
             renewalDays: 0,
           };
-  
+
           contractsToDisable.push(newContract);
           continue;
         }
-  
+
         novatedContracts.push(newContract);
       }
 
       return true;
-    }catch(err){
+    } catch (err) {
       return false;
     }
   }

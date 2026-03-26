@@ -9,7 +9,7 @@ import { memberRole } from '../middlewares/AuthMiddleware';
 const loadFileRoutes = function (app: express.Application) {
   const organizationController = new OrganizationController();
 
-  const baseUrl = process.env.BASE_URL_PATH || '/api/v1';
+  const baseUrl = (process.env.BASE_URL_PATH ?? "") + '/api/v1';
 
   // Public route for authentication (does not require API Key)
   app

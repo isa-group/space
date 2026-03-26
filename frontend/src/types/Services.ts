@@ -11,12 +11,14 @@ export interface RetrievedService {
 }
 
 export interface PricingEntry {
-  id: string;
-  url: string;
+  id?: string;
+  url?: string;
 }
 
 export interface Pricing {
   id?: string;
+  url?: string;
+  yamlPath?: string;
   version: string;
   currency: string;
   createdAt: Date; // o Date si no haces `JSON.stringify`

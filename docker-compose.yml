@@ -3,19 +3,19 @@ services:
       image: mongo:7.0.16
       container_name: space-mongodb
       environment:
-        MONGO_INITDB_ROOT_USERNAME: root
-        MONGO_INITDB_ROOT_PASSWORD: 4dm1n
-        MONGO_INITDB_DATABASE: space_db
-        DATABASE_NAME: space_db
-        DATABASE_USERNAME: mongoUser
-        DATABASE_PASSWORD: mongoPassword
+        MONGO_INITDB_ROOT_USERNAME: ${DATABASE_ROOT_USERNAME:-root}
+        MONGO_INITDB_ROOT_PASSWORD: ${DATABASE_ROOT_PASSWORD:-4dm1n}
+        MONGO_INITDB_DATABASE: ${DATABASE_NAME:-space_db}
+        DATABASE_NAME: ${DATABASE_NAME:-space_db}
+        DATABASE_USERNAME: ${DATABASE_USERNAME:-mongoUser}
+        DATABASE_PASSWORD: ${DATABASE_PASSWORD:-mongoPassword}
       volumes:
         - 'space-mongodb:/data/db'
         - './api/src/main/init-mongo.sh:/docker-entrypoint-initdb.d/init-mongo.sh'
       networks:
         - space-network
       healthcheck:
-        test: [ "CMD", "mongo", "--username", "${MONGO_INITDB_ROOT_USERNAME:-root}", "--password", "${MONGO_INITDB_ROOT_PASSWORD:-4dm1n}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')" ]
+        test: [ "CMD", "mongosh", "--username", "${MONGO_INITDB_ROOT_USERNAME:-root}", "--password", "${MONGO_INITDB_ROOT_PASSWORD:-4dm1n}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')" ]
         interval: 5s
         timeout: 5s
         retries: 3
@@ -41,47 +41,65 @@ services:
         context: ./api/
         dockerfile: ./docker/production/Dockerfile
     environment:
-      ENVIRONMENT: production
-      MONGO_URI: mongodb://mongoUser:mongoPassword@mongodb:27017/space_db
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: psg2_secret
-      JWT_SALT: wgv~eb6v=VWwC9GIG1q6rZ]J.tUM(M
-      JWT_EXPIRATION: 1d
-      HTTP_PROXY: http://proxy.int.local:3128
-      HTTPS_PROXY: http://proxy.int.local:3128
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-space4all}
+      BASE_URL_PATH: ${BASE_PATH:-}
+      MONGO_URI: ${MONGO_URI:-mongodb://${DATABASE_USERNAME:-mongoUser}:${DATABASE_PASSWORD:-mongoPassword}@mongodb:27017/${DATABASE_NAME:-space_db}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-test_secret}
+      JWT_SALT: ${JWT_SALT:-wgv~eb6v=VWwC9GIG1q6rZ]J.tUM(M}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-1h}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
     volumes:
       - 'space-statics:/usr/src/server/public'
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - space-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/healthcheck"]
-      interval: 1m30s
-      timeout: 30s
-      retries: 5
-      start_period: 30s
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const http=require('http'); const path=(process.env.BASE_URL_PATH ?? '') + '/api/v1'; http.get('http://localhost:3000'+path+'/healthcheck', r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1));\""]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
   space-client:
     container_name: space-client
     build:
       context: ./frontend/
       dockerfile: ./docker/Dockerfile
       args:
-        VITE_ENVIRONMENT: production
-        VITE_SPACE_BASE_URL: https://oitilo.us.es/space/api/v1 # Change to http://localhost/api/v1 if running SPACE in kubernetes
-        VITE_FRONTEND_BASE_PATH: /space
+        VITE_ENVIRONMENT: ${ENVIRONMENT:-production}
+        VITE_SPACE_BASE_URL: ${SPACE_HOST:-http://localhost:5403}${BASE_PATH:-}/api/v1 # Change to http://localhost/api/v1 if running SPACE in kubernetes
+        VITE_FRONTEND_BASE_PATH: ${BASE_PATH:-}
     environment:
-      HTTP_PROXY: http://proxy.int.local:3128
-      HTTPS_PROXY: http://proxy.int.local:3128
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
     depends_on:
-      - space-server
+      space-server:
+        condition: service_healthy
     networks:
       - space-network
     ports:
       - "5050:5050"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:5050').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 volumes:
   space-mongodb:
     driver: local

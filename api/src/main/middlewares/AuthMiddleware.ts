@@ -97,7 +97,7 @@ async function authenticateOrgApiKey(req: Request, apiKey: string): Promise<void
 const checkPermissions = (req: Request, res: Response, next: NextFunction) => {
   try {
     const method = req.method.toUpperCase() as HttpMethod;
-    const baseUrlPath = process.env.BASE_URL_PATH || '/api/v1';
+    const baseUrlPath = (process.env.BASE_URL_PATH ?? "") + '/api/v1';
     const apiPath = extractApiPath(req.path, baseUrlPath);
 
     // Find matching permission rule

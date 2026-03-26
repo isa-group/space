@@ -11,7 +11,7 @@ const loadFileRoutes = function (app: express.Application) {
   const serviceController = new ServiceController();
   const upload = handlePricingUpload(['pricing'], './public/static/pricings/uploaded');
 
-  const baseUrl = process.env.BASE_URL_PATH || '/api/v1';
+  const baseUrl = (process.env.BASE_URL_PATH ?? "") + '/api/v1';
 
   // ============================================
   // Organization-scoped routes (User API Keys)
@@ -34,6 +34,10 @@ const loadFileRoutes = function (app: express.Application) {
     .route(baseUrl + '/organizations/:organizationId/services/:serviceName/pricings')
     .get(memberRole, hasPermission(['OWNER', 'ADMIN', 'MANAGER', 'EVALUATOR']), serviceController.indexPricings)
     .post(memberRole, hasPermission(['OWNER','ADMIN', 'MANAGER']), upload, serviceController.addPricingToService);
+
+  app
+    .route(baseUrl + '/organizations/:organizationId/services/:serviceName/pricings/:pricingVersion/public-url')
+    .get(memberRole, hasPermission(['OWNER', 'ADMIN', 'MANAGER', 'EVALUATOR']), serviceController.showPublicPricingUrl);
 
   app
     .route(baseUrl + '/organizations/:organizationId/services/:serviceName/pricings/:pricingVersion')
@@ -62,6 +66,10 @@ const loadFileRoutes = function (app: express.Application) {
     .route(baseUrl + '/services/:serviceName/pricings')
     .get(serviceController.indexPricings)
     .post(upload, serviceController.addPricingToService);
+
+  app
+    .route(baseUrl + '/services/:serviceName/pricings/:pricingVersion/public-url')
+    .get(serviceController.showPublicPricingUrl);
 
   app
     .route(baseUrl + '/services/:serviceName/pricings/:pricingVersion')

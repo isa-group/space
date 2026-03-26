@@ -11,6 +11,11 @@ import ContractBillingSection from '@/components/contracts/ContractBillingSectio
 import ContractAddOnsSection from '@/components/contracts/ContractAddOnsSection';
 import ContractUsageLevelsSection from '@/components/contracts/ContractUsageLevelsSection';
 
+const normalizePlanName = (plan?: string | null) => {
+  const normalized = String(plan ?? '').trim();
+  return normalized ? normalized.toUpperCase() : 'UNKNOWN';
+};
+
 export default function ContractDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
@@ -47,7 +52,22 @@ export default function ContractDetailPage() {
             calculatedCreatedAt = oldestEntry;
           }
           
-          setContract({ ...data, createdAt: calculatedCreatedAt });
+          setContract({
+            ...data,
+            createdAt: calculatedCreatedAt,
+            services: (data.services || []).map(service => ({
+              ...service,
+              subscriptionPlan: normalizePlanName(service.subscriptionPlan),
+            })),
+            subscriptionPlans: data.subscriptionPlans
+              ? Object.fromEntries(
+                  Object.entries(data.subscriptionPlans).map(([serviceName, planName]) => [
+                    serviceName,
+                    normalizePlanName(planName),
+                  ]),
+                )
+              : data.subscriptionPlans,
+          });
           setError(null);
         }
       })
@@ -98,7 +118,7 @@ export default function ContractDetailPage() {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH}/contracts/dashboard`)}
+            onClick={() => navigate(`${import.meta.env.BASE_URL}contracts/dashboard`)}
             className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors cursor-pointer"
           >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -125,7 +145,7 @@ export default function ContractDetailPage() {
             <motion.button
               whileHover={{ scale: 1.1, x: -4 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH}/contracts/dashboard`)}
+              onClick={() => navigate(`${import.meta.env.BASE_URL}contracts/dashboard`)}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
             >
               <svg className="w-6 h-6 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -166,7 +186,7 @@ export default function ContractDetailPage() {
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH}/contracts/dashboard`)}
+          onClick={() => navigate(`${import.meta.env.BASE_URL}contracts/dashboard`)}
           className="inline-flex items-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors shadow-lg hover:shadow-xl cursor-pointer"
         >
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

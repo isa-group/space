@@ -10,6 +10,11 @@ import AddonsByPlanCharts from '@/components/contracts/AddonsByPlanCharts';
 // ExpectedRevenueCard removed until revenue calc is fixed
 import ContractsTable from '@/components/contracts/ContractsTable';
 
+const normalizePlanName = (plan?: string | null) => {
+  const normalized = String(plan ?? '').trim();
+  return normalized ? normalized.toUpperCase() : 'UNKNOWN';
+};
+
 export default function ContractsDashboard() {
   const { user } = useAuth();
   const { currentOrganization } = useOrganization();
@@ -75,10 +80,25 @@ export default function ContractsDashboard() {
     setServiceFilter(selectedService);
   }, [selectedService, setServiceFilter]);
 
+  const normalizedContracts = useMemo(() => {
+    return (contracts || []).map(c => ({
+      ...c,
+      services: (c.services || []).map((service: any) => ({
+        ...service,
+        subscriptionPlan: normalizePlanName(service.subscriptionPlan),
+      })),
+      subscriptionPlans: c.subscriptionPlans
+        ? Object.fromEntries(
+            Object.entries(c.subscriptionPlans).map(([serviceName, planName]) => [serviceName, normalizePlanName(planName)]),
+          )
+        : c.subscriptionPlans,
+    }));
+  }, [contracts]);
+
   // const distinctPlans = Object.keys(plansDistribution).length; // use localPlansDistribution below (filtered)
   // Client-side filtered view so the whole dashboard reflects the selected service/version
   const filteredContracts = useMemo(() => {
-    let res = contracts || [];
+    let res = normalizedContracts;
     if (selectedService) {
       const svc = selectedService.toLowerCase();
       res = res.filter(c => {
@@ -100,7 +120,7 @@ export default function ContractsDashboard() {
       });
     }
     return res;
-  }, [contracts, selectedService, selectedVersion]);
+  }, [normalizedContracts, selectedService, selectedVersion]);
 
   const filteredTotalContracts = filteredContracts.length;
 

@@ -90,7 +90,7 @@ export default function LoginPage() {
           <div className="text-center mt-4">
             <button
               type="button"
-              onClick={() => navigate(`${import.meta.env.VITE_FRONTEND_BASE_PATH}/register`)}
+              onClick={() => navigate(`${import.meta.env.BASE_URL}register`)}
               className="cursor-pointer text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-sm font-medium transition-colors"
             >
               Don't have an account? Register here

@@ -6,7 +6,8 @@ server {
     large_client_header_buffers 8 64k;
     client_header_buffer_size 64k;
 
-    location /api {
+    # API
+    location ${BASE_URL_PATH}/api {
         include             fastcgi_params;
         proxy_pass          http://space-server:3000;
         proxy_redirect      off;
@@ -19,7 +20,8 @@ server {
         proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
-    location /events {
+    # Events (websocket)
+    location ${BASE_URL_PATH}/events {
         include             fastcgi_params;
         proxy_pass          http://space-server:3000/events;
         proxy_redirect      off;
@@ -31,14 +33,13 @@ server {
         proxy_set_header    X-Real-IP       $remote_addr;
         proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
 
-
-        # Cabeceras necesarias para WebSocket
         proxy_http_version  1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
     }
 
-    location / {
+    # Frontend
+    location ${BASE_URL_PATH}/ {
         include             fastcgi_params;
         proxy_pass          http://space-client:5050;
         proxy_redirect      off;

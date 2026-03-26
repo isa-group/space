@@ -2,6 +2,8 @@ import { AddOn, Feature, Plan, UsageLimit } from "pricing4ts";
 
 export interface LeanPricing {
   id?: string;
+  url?: string;
+  yamlPath?: string;
   version: string;
   currency: string;
   createdAt: Date; // o Date si no haces `JSON.stringify`
@@ -12,6 +14,8 @@ export interface LeanPricing {
 }
 
 export interface ExpectedPricingType {
+  url?: string;
+  yamlPath?: string;
   version: string;
   currency: string;
   createdAt: Date;

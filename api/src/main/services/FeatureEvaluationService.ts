@@ -366,6 +366,9 @@ class FeatureEvaluationService {
             // Try cache first
             let pricing = await this.cacheService.get(`pricing.url.${url}`);
             if (!pricing) {
+              if (!url) {
+                throw new Error(`Pricing version ${version} for service ${serviceName} does not have a valid URL`);
+              }
               pricing = await this.serviceService._getPricingFromUrl(url);
               try {
                 await this.cacheService.set(`pricing.url.${url}`, pricing, 3600, true);
