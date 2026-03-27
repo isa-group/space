@@ -24,7 +24,6 @@ jobs:
           envkey_ENVIRONMENT: "testing"
           envkey_DATABASE_NAME: ${{ vars.CI_MONGO_INITDB_DATABASE }}
           envkey_MONGO_URI: mongodb://localhost:27017/space_testing_db?authSource=space_testing_db
-          envkey_BASE_URL_PATH: "/api/v1"
           envkey_ADMIN_USER: "admin"
           envkey_ADMIN_PASSWORD: "4dm1n"
           envkey_REDIS_URL: "redis://localhost:6379"

@@ -108,7 +108,7 @@ export default function ServicesPage() {
                     layout
                     whileHover={{ scale: 1.03, boxShadow: "0 4px 24px 0 rgba(99,102,241,0.10)" }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => navigate(`${import.meta.env.BASE_URL}services/${encodeURIComponent(service.name)}`)}
+                    onClick={() => navigate(`/services/${encodeURIComponent(service.name)}`)}
                     className="flex items-center gap-4 w-full bg-white/80 dark:bg-gray-900 rounded-lg shadow border border-gray-200 dark:border-gray-800 px-6 py-5 transition cursor-pointer hover:bg-indigo-50 dark:hover:bg-gray-800 focus:outline-none"
                   >
                     <span className="bg-indigo-100 dark:bg-gray-800 text-indigo-600 dark:text-indigo-300 rounded-full p-2">

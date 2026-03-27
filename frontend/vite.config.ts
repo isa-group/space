@@ -7,11 +7,9 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), ''); 
   
-  const basePath = env.VITE_FRONTEND_BASE_PATH || "/";
+  const basePath = env.BASE_PATH || "/";
   const finalBase = basePath.startsWith('/') ? basePath : `/${basePath}`;
   const safeBase = finalBase.endsWith('/') ? finalBase : `${finalBase}/`;
-
-  console.log(`Using base path: ${safeBase}`);
 
   return {
     base: safeBase,

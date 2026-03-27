@@ -55,10 +55,10 @@ const initializeServer = async (
   container.resolve('eventService').initialize(server);
 
   console.log(
-    `  ${green}➜${reset}  ${bold}API:${reset}     ${blue}http://localhost${addressInfo.port !== 80 ? `:${bold}${addressInfo.port}${reset}${process.env.BASE_URL_PATH || ''}` : `${process.env.BASE_URL_PATH || ''}`}`
+    `  ${green}➜${reset}  ${bold}API:${reset}     ${blue}http://localhost${addressInfo.port !== 80 ? `:${bold}${addressInfo.port}${reset}` : ''}`
   );
   console.log(
-    `  ${green}➜${reset}  ${bold}WebSockets:${reset} ${blue}ws://localhost${addressInfo.port !== 80 ? `:${bold}${addressInfo.port}${reset}${process.env.BASE_URL_PATH || ''}/events/pricings` : `${process.env.BASE_URL_PATH || ''}/events/pricings`}`
+    `  ${green}➜${reset}  ${bold}WebSockets:${reset} ${blue}ws://localhost${addressInfo.port !== 80 ? `:${bold}${addressInfo.port}${reset}/events/pricings` : '/events/pricings'}`
   );
 
   if (['development', 'testing'].includes(process.env.ENVIRONMENT ?? '')) {
