@@ -942,6 +942,116 @@ describe('Contract API routes', function () {
       await deleteTestUser(foreignOrgOwner.username);
     });
 
+    it('clears cached single-feature evaluations when novating contracts by groupId', async function () {
+      const sharedGroupId = `bulk-cache-features-${Date.now()}`;
+      const targetContract = await createTestContract(testOrganization.id!, [testService], app, sharedGroupId);
+      trackContractForCleanup(targetContract);
+
+      const allFeaturesBeforeResponse = await request(app)
+        .post(`${baseUrl}/features/${targetContract.userContact.userId}`)
+        .set('x-api-key', testOrgApiKey);
+
+      expect(allFeaturesBeforeResponse.status).toBe(200);
+      const oldFeatureId = Object.keys(allFeaturesBeforeResponse.body)[0];
+      expect(oldFeatureId).toBeDefined();
+
+      const singleFeatureBeforeResponse = await request(app)
+        .post(`${baseUrl}/features/${targetContract.userContact.userId}/${oldFeatureId}`)
+        .set('x-api-key', testOrgApiKey);
+
+      expect(singleFeatureBeforeResponse.status).toBe(200);
+      expect(singleFeatureBeforeResponse.body.error).toBeFalsy();
+
+      const novationService = await createTestService(
+        testOrganization.id,
+        `bulk-cache-features-service-${Date.now()}`
+      );
+      const pricingVersion = novationService.activePricings.keys().next().value!;
+      const pricingDetails = await getPricingFromService(
+        novationService.name,
+        pricingVersion,
+        testOrganization.id!,
+        app
+      );
+
+      const novationData = {
+        contractedServices: { [novationService.name.toLowerCase()]: pricingVersion },
+        subscriptionPlans: {
+          [novationService.name.toLowerCase()]: Object.keys(pricingDetails!.plans!)[0],
+        },
+        subscriptionAddOns: {},
+      };
+
+      const novateResponse = await request(app)
+        .put(`${baseUrl}/contracts?groupId=${sharedGroupId}`)
+        .set('x-api-key', testOrgApiKey)
+        .send(novationData);
+
+      expect(novateResponse.status).toBe(200);
+
+      const singleFeatureAfterResponse = await request(app)
+        .post(`${baseUrl}/features/${targetContract.userContact.userId}/${oldFeatureId}`)
+        .set('x-api-key', testOrgApiKey);
+
+      expect(singleFeatureAfterResponse.status).toBe(200);
+      expect(singleFeatureAfterResponse.body.error).toBeDefined();
+      expect(singleFeatureAfterResponse.body.error.code).toBe('FLAG_NOT_FOUND');
+
+      await deleteTestService(novationService.name, testOrganization.id!);
+    });
+
+    it('clears cached pricing token when novating contracts by groupId', async function () {
+      const sharedGroupId = `bulk-cache-pricing-token-${Date.now()}`;
+      const targetContract = await createTestContract(testOrganization.id!, [testService], app, sharedGroupId);
+      trackContractForCleanup(targetContract);
+
+      const pricingTokenBeforeResponse = await request(app)
+        .post(`${baseUrl}/features/${targetContract.userContact.userId}/pricing-token`)
+        .set('x-api-key', testOrgApiKey);
+
+      expect(pricingTokenBeforeResponse.status).toBe(200);
+      expect(pricingTokenBeforeResponse.body.pricingToken).toBeDefined();
+
+      const novationService = await createTestService(
+        testOrganization.id,
+        `bulk-cache-pricing-token-service-${Date.now()}`
+      );
+      const pricingVersion = novationService.activePricings.keys().next().value!;
+      const pricingDetails = await getPricingFromService(
+        novationService.name,
+        pricingVersion,
+        testOrganization.id!,
+        app
+      );
+
+      const novationData = {
+        contractedServices: { [novationService.name.toLowerCase()]: pricingVersion },
+        subscriptionPlans: {
+          [novationService.name.toLowerCase()]: Object.keys(pricingDetails!.plans!)[0],
+        },
+        subscriptionAddOns: {},
+      };
+
+      const novateResponse = await request(app)
+        .put(`${baseUrl}/contracts?groupId=${sharedGroupId}`)
+        .set('x-api-key', testOrgApiKey)
+        .send(novationData);
+
+      expect(novateResponse.status).toBe(200);
+
+      const pricingTokenAfterResponse = await request(app)
+        .post(`${baseUrl}/features/${targetContract.userContact.userId}/pricing-token`)
+        .set('x-api-key', testOrgApiKey);
+
+      expect(pricingTokenAfterResponse.status).toBe(200);
+      expect(pricingTokenAfterResponse.body.pricingToken).toBeDefined();
+      expect(pricingTokenAfterResponse.body.pricingToken).not.toBe(
+        pricingTokenBeforeResponse.body.pricingToken
+      );
+
+      await deleteTestService(novationService.name, testOrganization.id!);
+    });
+
     it('returns 400 when groupId query parameter is missing', async function () {
       const response = await request(app)
         .put(`${baseUrl}/contracts`)
