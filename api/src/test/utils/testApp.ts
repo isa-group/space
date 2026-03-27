@@ -8,7 +8,7 @@ dotenv.config();
 let testServer: Server | null = null;
 let testApp: Application | null = null;
 
-const baseUrl = (process.env.BASE_URL_PATH ?? "") + '/api/v1';
+const baseUrl = '/api/v1';
 
 const getApp = async (): Promise<Server> => {
   if (!testServer) {

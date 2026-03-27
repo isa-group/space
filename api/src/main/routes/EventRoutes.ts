@@ -4,7 +4,7 @@ import EventController from '../controllers/EventController';
 
 const loadFileRoutes = (app: express.Application) => {
   const eventController = new EventController();
-  const baseUrl = (process.env.BASE_URL_PATH ?? "") + '/api/v1';
+  const baseUrl = '/api/v1';
   
   // This route can be used to check the status of the event service
   app

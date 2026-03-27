@@ -21,7 +21,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
   if (!isAuthenticated) {
-    return <Navigate to={`${import.meta.env.BASE_URL}`} state={{ from: location }} replace />;
+    return <Navigate to={`/`} state={{ from: location }} replace />;
   }
   return <>{children}</>;
 }
@@ -39,21 +39,21 @@ function RequireRole({ children, allowedRoles }: { children: ReactNode; allowedR
 
 export function SpaceRouter() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <Routes>
-        <Route path={import.meta.env.BASE_URL} element={<MainPage/>}/>
-        <Route path={import.meta.env.BASE_URL + "register"} element={<RegisterPage/>}/>
-        <Route path={import.meta.env.BASE_URL + "contracts/dashboard"} element={<RequireAuth><LoggedLayout><ContractsDashboard/></LoggedLayout></RequireAuth>} />
-        <Route path={import.meta.env.BASE_URL + "contracts/:userId"} element={<RequireAuth><LoggedLayout><ContractDetailPage/></LoggedLayout></RequireAuth>} />
-        <Route path={import.meta.env.BASE_URL + "instance-monitoring"} element={<RequireAuth><RequireRole allowedRoles={['ADMIN']}><LoggedLayout><InstanceMonitoringPage/></LoggedLayout></RequireRole></RequireAuth>} />
-        <Route path={import.meta.env.BASE_URL + "users"} element={<RequireAuth><RequireRole allowedRoles={['ADMIN']}><LoggedLayout><UsersPage/></LoggedLayout></RequireRole></RequireAuth>} />
-        <Route path={import.meta.env.BASE_URL + "organizations"} element={<RequireAuth><RequireRole allowedRoles={['ADMIN']}><LoggedLayout><OrganizationsPage/></LoggedLayout></RequireRole></RequireAuth>} />
-        <Route path={import.meta.env.BASE_URL + "members"} element={<RequireAuth><LoggedLayout><MembersPage/></LoggedLayout></RequireAuth>}/>
-        <Route path={import.meta.env.BASE_URL + "api-keys"} element={<RequireAuth><LoggedLayout><ApiKeysPage/></LoggedLayout></RequireAuth>}/>
-        <Route path={import.meta.env.BASE_URL + "services"} element={<RequireAuth><LoggedLayout><ServicesPage/></LoggedLayout></RequireAuth>}/>
-        <Route path={import.meta.env.BASE_URL + "services/:name"} element={<RequireAuth><LoggedLayout><ServiceDetailPage/></LoggedLayout></RequireAuth>}/>
-        <Route path={import.meta.env.BASE_URL + "settings"} element={<RequireAuth><LoggedLayout><SettingsPage/></LoggedLayout></RequireAuth>}/>
-        <Route path={import.meta.env.BASE_URL + "organization-settings"} element={<RequireAuth><LoggedLayout><OrganizationSettingsPage/></LoggedLayout></RequireAuth>}/>
+        <Route path="/" element={<MainPage/>}/>
+        <Route path="/register" element={<RegisterPage/>}/>
+        <Route path="/contracts/dashboard" element={<RequireAuth><LoggedLayout><ContractsDashboard/></LoggedLayout></RequireAuth>} />
+        <Route path="/contracts/:userId" element={<RequireAuth><LoggedLayout><ContractDetailPage/></LoggedLayout></RequireAuth>} />
+        <Route path="/instance-monitoring" element={<RequireAuth><RequireRole allowedRoles={['ADMIN']}><LoggedLayout><InstanceMonitoringPage/></LoggedLayout></RequireRole></RequireAuth>} />
+        <Route path="/users" element={<RequireAuth><RequireRole allowedRoles={['ADMIN']}><LoggedLayout><UsersPage/></LoggedLayout></RequireRole></RequireAuth>} />
+        <Route path="/organizations" element={<RequireAuth><RequireRole allowedRoles={['ADMIN']}><LoggedLayout><OrganizationsPage/></LoggedLayout></RequireRole></RequireAuth>} />
+        <Route path="/members" element={<RequireAuth><LoggedLayout><MembersPage/></LoggedLayout></RequireAuth>}/>
+        <Route path="/api-keys" element={<RequireAuth><LoggedLayout><ApiKeysPage/></LoggedLayout></RequireAuth>}/>
+        <Route path="/services" element={<RequireAuth><LoggedLayout><ServicesPage/></LoggedLayout></RequireAuth>}/>
+        <Route path="/services/:name" element={<RequireAuth><LoggedLayout><ServiceDetailPage/></LoggedLayout></RequireAuth>}/>
+        <Route path="/settings" element={<RequireAuth><LoggedLayout><SettingsPage/></LoggedLayout></RequireAuth>}/>
+        <Route path="/organization-settings" element={<RequireAuth><LoggedLayout><OrganizationSettingsPage/></LoggedLayout></RequireAuth>}/>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
