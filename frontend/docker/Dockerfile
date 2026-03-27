@@ -40,20 +40,5 @@ ENV VITE_FRONTEND_BASE_PATH=${VITE_FRONTEND_BASE_PATH}
 RUN pnpm run build
 RUN pnpm add -D serve
 
-# Conditional Reorganization Block:
-# This only runs if VITE_FRONTEND_BASE_PATH is defined and is NOT equal to "/"
-RUN if [ -n "$VITE_FRONTEND_BASE_PATH" ] && [ "$VITE_FRONTEND_BASE_PATH" != "/" ]; then \
-    # Extract the directory name (e.g., from "/space/" to "space") to exclude it from the find command
-    FOLDER_NAME=$(echo "$VITE_FRONTEND_BASE_PATH" | sed 's/\///g'); \
-    echo "Reorganizing dist for subpath: $VITE_FRONTEND_BASE_PATH"; \
-    # Create the nested directory structure
-    mkdir -p ./dist${VITE_FRONTEND_BASE_PATH} && \
-    # Move everything EXCEPT index.html and the newly created subfolder into the subfolder
-    find ./dist -mindepth 1 -maxdepth 1 ! -name "index.html" ! -name "$FOLDER_NAME" \
-    -exec mv -t ./dist${VITE_FRONTEND_BASE_PATH}/ {} +; \
-    else \
-    echo "Skipping reorganization: App will be served from root (/)"; \
-    fi
-
 # Specify the command to start the server
 CMD ["pnpm", "exec", "serve", "-s", "./dist", "-l", "5050"]
