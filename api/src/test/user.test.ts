@@ -939,6 +939,36 @@ describe('User API routes', function () {
       await deleteTestUser(targetAdmin.username);
     });
 
+    it('returns 403 when trying to delete the last admin', async function () {
+      // Get all admins currently in the system
+      const allUsersResponse = await request(app)
+        .get(`${baseUrl}/users?limit=50`)
+        .set('x-api-key', adminApiKey);
+      
+      const allAdmins = allUsersResponse.body.data.filter((u: any) => u.role === 'ADMIN');
+      
+      // Delete all admins except the last one
+      for (let i = 0; i < allAdmins.length - 1; i++) {
+        await deleteTestUser(allAdmins[i].username);
+      }
+      
+      const lastAdminUsername = allAdmins[allAdmins.length - 1].username;
+      
+      // Try to delete the last admin - should fail
+      const response = await request(app)
+        .delete(`${baseUrl}/users/${lastAdminUsername}`)
+        .set('x-api-key', adminApiKey);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBeDefined();
+
+      // Verify the last admin still exists
+      const getResponse = await request(app)
+        .get(`${baseUrl}/users/${lastAdminUsername}`)
+        .set('x-api-key', adminApiKey);
+      expect(getResponse.status).toBe(200);
+    });
+
     it('returns 401 when api key is missing', async function () {
       const testUser = await createTestUser('USER');
       trackUserForCleanup(testUser);
