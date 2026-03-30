@@ -7,6 +7,15 @@ import { generateUserApiKey } from '../../utils/users/helpers';
 
 class UserRepository extends RepositoryBase {
 
+  async findAll(query?: any): Promise<LeanUser[]> {
+    try {
+      const users = await UserMongoose.find(query || {}, { password: 0 }).exec();
+      return users.map(user => user.toObject({ getters: true, virtuals: true, versionKey: false }) as unknown as LeanUser);
+    } catch (err) {
+      return [];
+    }
+  }
+
   async find(username: string, limit: number = 10, offset: number = 0): Promise<LeanUser[]> {
     try {
       const users = await UserMongoose.find({ username: { $regex: username, $options: 'i' } }, { password: 0 }).skip(offset).limit(limit).exec();

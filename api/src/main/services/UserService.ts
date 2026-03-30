@@ -176,9 +176,8 @@ class UserService {
 
     if (user.role === 'ADMIN') {
       // Contar admins restantes
-      const allUsers = await this.userRepository.findAll();
-      const adminCount = allUsers.filter((u: LeanUser) => u.role === 'ADMIN' && u.username !== username).length;
-      if (adminCount < 1) {
+      const admins = await this.userRepository.findAll({role: 'ADMIN'});
+      if (admins.length < 2) {
         throw new Error('PERMISSION ERROR: There must always be at least one ADMIN user in the system.');
       }
     }
