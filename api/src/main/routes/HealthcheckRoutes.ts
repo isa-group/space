@@ -1,7 +1,7 @@
 import express from 'express';
 
 const loadFileRoutes = function (app: express.Application) {
-  const baseUrl = (process.env.BASE_URL_PATH ?? "") + '/api/v1';
+  const baseUrl = '/api/v1';
 
   // Public route for authentication (does not require API Key)
   app

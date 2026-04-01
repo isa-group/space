@@ -41,7 +41,7 @@ export default function RegisterPage() {
       await registerUser({ username, password });
       await login(username, password);
       setSuccess(true);
-      navigate(`${import.meta.env.BASE_URL}`);
+      navigate(`/`);
     } catch (error: any) {
       setError(error.message || 'Registration failed. Please try again.');
     }
@@ -129,7 +129,7 @@ export default function RegisterPage() {
               <div className="text-center mt-4">
                 <button
                   type="button"
-                  onClick={() => navigate(`${import.meta.env.BASE_URL}`)}
+                  onClick={() => navigate(`/`)}
                   className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-sm font-medium transition-colors"
                 >
                   Already have an account? Log in
