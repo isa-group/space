@@ -40,6 +40,7 @@
   },
   "packageManager": "pnpm@10.9.0",
   "dependencies": {
+    "@oas-tools/oas-telemetry": "^0.7.1",
     "@socket.io/redis-adapter": "^8.3.0",
     "@types/cors": "^2.8.17",
     "@types/js-yaml": "^4.0.9",

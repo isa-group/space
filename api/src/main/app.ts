@@ -1,3 +1,4 @@
+import oasTelemetry from '@oas-tools/oas-telemetry';
 import * as dotenv from 'dotenv';
 import express, { Application } from 'express';
 import type { Server } from 'http';
@@ -19,6 +20,10 @@ const bold = '\x1b[1m';
 const initializeApp = async (seedDatabase: boolean = true) => {
   dotenv.config();
   const app: Application = express();
+
+  // Initialize OAS Telemetry
+  app.use(oasTelemetry());
+
   loadGlobalMiddlewares(app);
   await routes(app);
   await initializeDatabase(seedDatabase);
