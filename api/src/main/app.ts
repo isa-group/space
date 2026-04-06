@@ -1,4 +1,4 @@
-import oasTelemetry from '@oas-tools/oas-telemetry';
+import * as oasTelemetry from '@oas-tools/oas-telemetry';
 import * as dotenv from 'dotenv';
 import express, { Application } from 'express';
 import type { Server } from 'http';
