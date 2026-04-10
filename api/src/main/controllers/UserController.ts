@@ -55,7 +55,7 @@ class UserController {
         return res.status(401).send({ error: 'Authentication required' });
       }
 
-      const user = await this.userService.findByUsername(req.user.username);
+      const user = await this.userService.findByUsername(req.user.username, req.user);
       res.json({ username: user.username, role: user.role });
     } catch (err: any) {
       res.status(500).send({ error: err.message });
@@ -89,7 +89,7 @@ class UserController {
           .send({ error: 'INVALID DATA: Offset must be a non-negative number' });
       }
 
-      const users = await this.userService.getUsers(q, searchLimit, searchOffset);
+      const users = await this.userService.getUsers(req.user, q, searchLimit, searchOffset);
       const total = await this.userService.countUsers(q);
       return res.json({
         data: users,
@@ -108,7 +108,7 @@ class UserController {
 
   async getByUsername(req: any, res: any) {
     try {
-      const user = await this.userService.findByUsername(req.params.username);
+      const user = await this.userService.findByUsername(req.params.username, req.user);
       res.json(user);
     } catch (err: any) {
       res.status(404).send({ error: err.message });

@@ -29,7 +29,7 @@ class OrganizationRepository extends RepositoryBase {
       const organization = await OrganizationMongoose.findOne({ _id: organizationId })
         .populate({
           path: 'ownerDetails',
-          select: '-password',
+          select: '-password -apiKey -role',
         })
         .exec();
 
@@ -65,7 +65,7 @@ class OrganizationRepository extends RepositoryBase {
     })
       .populate({
         path: 'ownerDetails',
-        select: '-password',
+        select: '-password -apiKey -role',
       })
       .exec();
 
