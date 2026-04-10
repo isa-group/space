@@ -108,7 +108,7 @@ services:
     networks:
       - space-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5403/${BASE_URL_PATH:-}/api/v1/healthcheck"]
+      test: ["CMD", "curl", "-f", "http://localhost:5403${BASE_PATH:-}/api/v1/healthcheck"]
       interval: 5s
       timeout: 5s
       retries: 3
