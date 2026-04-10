@@ -9,25 +9,44 @@ class UserService {
   private userRepository: UserRepository;
   private organizationService: OrganizationService;
 
+  private sanitizeUserForRequester(user: LeanUser, requester?: LeanUser, targetUsername?: string): LeanUser {
+    if (!requester || requester.role === 'ADMIN') {
+      return user;
+    }
+
+    const effectiveTargetUsername = targetUsername || user.username;
+    const isOwnData = effectiveTargetUsername === requester.username;
+
+    if (isOwnData) {
+      return user;
+    }
+
+    const { role, apiKey, ...safeUser } = user as any;
+    return safeUser as LeanUser;
+  }
+
   constructor() {
     this.userRepository = container.resolve('userRepository');
     this.organizationService = container.resolve('organizationService');
   }
 
-  async getUsers(query: string = '', limit: number = 10, offset: number = 0): Promise<LeanUser[]> {
-    return await this.userRepository.find(query.trim(), limit, offset);
+  async getUsers(reqUser: LeanUser, query: string = '', limit: number = 10, offset: number = 0): Promise<LeanUser[]> {
+    
+    const users = await this.userRepository.find(query.trim(), limit, offset);
+
+    return users.map(user => this.sanitizeUserForRequester(user, reqUser, user.username));
   }
 
   async countUsers(query: string = '') {
     return this.userRepository.count(query.trim());
   }
 
-  async findByUsername(username: string) {
+  async findByUsername(username: string, reqUser: LeanUser): Promise<LeanUser> {
     const user = await this.userRepository.findByUsername(username);
     if (!user) {
       throw new Error('INVALID DATA: User not found');
     }
-    return user;
+    return this.sanitizeUserForRequester(user, reqUser, username);
   }
 
   async findByApiKey(apiKey: string) {
@@ -61,7 +80,7 @@ class UserService {
       createdUser
     );
     
-    return createdUser;
+    return this.sanitizeUserForRequester(createdUser, creatorData, createdUser.username);
   }
 
   async update(username: string, userData: any, creatorData: LeanUser) {
@@ -106,7 +125,7 @@ class UserService {
       await this.organizationService.updateUsername(username, userData.username);
     }
 
-    return updatedUser;
+    return this.sanitizeUserForRequester(updatedUser, creatorData, username);
   }
 
   async regenerateApiKey(username: string, reqUser: LeanUser): Promise<string> {
@@ -150,7 +169,8 @@ class UserService {
       }
     }
 
-    return this.userRepository.changeRole(username, role);
+    const updatedUser = await this.userRepository.changeRole(username, role);
+    return this.sanitizeUserForRequester(updatedUser, creatorData, username);
   }
 
   async authenticate(username: string, password: string): Promise<LeanUser> {
