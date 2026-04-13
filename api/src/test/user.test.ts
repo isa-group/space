@@ -27,6 +27,17 @@ describe('User API routes', function () {
     }
   };
 
+  const expectNoSensitiveUserFields = (user: any) => {
+    expect(user.role).toBeUndefined();
+    expect(user.apiKey).toBeUndefined();
+  };
+
+  const expectNoSensitiveFieldsForOtherUsers = (users: any[], requesterUsername: string) => {
+    users
+      .filter(user => user?.username && user.username !== requesterUsername)
+      .forEach(user => expectNoSensitiveUserFields(user));
+  };
+
   beforeAll(async function () {
     app = await getApp();
     adminUser = await createTestUser('ADMIN');
@@ -732,6 +743,18 @@ describe('User API routes', function () {
     });
 
     it('returns 403 when trying to demote the last admin', async function () {
+      const allUsersResponse = await request(app)
+        .get(`${baseUrl}/users?limit=50`)
+        .set('x-api-key', adminApiKey);
+
+      const allAdmins = allUsersResponse.body.data.filter((u: any) => u.role === 'ADMIN');
+
+      for (const admin of allAdmins) {
+        if (admin.username !== adminUser.username) {
+          await deleteTestUser(admin.username);
+        }
+      }
+
       const response = await request(app)
         .put(`${baseUrl}/users/${adminUser.username}/role`)
         .set('x-api-key', adminApiKey)
@@ -978,6 +1001,135 @@ describe('User API routes', function () {
 
       expect(response.status).toBe(401);
       expect(response.body.error).toContain('API Key');
+    });
+  });
+
+  describe('USER privacy on user endpoints', function () {
+    it('GET /users with search never exposes role or apiKey for other users', async function () {
+      const requester = await createTestUser('USER', `privacy_viewer_${Date.now()}`);
+      const otherUser1 = await createTestUser('USER', `privacy_target_1_${Date.now()}`);
+      const otherUser2 = await createTestUser('USER', `privacy_target_2_${Date.now()}`);
+
+      trackUserForCleanup(requester);
+      trackUserForCleanup(otherUser1);
+      trackUserForCleanup(otherUser2);
+
+      const response = await request(app)
+        .get(`${baseUrl}/users?q=privacy_target_`)
+        .set('x-api-key', requester.apiKey);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBeTruthy();
+      expect(response.body.data.length).toBeGreaterThanOrEqual(2);
+      expectNoSensitiveFieldsForOtherUsers(response.body.data, requester.username);
+    });
+
+    it('GET /users/:username never exposes role or apiKey when USER requests another user', async function () {
+      const requester = await createTestUser('USER', `privacy_reader_${Date.now()}`);
+      const targetUser = await createTestUser('USER', `privacy_profile_target_${Date.now()}`);
+
+      trackUserForCleanup(requester);
+      trackUserForCleanup(targetUser);
+
+      const response = await request(app)
+        .get(`${baseUrl}/users/${targetUser.username}`)
+        .set('x-api-key', requester.apiKey);
+
+      expect(response.status).toBe(200);
+      expect(response.body.username).toBe(targetUser.username);
+      expectNoSensitiveUserFields(response.body);
+    });
+
+    it('POST /users never exposes role or apiKey when USER creates another user', async function () {
+      const creator = await createTestUser('USER', `privacy_creator_${Date.now()}`);
+      trackUserForCleanup(creator);
+
+      const userData = {
+        username: `privacy_created_${Date.now()}`,
+        password: 'password123',
+        role: USER_ROLES[USER_ROLES.length - 1],
+      };
+
+      const response = await request(app)
+        .post(`${baseUrl}/users`)
+        .set('x-api-key', creator.apiKey)
+        .send(userData);
+
+      expect(response.status).toBe(201);
+      expect(response.body.username).toBe(userData.username);
+      expectNoSensitiveUserFields(response.body);
+      trackUserForCleanup(response.body);
+    });
+
+    it('PUT /users/:username never exposes role or apiKey when USER updates another user', async function () {
+      const requester = await createTestUser('USER', `privacy_updater_${Date.now()}`);
+      const targetUser = await createTestUser('USER', `privacy_update_target_${Date.now()}`);
+      const updatedUsername = `upd_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
+      trackUserForCleanup(requester);
+      trackUserForCleanup(targetUser);
+
+      const response = await request(app)
+        .put(`${baseUrl}/users/${targetUser.username}`)
+        .set('x-api-key', requester.apiKey)
+        .send({ username: updatedUsername });
+
+      expect([200, 403, 404, 422]).toContain(response.status);
+      expect(response.body.role).toBeUndefined();
+      expect(response.body.apiKey).toBeUndefined();
+
+      if (response.status === 200) {
+        expect(response.body.username).toBe(updatedUsername);
+        trackUserForCleanup(response.body);
+      }
+    });
+
+    it('PUT /users/:username/api-key forbidden response does not expose sensitive user fields', async function () {
+      const requester = await createTestUser('USER', `privacy_apikey_req_${Date.now()}`);
+      const targetUser = await createTestUser('USER', `privacy_apikey_target_${Date.now()}`);
+
+      trackUserForCleanup(requester);
+      trackUserForCleanup(targetUser);
+
+      const response = await request(app)
+        .put(`${baseUrl}/users/${targetUser.username}/api-key`)
+        .set('x-api-key', requester.apiKey);
+
+      expect(response.status).toBe(403);
+      expect(response.body.role).toBeUndefined();
+      expect(response.body.apiKey).toBeUndefined();
+    });
+
+    it('PUT /users/:username/role forbidden response does not expose sensitive user fields', async function () {
+      const requester = await createTestUser('USER', `privacy_role_req_${Date.now()}`);
+      const targetUser = await createTestUser('USER', `privacy_role_target_${Date.now()}`);
+
+      trackUserForCleanup(requester);
+      trackUserForCleanup(targetUser);
+
+      const response = await request(app)
+        .put(`${baseUrl}/users/${targetUser.username}/role`)
+        .set('x-api-key', requester.apiKey)
+        .send({ role: USER_ROLES[USER_ROLES.length - 1] });
+
+      expect(response.status).toBe(403);
+      expect(response.body.role).toBeUndefined();
+      expect(response.body.apiKey).toBeUndefined();
+    });
+
+    it('DELETE /users/:username returns no body for USER deleting another non-admin user', async function () {
+      const requester = await createTestUser('USER', `privacy_delete_req_${Date.now()}`);
+      const targetUser = await createTestUser('USER', `privacy_delete_target_${Date.now()}`);
+
+      trackUserForCleanup(requester);
+      trackUserForCleanup(targetUser);
+
+      const response = await request(app)
+        .delete(`${baseUrl}/users/${targetUser.username}`)
+        .set('x-api-key', requester.apiKey);
+
+      expect(response.status).toBe(204);
+      expect(response.body).toEqual({});
     });
   });
 });

@@ -9,7 +9,7 @@ class UserRepository extends RepositoryBase {
 
   async findAll(query?: any): Promise<LeanUser[]> {
     try {
-      const users = await UserMongoose.find(query || {}, { password: 0 }).exec();
+      const users = await UserMongoose.find(query || {}, { password: 0, apiKey: 0 }).exec();
       return users.map(user => user.toObject({ getters: true, virtuals: true, versionKey: false }) as unknown as LeanUser);
     } catch (err) {
       return [];
@@ -18,7 +18,7 @@ class UserRepository extends RepositoryBase {
 
   async find(username: string, limit: number = 10, offset: number = 0): Promise<LeanUser[]> {
     try {
-      const users = await UserMongoose.find({ username: { $regex: username, $options: 'i' } }, { password: 0 }).skip(offset).limit(limit).exec();
+      const users = await UserMongoose.find({ username: { $regex: username, $options: 'i' } }).select({ password: 0 }).skip(offset).limit(limit).exec();
       return users.map(user => user.toObject({ getters: true, virtuals: true, versionKey: false }) as unknown as LeanUser);
     } catch (err) {
       return [];
@@ -35,12 +35,13 @@ class UserRepository extends RepositoryBase {
   
   async findByUsername(username: string): Promise<LeanUser | null> {
     try {
-      const user = (await this.find(username))[0];
+      const user = await UserMongoose.findOne({ username })
+        .select({ password: 0 })
+        .exec();
 
       if (!user) return null;
 
-      
-      return user as unknown as LeanUser;
+      return user.toObject({ getters: true, virtuals: true, versionKey: false }) as unknown as LeanUser;
     } catch (err) {
       return null;
     }
@@ -48,7 +49,7 @@ class UserRepository extends RepositoryBase {
 
   async findByRole(role: UserRole): Promise<LeanUser[]> {
     try {
-      const users = await UserMongoose.find({ role: role }, { password: 0 }).exec();
+      const users = await UserMongoose.find({ role: role }, { password: 0, apiKey: 0 }).exec();
       return users.map(user => user.toObject({ getters: true, virtuals: true, versionKey: false }) as unknown as LeanUser);
     } catch (err) {
       return [];
@@ -95,7 +96,7 @@ class UserRepository extends RepositoryBase {
   async update(username: string, userData: any) {
     const updatedUser = await UserMongoose.findOneAndUpdate({ username: username }, userData, {
       new: true,
-      projection: { password: 0 },
+      projection: { password: 0, apiKey: 0 },
     })
 
     if (!updatedUser) {
