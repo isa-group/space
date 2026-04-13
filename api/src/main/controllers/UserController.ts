@@ -72,8 +72,8 @@ class UserController {
         return res.status(401).send({ error: 'Authentication required' });
       }
 
-      if (q.length === 0 && req.user.role !== 'ADMIN') {
-        return res.status(403).send({ error: 'PERMISSION ERROR: Only admins can retrieve the full user list without a search query' });
+      if (q.length < 4 && req.user.role !== 'ADMIN') {
+        return res.status(403).send({ error: 'PERMISSION ERROR: Only admins can retrieve the full user list without providing at least 4 characters in the search query' });
       }
 
       const searchLimit = limit ? parseInt(limit, 10) : 10;
