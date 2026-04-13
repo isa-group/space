@@ -388,6 +388,51 @@ describe('User API routes', function () {
         expect(response.body).toHaveProperty('pagination');
       });
     });
+
+    describe('ACCESS CONTROL: USER role restrictions', function () {
+      it('returns 403 when USER tries to list users without q parameter', async function () {
+        const user = await createTestUser('USER', `user_no_q_${Date.now()}`);
+        trackUserForCleanup(user);
+
+        const response = await request(app)
+          .get(`${baseUrl}/users`)
+          .set('x-api-key', user.apiKey);
+
+        expect(response.status).toBe(403);
+        expect(response.body.error).toBeDefined();
+      });
+
+      it('returns 403 when USER provides q with fewer than 4 characters', async function () {
+        const user = await createTestUser('USER', `user_short_q_${Date.now()}`);
+        trackUserForCleanup(user);
+
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=abc`)
+          .set('x-api-key', user.apiKey);
+
+        expect(response.status).toBe(403);
+        expect(response.body.error).toBeDefined();
+      });
+
+      it('returns 200 when USER provides q with 4 or more characters', async function () {
+        const requester = await createTestUser('USER', `user_q_ok_${Date.now()}`);
+        const match1 = await createTestUser('USER', `match_user_01_${Date.now()}`);
+        const match2 = await createTestUser('USER', `match_user_02_${Date.now()}`);
+
+        trackUserForCleanup(requester);
+        trackUserForCleanup(match1);
+        trackUserForCleanup(match2);
+
+        const response = await request(app)
+          .get(`${baseUrl}/users?q=match_user`)
+          .set('x-api-key', requester.apiKey);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty('data');
+        expect(Array.isArray(response.body.data)).toBeTruthy();
+        expect(response.body.data.length).toBeGreaterThanOrEqual(2);
+      });
+    });
   });
 
 

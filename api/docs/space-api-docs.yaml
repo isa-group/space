@@ -193,8 +193,9 @@ paths:
             type: string
           description: |
             Search query to match against usernames (case-insensitive regex).
-            - If provided and not empty: performs search filtering
-            - If not provided or empty: returns all users (ADMIN required)
+            - If provided with 4 or more characters: performs search filtering
+            - If not provided: returns all users (ADMIN required)
+            - If provided with less than 4 characters: returns users that match the filter (ADMIN required)
           example: john
         - name: limit
           in: query
