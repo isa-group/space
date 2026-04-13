@@ -46,7 +46,7 @@ export default function MembersPage() {
     const trimmedQuery = userSearchQuery.trim();
     latestSearchQueryRef.current = trimmedQuery;
 
-    if (!trimmedQuery || trimmedQuery.length < 2) {
+    if (!trimmedQuery || trimmedQuery.length < 4) {
       setSearchResults([]);
       setShowDropdown(false);
       return;
