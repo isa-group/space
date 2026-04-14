@@ -146,5 +146,8 @@ api/public/static
 # Generated files for testing purposes
 api/src/test/data/generated/
 
+# Telemetry data
+api/data/telemetry
+
 #### Global ignores ####
 .DS_Store

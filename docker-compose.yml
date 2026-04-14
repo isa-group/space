@@ -53,6 +53,7 @@ services:
       HTTPS_PROXY: ${HTTPS_PROXY:-}
     volumes:
       - 'space-statics:/usr/src/server/public'
+      - 'space-telemetry:/usr/src/server/data/telemetry'
     depends_on:
       mongodb:
         condition: service_healthy
@@ -103,6 +104,8 @@ volumes:
   space-mongodb:
     driver: local
   space-statics:
+    driver: local
+  space-telemetry:
     driver: local
   redis_data:
     driver: local

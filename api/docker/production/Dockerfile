@@ -29,5 +29,10 @@ RUN pnpm run build --project tsconfig.json
 # Arregla los imports relativos en la salida ESM usando tsc-alias
 RUN pnpx tsc-alias --project="./tsconfig.json" --resolve-full-paths
 
+# Additions to integrate OAS Telemetry
+RUN mkdir -p /usr/src/server/data/telemetry
+COPY ./docs/space-api-docs.yaml /usr/src/server/data/telemetry/space-api-docs.yaml
+VOLUME /usr/src/server/data/telemetry
+
 # Specify the command to start the server
 CMD [ "node", "dist/index.js"]
