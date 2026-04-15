@@ -30,8 +30,11 @@ RUN pnpm run build --project tsconfig.json
 RUN pnpx tsc-alias --project="./tsconfig.json" --resolve-full-paths
 
 # Additions to integrate OAS Telemetry
-RUN mkdir -p /usr/src/server/data/telemetry
-COPY ./docs/space-api-docs.yaml /usr/src/server/data/telemetry/space-api-docs.yaml
+RUN mkdir -p ./data/telemetry
+COPY ./docs/space-api-docs.yaml ./data/telemetry/space-api-docs.yaml
+ENV OASTLM_CONFIG_STORAGE_PATH=data/telemetry
+ENV OASTLM_CONFIG_STORAGE_LOAD_FROM_START=false
+ENV OASTLM_CONFIG_GENERAL_SPEC_FILE_NAME=data/telemetry/space-api-docs.yaml
 VOLUME /usr/src/server/data/telemetry
 
 # Specify the command to start the server
