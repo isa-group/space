@@ -19,6 +19,20 @@ server {
         proxy_set_header    X-Real-IP       $remote_addr;
         proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
     }
+    
+    # Static files
+    location ${BASE_URL_PATH}/static/ {
+        include             fastcgi_params;
+        proxy_pass          http://space-server:3000/static/;
+        proxy_redirect      off;
+
+        proxy_connect_timeout 500;
+        proxy_read_timeout 500;
+
+        proxy_set_header    Host            $host;
+        proxy_set_header    X-Real-IP       $remote_addr;
+        proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
 
     # Events (websocket)
     location ${BASE_URL_PATH}/events/ {
