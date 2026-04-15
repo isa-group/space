@@ -220,12 +220,6 @@ export default function ContractsDashboard() {
               >
                 Create Service
               </a>
-              <a
-                href="/contracts"
-                className="inline-flex items-center justify-center px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-lg border border-gray-300 dark:border-gray-600 transition-colors cursor-pointer"
-              >
-                View Contracts
-              </a>
             </div>
           </div>
         </div>
