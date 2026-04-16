@@ -6,11 +6,13 @@ interface UsersFiltersProps {
     pageSize: number;
   };
   setFilters: (f: any) => void;
+  setPage: (page: number) => void;
 }
 
 export default function UsersFilters({
   filters,
   setFilters,
+  setPage,
 }: UsersFiltersProps) {
   return (
     <div className="flex flex-wrap items-end justify-start gap-4 mb-6">
@@ -23,7 +25,10 @@ export default function UsersFilters({
           className="rounded-lg dark:border-white px-3 h-[35px] focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-900 text-indigo-500 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-300 font-medium bg-white dark:bg-gray-900 shadow-sm transition"
           placeholder="Type username..."
           value={filters.search}
-          onChange={e => setFilters((f: any) => ({ ...f, search: e.target.value }))}
+          onChange={e => {
+            setFilters((f: any) => ({ ...f, search: e.target.value }));
+            setPage(1);
+          }}
         />
       </div>
       <div className="flex flex-col gap-1 min-w-[90px] w-[90px]">
@@ -32,7 +37,10 @@ export default function UsersFilters({
           <select
             className="w-full pl-4 appearance-none rounded-lg dark:border-gray-800 px-2 py-2 pr-7 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-900 font-semibold text-gray-700 dark:text-gray-100 bg-white dark:bg-gray-900 cursor-pointer shadow-sm hover:border-indigo-400 dark:hover:border-indigo-600 transition text-sm"
             value={filters.pageSize}
-            onChange={e => setFilters((f: any) => ({ ...f, pageSize: Number(e.target.value) }))}
+            onChange={e => {
+              setFilters((f: any) => ({ ...f, pageSize: Number(e.target.value) }));
+              setPage(1);
+            }}
           >
             <option value={5}>5</option>
             <option value={10}>10</option>

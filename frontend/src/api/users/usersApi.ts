@@ -19,10 +19,15 @@ export async function getCurrentUser(apiKey: string): Promise<{ username: string
     });
 }
 
-export async function getUsers(apiKey: string, offset: number = 0, limit: number = 10): Promise<{ data: Array<{ username: string; apiKey: string; role: 'ADMIN' | 'USER' }>; pagination: { offset: number; limit: number; total: number; page: number; pages: number } }> {
+export async function getUsers(
+  apiKey: string,
+  offset: number = 0,
+  limit: number = 10,
+  query: string = ''
+): Promise<{ data: Array<{ username: string; apiKey: string; role: 'ADMIN' | 'USER' }>; pagination: { offset: number; limit: number; total: number; page: number; pages: number } }> {
   return axios
     .get('/users', {
-      params: { offset, limit },
+      params: { offset, limit, q: query },
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,

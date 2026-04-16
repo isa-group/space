@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import useAuth from '@/hooks/useAuth';
 import { useCustomAlert } from '@/hooks/useCustomAlert';
 import UsersFilters from '@/components/users/UsersFilters';
@@ -26,9 +26,11 @@ export default function UsersPage() {
     pageSize: 10,
   });
   const [page, setPage] = useState(1);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const {showAlert, alertElement} = useCustomAlert();
   const [refreshKey, setRefreshKey] = useState(0);
   const [addUserOpen, setAddUserOpen] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refresca usuarios desde el server
   const refreshUsers = () => {
@@ -36,32 +38,56 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    searchDebounceRef.current = setTimeout(() => {
+      setDebouncedSearch(filters.search.trim());
+    }, 1000);
+
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [filters.search]);
+
+  useEffect(() => {
     if (!user?.apiKey) return;
+
+    const normalizedSearch = filters.search.trim();
+    if (normalizedSearch !== debouncedSearch) {
+      return;
+    }
     
     setLoading(true);
     const offset = (page - 1) * filters.pageSize;
-    getUsers(user.apiKey, offset, filters.pageSize)
+    let cancelled = false;
+
+    getUsers(user.apiKey, offset, filters.pageSize, debouncedSearch)
       .then((response) => {
+        if (cancelled) return;
         const data = Array.isArray(response.data) ? response.data : [];
         setUsers(data);
         setTotalUsers(response.pagination?.total ?? 0);
       })
       .catch((e) => {
+        if (cancelled) return;
         showAlert(e.message ?? 'Failed to fetch users', 'danger');
         setUsers([]);
         setTotalUsers(0);
       })
-      .finally(() => setLoading(false));
-  }, [user?.apiKey, filters, page, refreshKey]);
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
 
-  // Cliente-side filtering por búsqueda
-  const filteredUsers = useMemo(() => {
-    if (!Array.isArray(users)) return [];
-    if (!filters.search) return users;
-    return users.filter(u =>
-      u.username.toLowerCase().includes(filters.search.toLowerCase())
-    );
-  }, [users, filters.search]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.apiKey, filters.search, filters.pageSize, page, refreshKey, debouncedSearch, showAlert]);
 
   const totalPages = Math.ceil(totalUsers / filters.pageSize) || 1;
 
@@ -89,9 +115,10 @@ export default function UsersPage() {
       <UsersFilters
         filters={filters}
         setFilters={setFilters}
+        setPage={setPage}
       />
       <UsersList
-        users={filteredUsers}
+        users={users}
         loading={loading}
         page={page}
         setPage={setPage}

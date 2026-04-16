@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react';
+import { useCallback, useState, type JSX } from 'react';
 import CustomAlert from '../components/CustomAlert';
 import type { CustomAlertType } from '../components/CustomAlert';
 
@@ -10,11 +10,11 @@ export function useCustomAlert(): {
     { message: string; type: CustomAlertType; resolve: () => void } | null
   >(null);
 
-  const showAlert = (message: string, type: CustomAlertType = 'info') => {
+  const showAlert = useCallback((message: string, type: CustomAlertType = 'info') => {
     return new Promise<void>((resolve) => {
       setAlert({ message, type, resolve });
     });
-  };
+  }, []);
 
   const handleClose = () => {
     if (alert) {
